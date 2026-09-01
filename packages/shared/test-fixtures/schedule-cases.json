@@ -1,0 +1,166 @@
+[
+  {
+    "name": "week 1 monday resolves scheduled workout",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": {},
+    "date": "2026-06-29",
+    "expected": "w1"
+  },
+  {
+    "name": "week 1 wednesday resolves scheduled workout",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": {},
+    "date": "2026-07-01",
+    "expected": "w2"
+  },
+  {
+    "name": "rest day (unscheduled day of week) resolves to null",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": {},
+    "date": "2026-06-30",
+    "expected": null
+  },
+  {
+    "name": "before program start resolves to null",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": {},
+    "date": "2026-06-28",
+    "expected": null
+  },
+  {
+    "name": "week rollover: day 7 after start is still week 1, day 8 is week 2",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": {},
+    "date": "2026-07-06",
+    "expected": "w3"
+  },
+  {
+    "name": "past program end resolves to null",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": {},
+    "date": "2026-07-20",
+    "expected": null
+  },
+  {
+    "name": "phase 2 flattening: phase 1 has 2 weeks, phase 2 week 1 becomes global week 3",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p2",
+      "weeks": 3,
+      "weekSchedule": {},
+      "phases": [
+        {
+          "id": "phaseA",
+          "weeks": 2,
+          "weekSchedule": {
+            "1": { "monday": "a1" },
+            "2": { "monday": "a2" }
+          }
+        },
+        {
+          "id": "phaseB",
+          "weeks": 1,
+          "weekSchedule": {
+            "1": { "monday": "b1" }
+          }
+        }
+      ]
+    },
+    "overrides": {},
+    "date": "2026-07-13",
+    "expected": "b1"
+  },
+  {
+    "name": "override wins outright over computed schedule",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": { "2026-06-29": "w9" },
+    "date": "2026-06-29",
+    "expected": "w9"
+  },
+  {
+    "name": "explicit-rest override (null) beats a normally-scheduled workout",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": { "2026-06-29": null },
+    "date": "2026-06-29",
+    "expected": null
+  },
+  {
+    "name": "override can add a workout on an otherwise-rest day",
+    "startDate": "2026-06-29",
+    "program": {
+      "id": "p1",
+      "weeks": 2,
+      "weekSchedule": {
+        "1": { "monday": "w1", "wednesday": "w2" },
+        "2": { "monday": "w3", "wednesday": "w4" }
+      }
+    },
+    "overrides": { "2026-06-30": "bonus" },
+    "date": "2026-06-30",
+    "expected": "bonus"
+  }
+]
