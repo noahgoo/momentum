@@ -34,7 +34,7 @@ create table workouts (
   type workout_type not null default 'workout',
   warmup_id uuid references workouts (id),
   created_by uuid references profiles (id),
-  client_id uuid references profiles (id),
+  client_id uuid references profiles (id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -74,7 +74,7 @@ create table programs (
   description text,
   weeks int,
   created_by uuid references profiles (id),
-  client_id uuid references profiles (id),
+  client_id uuid references profiles (id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -135,7 +135,7 @@ create index week_schedules_workout_id_idx on week_schedules (workout_id);
 
 create table assignments (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   program_id uuid not null references programs (id),
   start_date date not null,
   active boolean not null default false,

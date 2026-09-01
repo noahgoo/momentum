@@ -3,7 +3,7 @@
 
 create table workout_logs (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   workout_id uuid references workouts (id),
   date date not null,
   completed boolean not null default false,
@@ -60,7 +60,7 @@ create index set_logs_exercise_log_id_idx on set_logs (exercise_log_id);
 
 create table goals (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   text text not null,
   set_by uuid references profiles (id),
   locked boolean not null default false,
@@ -78,7 +78,7 @@ create index goals_archived_by_idx on goals (archived_by);
 
 create table goal_logs (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   goal_id uuid not null references goals (id) on delete cascade,
   date date not null,
   goal_text text,
@@ -92,7 +92,7 @@ create index goal_logs_client_id_idx on goal_logs (client_id);
 
 create table threads (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null unique references profiles (id),
+  client_id uuid not null unique references profiles (id) on delete cascade,
   coach_id uuid not null references profiles (id),
   last_message text,
   last_message_at timestamptz,
@@ -129,8 +129,8 @@ create index messages_sender_id_idx on messages (sender_id);
 
 create table friendships (
   pair_id text primary key,
-  client_id uuid not null references profiles (id),
-  friend_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
+  friend_id uuid not null references profiles (id) on delete cascade,
   coach_id uuid not null references profiles (id),
   requested_by uuid not null references profiles (id),
   status friendship_status not null default 'pending',
@@ -152,7 +152,7 @@ create index friendships_requested_by_idx on friendships (requested_by);
 
 create table change_requests (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   coach_id uuid not null references profiles (id),
   from_date date not null,
   to_date date not null,
@@ -174,7 +174,7 @@ create index change_requests_workout_id_idx on change_requests (workout_id);
 
 create table progress_photos (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   storage_path text not null,
   url text,
   thumb_url text,
@@ -191,7 +191,7 @@ create index progress_photos_client_id_idx on progress_photos (client_id);
 
 create table body_measurements (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references profiles (id),
+  client_id uuid not null references profiles (id) on delete cascade,
   date date not null,
   weight_lbs numeric,
   neck_in numeric,
