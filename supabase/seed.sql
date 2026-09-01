@@ -34,9 +34,25 @@
 --  client1: active schedule-aware streak, perfect completion to date, today
 --           left incomplete when scheduled (grace covers it).
 --  client2: Simple program started this week, one completed log so far.
---  client3: broken streak (missed a scheduled day 3 days ago), completed
---           the days around it; one log has difficulty='challenging' +
---           next_day_feel=4.
+--  client3: broken streak. The missed day (v_missed3 in the script) is
+--           computed, not hardcoded: it's the most recent ACTUAL scheduled
+--           mon/wed/fri that is >= 2 days before current_date and after her
+--           start (current_date - 10) -- guaranteeing it's a real scheduled
+--           day, not a rest day, so the streak genuinely breaks there. Every
+--           other scheduled day (before and after the miss) is completed;
+--           the day at current_date - 1 additionally carries
+--           difficulty='challenging' + next_day_feel=4.
+--           Expected streak = (number of days from v_missed3 + 1 through
+--           yesterday, inclusive) + 1 more if today is unscheduled or
+--           already completed (compute_streak's grace: today only extends
+--           the streak when it's NOT a scheduled-and-incomplete day; when it
+--           IS scheduled-and-incomplete, the walk starts at yesterday
+--           instead, so today contributes 0 either way -- the count from
+--           v_missed3 + 1 through yesterday is unaffected by today's
+--           status). Concretely: streak = (current_date - v_missed3 - 1) if
+--           today is scheduled-and-incomplete, else (current_date -
+--           v_missed3), since rest days between the miss and today never
+--           break the count.
 --  client4-6, client9-10: no assignment -> has_program=false, streak from
 --           plain-consecutive fallback (0, no logs).
 --  client7: disabled, old inactive assignment only, not counted anywhere
@@ -134,6 +150,7 @@ declare
   v_start1 date := current_date - 21; -- client1: mid-program (3 weeks in)
   v_start2 date := date_trunc('week', current_date)::date; -- client2: this week (Monday)
   v_start3 date := current_date - 10; -- client3: 10 days ago
+  v_missed3 date; -- client3: most recent actual scheduled day, >=2 days ago, that she misses
   v_day day_of_week;
   v_d date;
   v_i int;
@@ -468,6 +485,30 @@ begin
   -- ==========================================================================
   -- WORKOUT LOGS
   -- ==========================================================================
+  --
+  -- Self-repairing: delete any existing workout_logs for the seeded clients
+  -- across their seeded date ranges before inserting. This makes the
+  -- log-seeding idempotent against *live data*, not just against its own
+  -- prior inserts — if a previous run (or a bug in a previous version of
+  -- this script) landed a log on the wrong day, re-running this file
+  -- corrects it rather than leaving the stale row in place (ON CONFLICT DO
+  -- NOTHING alone cannot do this, since the conflict key is (client_id,
+  -- date) and a wrongly-present row for a "should be missing" date has no
+  -- conflicting insert to no-op against). Deletes cascade to
+  -- exercise_logs/set_logs (FK on delete cascade), so those are rebuilt too.
+
+  delete from public.workout_logs where client_id = client1 and date between v_start1 and current_date;
+  delete from public.workout_logs where client_id = client2 and date between v_start2 and current_date;
+  delete from public.workout_logs where client_id = client3 and date between v_start3 and current_date;
+
+  -- client3 (Cara): pick the most recent day she actually misses. Must be a
+  -- real scheduled day (resolve_scheduled_workout not null), at least 2 days
+  -- before current_date, and after her assignment start — otherwise (e.g. if
+  -- that slot lands on a rest day) the streak wouldn't actually break, which
+  -- is the bug this fix addresses.
+  select max(d)::date into v_missed3
+  from generate_series(v_start3 + 1, current_date - 2, interval '1 day') as d
+  where public.resolve_scheduled_workout(client3, d::date) is not null;
 
   -- client1: perfect completion on every scheduled day from start_date up to
   -- (but not including) today. If today is itself scheduled, it is left
@@ -508,12 +549,12 @@ begin
     on conflict (client_id, date) do nothing;
   end if;
 
-  -- client3: completed most scheduled days, missed one 3 days ago (broken
-  -- streak), include a 'challenging' difficulty log and exercise/set detail
-  -- with a distance-mode entry.
+  -- client3: completed every scheduled day except v_missed3 (broken streak),
+  -- include a 'challenging' difficulty log and exercise/set detail with a
+  -- distance-mode entry.
   for v_d in select generate_series(v_start3, current_date, interval '1 day')::date loop
     if public.resolve_scheduled_workout(client3, v_d) is not null and v_d < current_date then
-      if v_d = current_date - 3 then
+      if v_missed3 is not null and v_d = v_missed3 then
         -- Deliberately missed: no workout_log row for this scheduled day.
         continue;
       end if;
@@ -583,7 +624,11 @@ begin
   on conflict (id) do nothing;
 
   -- goal_logs: client1 completed 2 of 3 today, full completion yesterday;
-  -- scatter a week of partial logs across client1 and client2.
+  -- scatter a week of partial logs across client1 and client2. Unlike
+  -- workout_logs, every (goal_id, date) pair here is a fixed literal, not a
+  -- computed "which day did she miss" value, so ON CONFLICT (goal_id, date)
+  -- DO NOTHING is already self-repairing on re-run — there is no wrong-day
+  -- state a delete-then-insert would need to correct.
   insert into public.goal_logs (client_id, goal_id, date, goal_text)
   values
     (client1, g_client1_locked, current_date, 'Drink 80oz of water daily'),
