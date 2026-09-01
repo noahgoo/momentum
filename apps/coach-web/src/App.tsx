@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
 import { AuthProvider, RequireAuth } from "./lib/auth";
 import { NAV_ITEMS } from "./lib/navigation";
+import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 
@@ -27,7 +28,7 @@ export function App() {
                   key={to}
                   path={to === "/" ? undefined : to.slice(1)}
                   index={to === "/"}
-                  element={<PlaceholderPage title={label} />}
+                  element={to === "/" ? <DashboardPage /> : <PlaceholderPage title={label} />}
                 />
               ))}
             </Route>
