@@ -10,7 +10,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint && eslint .",
-    "gen:types": "echo \"TODO: generate Supabase types (pending Supabase project setup)\""
+    "gen:types": "supabase gen types typescript --linked > packages/shared/src/db-types.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
