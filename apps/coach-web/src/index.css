@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  --cream: #f6f4f0;
+  --cream-deep: #e8e0d7;
+  --blue: #a8c4d8;
+  --blue-deep: #7aaac4;
+  --ink: #1c1c1c;
+  --ink-70: rgba(28, 28, 28, 0.72);
+  --ink-50: rgba(28, 28, 28, 0.5);
+  --ink-30: rgba(28, 28, 28, 0.3);
+  --ink-15: rgba(28, 28, 28, 0.15);
+  --ink-08: rgba(28, 28, 28, 0.08);
+  --paper: #fbf8f4;
+  --line: #d9cfc4;
+  --ok: #7fa98b;
+  --bad: #c97a6d;
+  --warn: #c8924e;
+  --radius-card: 24px;
+  --radius-control: 14px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.font-display {
+  font-family: "Fraunces", serif;
+  font-style: italic;
+}
+
+.admin-card {
+  background: #ffffff;
+  border-radius: var(--radius-card);
+  box-shadow: 0 14px 36px rgba(28, 28, 28, 0.06);
+}
