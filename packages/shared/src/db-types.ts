@@ -641,6 +641,41 @@ export type Database = {
           },
         ]
       }
+      notification_outbox: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          payload: Json
+          profile_id: string
+          sent_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          payload?: Json
+          profile_id: string
+          sent_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          profile_id?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_outbox_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1170,8 +1205,41 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_change_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      apply_change_request_swap: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      client_today: { Args: { p_client_id: string }; Returns: string }
+      compute_streak: {
+        Args: { p_as_of?: string; p_client_id: string }
+        Returns: number
+      }
+      get_my_streak: { Args: never; Returns: number }
       is_coach: { Args: never; Returns: boolean }
       is_coach_of: { Args: { p_client_id: string }; Returns: boolean }
+      recompute_friendship_stats: {
+        Args: { p_pair_id: string }
+        Returns: undefined
+      }
+      refresh_all_client_summaries: { Args: never; Returns: undefined }
+      refresh_client_summary: {
+        Args: { p_client_id: string }
+        Returns: undefined
+      }
+      reject_change_request: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      resolve_scheduled_workout: {
+        Args: { p_client_id: string; p_date: string }
+        Returns: string
+      }
+      run_daily_maintenance: { Args: never; Returns: undefined }
+      run_hourly_reminders: { Args: never; Returns: undefined }
     }
     Enums: {
       change_request_status: "pending" | "accepted" | "rejected"
