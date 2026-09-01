@@ -76,10 +76,10 @@ begin
 
   -- Assertion: 0010 signup trigger populated profiles automatically.
   if not exists (select 1 from public.profiles where id = coach_id and role = 'coach') then
-    failures := failures || 'handle_new_user did not create coach profile row';
+    failures := array_append(failures, 'handle_new_user did not create coach profile row');
   end if;
   if not exists (select 1 from public.profiles where id = client_a and role = 'client' and invited_by = coach_id) then
-    failures := failures || 'handle_new_user did not create client_a profile row with invited_by';
+    failures := array_append(failures, 'handle_new_user did not create client_a profile row with invited_by');
   end if;
 
   -- Pin timezone explicitly (UTC) so client_today()/compute_streak() are
@@ -135,43 +135,43 @@ begin
   -- 1. Week 1 Monday resolves scheduled workout.
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
   if v_result is distinct from w1 then
-    failures := failures || format('resolve_scheduled_workout week1 monday: expected %s got %s', w1, v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout week1 monday: expected %s got %s', w1, v_result));
   end if;
 
   -- 2. Week 1 Wednesday resolves scheduled workout.
   v_result := public.resolve_scheduled_workout(client_a, '2026-07-01');
   if v_result is distinct from w2 then
-    failures := failures || format('resolve_scheduled_workout week1 wednesday: expected %s got %s', w2, v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout week1 wednesday: expected %s got %s', w2, v_result));
   end if;
 
   -- 3. Rest day (unscheduled day of week) resolves to null.
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-30');
   if v_result is not null then
-    failures := failures || format('resolve_scheduled_workout rest day: expected null got %s', v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout rest day: expected null got %s', v_result));
   end if;
 
   -- 4. Before program start resolves to null.
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-28');
   if v_result is not null then
-    failures := failures || format('resolve_scheduled_workout before start: expected null got %s', v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout before start: expected null got %s', v_result));
   end if;
 
   -- 5. Week rollover: day 8 after start is week 2 (2026-07-06 = Monday).
   v_result := public.resolve_scheduled_workout(client_a, '2026-07-06');
   if v_result is distinct from w3 then
-    failures := failures || format('resolve_scheduled_workout week rollover: expected %s got %s', w3, v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout week rollover: expected %s got %s', w3, v_result));
   end if;
 
   -- 6. Past program end resolves to null.
   v_result := public.resolve_scheduled_workout(client_a, '2026-07-20');
   if v_result is not null then
-    failures := failures || format('resolve_scheduled_workout past program end: expected null got %s', v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout past program end: expected null got %s', v_result));
   end if;
 
   -- 7. Phase flattening: phase A 2 weeks, phase B week 1 = global week 3.
   v_result := public.resolve_scheduled_workout(client_b, '2026-07-13'); -- Monday, global week 3
   if v_result is distinct from wb1 then
-    failures := failures || format('resolve_scheduled_workout phase flattening: expected %s got %s', wb1, v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout phase flattening: expected %s got %s', wb1, v_result));
   end if;
 
   -- 8. Override wins outright over computed schedule.
@@ -179,7 +179,7 @@ begin
   values (assignment_a, '2026-06-29', w9);
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
   if v_result is distinct from w9 then
-    failures := failures || format('resolve_scheduled_workout override wins: expected %s got %s', w9, v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout override wins: expected %s got %s', w9, v_result));
   end if;
 
   -- 9. Explicit-rest override (NULL) beats a normally-scheduled workout.
@@ -188,7 +188,7 @@ begin
   values (assignment_a, '2026-06-29', null);
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
   if v_result is not null then
-    failures := failures || format('resolve_scheduled_workout explicit rest override: expected null got %s', v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout explicit rest override: expected null got %s', v_result));
   end if;
 
   -- 10. Override can add a workout on an otherwise-rest day.
@@ -196,7 +196,7 @@ begin
   values (assignment_a, '2026-06-30', wbonus);
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-30');
   if v_result is distinct from wbonus then
-    failures := failures || format('resolve_scheduled_workout override adds workout: expected %s got %s', wbonus, v_result);
+    failures := array_append(failures, format('resolve_scheduled_workout override adds workout: expected %s got %s', wbonus, v_result));
   end if;
 
   -- Clean up overrides before the streak vectors below (which assume the
@@ -230,7 +230,7 @@ begin
     (client_a, w4, '2026-07-08', true);
   v_int_result := public.compute_streak(client_a, '2026-07-09');
   if v_int_result is distinct from 11 then
-    failures := failures || format('compute_streak rest-day continue: expected 11 got %s', v_int_result);
+    failures := array_append(failures, format('compute_streak rest-day continue: expected 11 got %s', v_int_result));
   end if;
 
   -- Vector: breaks the streak on a missed workout day. Only 06-29
@@ -241,7 +241,7 @@ begin
     (client_a, w1, '2026-06-29', true);
   v_int_result := public.compute_streak(client_a, '2026-07-02');
   if v_int_result is distinct from 1 then
-    failures := failures || format('compute_streak missed-day break: expected 1 got %s', v_int_result);
+    failures := array_append(failures, format('compute_streak missed-day break: expected 1 got %s', v_int_result));
   end if;
 
   -- Vector: does not penalize today's pending workout (grace day). as_of =
@@ -256,7 +256,7 @@ begin
     (client_a, w4, '2026-07-08', true);
   v_int_result := public.compute_streak(client_a, '2026-07-10');
   if v_int_result is distinct from 11 then
-    failures := failures || format('compute_streak grace day: expected 11 got %s', v_int_result);
+    failures := array_append(failures, format('compute_streak grace day: expected 11 got %s', v_int_result));
   end if;
 
   -- Vector: stops counting once before program start. Only 06-29 completed.
@@ -267,7 +267,7 @@ begin
     (client_a, w1, '2026-06-29', true);
   v_int_result := public.compute_streak(client_a, '2026-06-30');
   if v_int_result is distinct from 2 then
-    failures := failures || format('compute_streak program-start bound: expected 2 got %s', v_int_result);
+    failures := array_append(failures, format('compute_streak program-start bound: expected 2 got %s', v_int_result));
   end if;
 
   -- Reset client_a's program back to 2 weeks / no Friday slot and clear logs
@@ -284,7 +284,7 @@ begin
     (client_c, null, '2026-07-05', true);
   v_int_result := public.compute_streak(client_c, '2026-07-07');
   if v_int_result is distinct from 3 then
-    failures := failures || format('compute_streak fallback (no assignment): expected 3 got %s', v_int_result);
+    failures := array_append(failures, format('compute_streak fallback (no assignment): expected 3 got %s', v_int_result));
   end if;
 
   -- Fallback grace: today not logged yet -> streak still counts through
@@ -296,7 +296,7 @@ begin
     (client_c, null, '2026-07-04', true);
   v_int_result := public.compute_streak(client_c, '2026-07-07');
   if v_int_result is distinct from 3 then
-    failures := failures || format('compute_streak fallback grace: expected 3 got %s', v_int_result);
+    failures := array_append(failures, format('compute_streak fallback grace: expected 3 got %s', v_int_result));
   end if;
   delete from public.workout_logs where client_id = client_c;
 
@@ -317,15 +317,15 @@ begin
   -- to_date, i.e. rest).
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-30');
   if v_result is distinct from w1 then
-    failures := failures || format('apply_change_request_swap to_date: expected %s got %s', w1, v_result);
+    failures := array_append(failures, format('apply_change_request_swap to_date: expected %s got %s', w1, v_result));
   end if;
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
   if v_result is not null then
-    failures := failures || format('apply_change_request_swap from_date: expected null got %s', v_result);
+    failures := array_append(failures, format('apply_change_request_swap from_date: expected null got %s', v_result));
   end if;
 
   if not exists (select 1 from public.change_requests where id = cr_pending and status = 'accepted' and responded_at is not null) then
-    failures := failures || 'apply_change_request_swap did not flip status to accepted';
+    failures := array_append(failures, 'apply_change_request_swap did not flip status to accepted');
   end if;
 
   -- Double-accept: calling again on an already-accepted request should
@@ -342,7 +342,7 @@ begin
       v_caught := true;
   end;
   if not v_caught then
-    failures := failures || 'apply_change_request_swap on an already-swapped request should raise (nothing_to_move) but did not';
+    failures := array_append(failures, 'apply_change_request_swap on an already-swapped request should raise (nothing_to_move) but did not');
   end if;
 
   -- Auth check: accept_change_request itself must raise when the request
@@ -361,7 +361,7 @@ begin
       v_caught := true;
   end;
   if not v_caught then
-    failures := failures || 'accept_change_request should raise not_found_or_forbidden when auth.uid() does not match coach_id';
+    failures := array_append(failures, 'accept_change_request should raise not_found_or_forbidden when auth.uid() does not match coach_id');
   end if;
 
   -------------------------------------------------------------------------
@@ -376,7 +376,7 @@ begin
   returning pair_id into pair_ab;
 
   if pair_ab <> (least(client_a::text, client_b::text) || '_' || greatest(client_a::text, client_b::text)) then
-    failures := failures || format('friendships pair_id sort invariant: got %s', pair_ab);
+    failures := array_append(failures, format('friendships pair_id sort invariant: got %s', pair_ab));
   end if;
 
   -- Duplicate insert (same pair, either order) must conflict on the pair_id PK.
@@ -389,7 +389,7 @@ begin
       v_caught := true;
   end;
   if not v_caught then
-    failures := failures || 'friendships duplicate insert (reversed member order) should conflict on pair_id but did not';
+    failures := array_append(failures, 'friendships duplicate insert (reversed member order) should conflict on pair_id but did not');
   end if;
 
   -- Accept the friendship (bypassing RLS client policies since we're
@@ -397,7 +397,7 @@ begin
   update public.friendships set status = 'accepted', accepted_at = now() where pair_id = pair_ab;
 
   if not exists (select 1 from public.friendships where pair_id = pair_ab and stats is not null) then
-    failures := failures || 'recompute_friendship_stats did not seed stats on accept';
+    failures := array_append(failures, 'recompute_friendship_stats did not seed stats on accept');
   end if;
 
   -- Shared-streak one-member-completes case. recompute_friendship_stats
@@ -425,18 +425,18 @@ begin
     from public.friendships where pair_id = pair_ab;
 
     if v_stats is null then
-      failures := failures || 'recompute_friendship_stats left stats null after explicit call';
+      failures := array_append(failures, 'recompute_friendship_stats left stats null after explicit call');
     end if;
     if v_shared_streak < 1 then
-      failures := failures || format(
+      failures := array_append(failures, format(
         'shared-streak one-member-completes: expected shared_streak >= 1 (yesterday %s counts because client_a completed, client_b merely rested) got %s',
         v_yesterday, v_shared_streak
-      );
+      ));
     end if;
 
     delete from public.workout_logs where client_id in (client_a, client_b);
   else
-    failures := failures || 'shared-streak fixture skipped: current_date is before the 2026-06-29 fixture start_date, adjust fixture dates forward';
+    failures := array_append(failures, 'shared-streak fixture skipped: current_date is before the 2026-06-29 fixture start_date, adjust fixture dates forward');
   end if;
 
   -------------------------------------------------------------------------
