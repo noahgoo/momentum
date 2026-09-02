@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   dateStr,
-  parseFriendshipStats,
   type Friendship,
   type Goal,
   type GoalLog,
@@ -170,7 +169,6 @@ async function fetchFriendSummary(clientId: string): Promise<DashboardFriendSumm
   if (accepted.length > 0) {
     const friendship = accepted[0];
     const friendId = friendship.client_id === clientId ? friendship.friend_id : friendship.client_id;
-    const stats = parseFriendshipStats(friendship.stats ?? {});
     const memberNames = (friendship.member_names ?? {}) as Record<string, string>;
     first = {
       friendName: memberNames[friendId] ?? "Friend",
