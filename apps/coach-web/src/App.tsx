@@ -13,12 +13,31 @@ import { ProgramsPage } from "./pages/ProgramsPage";
 import { ProgramBuilderPage } from "./pages/ProgramBuilderPage";
 import { ClientsPage } from "./pages/ClientsPage";
 import { ClientDetailPage } from "./pages/ClientDetailPage";
+import { AssignPage } from "./pages/AssignPage";
+import { MessagesPage } from "./pages/MessagesPage";
+import { ChangeRequestsPage } from "./pages/ChangeRequestsPage";
+import { MotivationPage } from "./pages/MotivationPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { ExercisesPage } from "./pages/ExercisesPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 const queryClient = new QueryClient();
 
-// Routes with dedicated pages (built in this slice) rather than the generic
-// PlaceholderPage fallback every other nav item still uses.
-const ROUTED_PATHS = new Set(["/workouts", "/warmups", "/programs", "/clients"]);
+// Every nav route now has a dedicated page component; feature slices replace
+// the page bodies without touching this file.
+const ROUTED_PATHS = new Set([
+  "/workouts",
+  "/warmups",
+  "/programs",
+  "/clients",
+  "/assign",
+  "/messages",
+  "/change-requests",
+  "/motivation",
+  "/notifications",
+  "/exercises",
+  "/settings",
+]);
 
 export function App() {
   return (
@@ -57,6 +76,14 @@ export function App() {
 
               <Route path="clients" element={<ClientsPage />} />
               <Route path="clients/:id" element={<ClientDetailPage />} />
+
+              <Route path="assign" element={<AssignPage />} />
+              <Route path="messages" element={<MessagesPage />} />
+              <Route path="change-requests" element={<ChangeRequestsPage />} />
+              <Route path="motivation" element={<MotivationPage />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+              <Route path="exercises" element={<ExercisesPage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>
         </AuthProvider>
