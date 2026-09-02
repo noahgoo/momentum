@@ -66,3 +66,29 @@ export function useDeleteExercise() {
     },
   });
 }
+
+/**
+ * Per-exercise count of workouts referencing it (via `workout_exercises`),
+ * for the library page's usage badge and delete-blocked messaging. Mirrors
+ * `useWorkoutExerciseCounts` in `useWorkouts.ts`.
+ */
+export function useExerciseUsageCounts(exerciseIds: string[]) {
+  return useQuery<Record<string, number>>({
+    queryKey: qk.exerciseUsageCounts(exerciseIds),
+    queryFn: async () => {
+      if (exerciseIds.length === 0) return {};
+      const { data, error } = await supabase
+        .from("workout_exercises")
+        .select("exercise_id")
+        .in("exercise_id", exerciseIds);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const row of data ?? []) {
+        if (!row.exercise_id) continue;
+        counts[row.exercise_id] = (counts[row.exercise_id] ?? 0) + 1;
+      }
+      return counts;
+    },
+    enabled: exerciseIds.length > 0,
+  });
+}
