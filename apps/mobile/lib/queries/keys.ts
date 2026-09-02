@@ -23,6 +23,7 @@
  *   ['friendships', uid]
  *   ['progressPhotos', uid]
  *   ['bodyMeasurements', uid]
+ *   ['streak', uid]
  *
  * Keep every segment a plain string/primitive (no objects) so React Query's
  * default structural-sharing/equality checks stay cheap and predictable.
@@ -58,4 +59,6 @@ export const qk = {
   progressPhotos: (uid: string) => ["progressPhotos", uid] as const,
   /** This client's body_measurements, most recent first (progress/measurements.tsx). */
   bodyMeasurements: (uid: string) => ["bodyMeasurements", uid] as const,
+  /** get_my_streak() RPC result, standalone (progress/index.tsx's hero — see useTodayWorkout for the composite version). */
+  streak: (uid: string) => ["streak", uid] as const,
 };
