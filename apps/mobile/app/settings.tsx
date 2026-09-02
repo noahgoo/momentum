@@ -1,33 +1,50 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth";
-import { colors, fonts, radii, spacing } from "../theme/tokens";
+import { useProfile } from "../lib/queries/useProfile";
+import { useChangeRequestHistory } from "../lib/queries/useChangeRequestHistory";
+import { ProfileCard } from "../components/settings/ProfileCard";
+import { NotificationsCard } from "../components/settings/NotificationsCard";
+import { BodyCard } from "../components/settings/BodyCard";
+import { TimezoneRow } from "../components/settings/TimezoneRow";
+import { RequestsCard } from "../components/settings/RequestsCard";
+import { AccountCard } from "../components/settings/AccountCard";
+import { colors, fonts, spacing } from "../theme/tokens";
 
 export default function Settings() {
-  const { profile, signOut } = useAuth();
+  const { session, signOut } = useAuth();
+  const uid = session?.user.id;
+
+  // Read through the query hook (not auth-context `profile`) so every card's
+  // autosave mutation and this screen share the same qk.profile(uid) cache
+  // entry per the README's optimistic-mutation convention.
+  const { data: profile } = useProfile(uid);
+  const { data: requests = [], isLoading: requestsLoading } = useChangeRequestHistory(uid);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Settings</Text>
-        <Text style={styles.description}>
-          Autosave-on-blur preferences and account details land here in a later slice.
-        </Text>
 
         {profile ? (
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Timezone</Text>
-            <Text style={styles.infoValue}>{profile.timezone ?? "syncing..."}</Text>
+          <>
+            <ProfileCard profile={profile} />
+            <NotificationsCard profile={profile} />
+            <BodyCard profile={profile} />
+            <TimezoneRow timezone={profile.timezone} />
+          </>
+        ) : (
+          <View style={styles.loading}>
+            <Text style={styles.loadingText}>Loading…</Text>
           </View>
-        ) : null}
+        )}
 
-        <Pressable
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={() => void signOut()}
-        >
-          <Text style={styles.buttonText}>Sign out</Text>
-        </Pressable>
-      </View>
+        <RequestsCard requests={requests} loading={requestsLoading} />
+        <AccountCard signOut={signOut} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -38,51 +55,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cream,
   },
   content: {
-    flex: 1,
     padding: spacing.xxl,
+    paddingBottom: spacing.xxl * 2,
   },
   title: {
     fontFamily: fonts.display,
     fontSize: 28,
     color: colors.ink,
-    marginBottom: spacing.sm,
-  },
-  description: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.ink50,
     marginBottom: spacing.xl,
   },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: colors.surface,
-    borderRadius: radii.control,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  infoLabel: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    color: colors.ink70,
-  },
-  infoValue: {
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.ink50,
-  },
-  button: {
-    backgroundColor: colors.bad,
-    borderRadius: radii.control,
-    paddingVertical: 14,
+  loading: {
+    paddingVertical: spacing.xl,
     alignItems: "center",
   },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 16,
-    color: colors.surface,
+  loadingText: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.ink50,
   },
 });

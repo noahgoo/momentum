@@ -13,10 +13,16 @@
  *   ['goals', uid, 'logs', dateStr]
  *   ['goals', uid, 'logs', 'range', fromDateStr, toDateStr]
  *   ['messages', clientId]
+ *   ['thread', clientId]
+ *   ['myCoach', coachId]
  *   ['workoutWeek', uid, weekNumber]
  *   ['workoutDay', uid, dateStr]
  *   ['workoutHistory', uid]
  *   ['changeRequest', uid]
+ *   ['changeRequestHistory', uid]
+ *   ['friendships', uid]
+ *   ['progressPhotos', uid]
+ *   ['bodyMeasurements', uid]
  *
  * Keep every segment a plain string/primitive (no objects) so React Query's
  * default structural-sharing/equality checks stay cheap and predictable.
@@ -32,6 +38,10 @@ export const qk = {
   goalLogsRange: (uid: string, fromDateStr: string, toDateStr: string) =>
     ["goals", uid, "logs", "range", fromDateStr, toDateStr] as const,
   messages: (clientId: string) => ["messages", clientId] as const,
+  /** The client's single messaging thread row (threads.client_id is unique). */
+  thread: (clientId: string) => ["thread", clientId] as const,
+  /** The client's own coach's `profiles` row (display_name for the messages header). */
+  myCoach: (coachId: string) => ["myCoach", coachId] as const,
   /** One week's 7-day grid (workout tab index.tsx). weekNumber is 1-based. */
   workoutWeek: (uid: string, weekNumber: number) => ["workoutWeek", uid, weekNumber] as const,
   /** Single date's workout/warmup/log/previous-log bundle ([date].tsx). */
@@ -40,4 +50,12 @@ export const qk = {
   workoutHistory: (uid: string) => ["workoutHistory", uid] as const,
   /** This client's pending change_requests row, if any (MoveWorkoutCard). */
   changeRequest: (uid: string) => ["changeRequest", uid] as const,
+  /** This client's own change_requests, any status, most recent first (settings.tsx). */
+  changeRequestHistory: (uid: string) => ["changeRequestHistory", uid] as const,
+  /** All friendships (any status) this client is a member of (friends.tsx). */
+  friendships: (uid: string) => ["friendships", uid] as const,
+  /** This client's progress_photos, most recent first (progress/photos.tsx). */
+  progressPhotos: (uid: string) => ["progressPhotos", uid] as const,
+  /** This client's body_measurements, most recent first (progress/measurements.tsx). */
+  bodyMeasurements: (uid: string) => ["bodyMeasurements", uid] as const,
 };
