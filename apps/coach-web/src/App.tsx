@@ -9,12 +9,16 @@ import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { WorkoutsPage } from "./pages/WorkoutsPage";
 import { WarmupsPage } from "./pages/WarmupsPage";
 import { WorkoutBuilderPage } from "./pages/WorkoutBuilderPage";
+import { ProgramsPage } from "./pages/ProgramsPage";
+import { ProgramBuilderPage } from "./pages/ProgramBuilderPage";
+import { ClientsPage } from "./pages/ClientsPage";
+import { ClientDetailPage } from "./pages/ClientDetailPage";
 
 const queryClient = new QueryClient();
 
 // Routes with dedicated pages (built in this slice) rather than the generic
 // PlaceholderPage fallback every other nav item still uses.
-const ROUTED_PATHS = new Set(["/workouts", "/warmups"]);
+const ROUTED_PATHS = new Set(["/workouts", "/warmups", "/programs", "/clients"]);
 
 export function App() {
   return (
@@ -46,6 +50,13 @@ export function App() {
               <Route path="warmups" element={<WarmupsPage />} />
               <Route path="warmups/new" element={<WorkoutBuilderPage type="warmup" />} />
               <Route path="warmups/:id" element={<WorkoutBuilderPage type="warmup" />} />
+
+              <Route path="programs" element={<ProgramsPage />} />
+              <Route path="programs/new" element={<ProgramBuilderPage />} />
+              <Route path="programs/:id" element={<ProgramBuilderPage />} />
+
+              <Route path="clients" element={<ClientsPage />} />
+              <Route path="clients/:id" element={<ClientDetailPage />} />
             </Route>
           </Routes>
         </AuthProvider>
