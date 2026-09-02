@@ -1221,6 +1221,14 @@ export type Database = {
       get_my_streak: { Args: never; Returns: number }
       is_coach: { Args: never; Returns: boolean }
       is_coach_of: { Args: { p_client_id: string }; Returns: boolean }
+      list_coach_siblings: {
+        Args: never
+        Returns: {
+          display_name: string
+          id: string
+        }[]
+      }
+      my_coach_id: { Args: never; Returns: string }
       recompute_friendship_stats: {
         Args: { p_pair_id: string }
         Returns: undefined

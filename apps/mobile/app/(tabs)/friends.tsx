@@ -147,7 +147,7 @@ export default function FriendsScreen() {
           </View>
         )}
 
-        <FindFriendsSection />
+        <FindFriendsSection friendships={friendships} />
       </ScrollView>
     </SafeAreaView>
   );

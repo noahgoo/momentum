@@ -25,13 +25,11 @@ interface SendFriendRequestInput {
  * default) — the placeholders below are discarded by the trigger before
  * the row is ever visible.
  *
- * NON-GOAL note (plan 8.6): the roster this mutation's `friendId` comes from
- * (a same-coach client picker) is not readable under current `profiles` RLS
- * — see the "Find friends" section in friends.tsx, which is disabled with an
- * explanatory empty state pending an RLS follow-up. This hook still exists
- * so it's ready to wire up the moment a roster becomes available (e.g. via
- * a future SECURITY DEFINER RPC), without another slice needing to touch
- * the mutation layer.
+ * The roster this mutation's `friendId` comes from is `list_coach_siblings()`
+ * (0018_list_coach_siblings.sql), a SECURITY DEFINER RPC — see
+ * `useCoachSiblings` and `FindFriendsSection.tsx`. Plain `profiles` RLS still
+ * doesn't let a client read sibling rows directly, which is why that RPC
+ * exists instead of widening the SELECT policy.
  */
 export function useSendFriendRequest() {
   const queryClient = useQueryClient();

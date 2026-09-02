@@ -1,6 +1,22 @@
+import { View, StyleSheet, type ColorValue } from "react-native";
 import { Tabs } from "expo-router";
 import { Home, Dumbbell, Target, TrendingUp, MessageCircle, Users } from "lucide-react-native";
 import { colors, fonts } from "../../theme/tokens";
+import { useAuth } from "../../lib/auth";
+import { useHasUnreadMessages } from "../../lib/queries/useUnreadMessages";
+
+/** Small red dot overlaid on the Messages tab icon when there's an unread message. */
+function MessagesIcon({ color, size }: { color: ColorValue; size: number }) {
+  const { session } = useAuth();
+  const hasUnread = useHasUnreadMessages(session?.user.id);
+
+  return (
+    <View>
+      <MessageCircle color={color} size={size} />
+      {hasUnread && <View style={styles.badge} />}
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   return (
@@ -51,7 +67,7 @@ export default function TabsLayout() {
         name="messages"
         options={{
           title: "Messages",
-          tabBarIcon: ({ color, size }) => <MessageCircle color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <MessagesIcon color={color} size={size} />,
         }}
       />
       <Tabs.Screen
@@ -64,3 +80,15 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  badge: {
+    position: "absolute",
+    top: -1,
+    right: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.bad,
+  },
+});
