@@ -93,8 +93,7 @@ export default function Messages() {
       if (!hasUnread) return;
       markReadOnceRef.current = threadId;
       markRead.mutate({ clientId: uid, threadId });
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uid, threadId, messages])
+    }, [uid, threadId, messages, markRead])
   );
 
   const rows = useMemo<Row[]>(() => {
