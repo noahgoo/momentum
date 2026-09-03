@@ -25,7 +25,7 @@ export interface WorkoutDayResult {
   warmupExercises: WorkoutExerciseWithName[];
   /** This date's workout_logs row (with children), if one exists yet. */
   log: WorkoutLogWithChildren | null;
-  /** Most recent prior log for the SAME workout_id, before this date — for "last time" ghost values. */
+  /** The client's most recent completed log before this date, in any workout — for "last time" ghost values, paired by exercise. */
   previousLog: WorkoutLogWithChildren | null;
   /** Whether `date` falls within the assignment's active window. */
   inRange: boolean;
@@ -109,11 +109,15 @@ export function useWorkoutDay(uid: string | undefined, date: string | undefined)
           .select("*, exercises(name, video_url)")
           .eq("workout_id", workoutId)
           .order("sort_order", { ascending: true }),
+        // "Last time" means the last time this client did these EXERCISES,
+        // in any workout — not the last time they did this same workout row.
+        // Scoping by workout_id blanked the column after a reassign (P-4),
+        // and the logger already pairs prior sets by exercise_id anyway.
         supabase
           .from("workout_logs")
           .select(LOG_SELECT)
           .eq("client_id", clientId)
-          .eq("workout_id", workoutId)
+          .eq("completed", true)
           .lt("date", targetDate)
           .order("date", { ascending: false })
           .limit(1)

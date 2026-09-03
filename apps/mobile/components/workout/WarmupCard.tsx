@@ -71,6 +71,9 @@ export function WarmupCard({ warmup, exercises, completed, readOnly = false, onT
       {open && (
         <View style={styles.movementList}>
           {exercises.map((ex, i) => {
+            // Live `set_configs` is correct here: this card shows what the
+            // client is being asked to do TODAY, not what a past log recorded.
+            // The snapshot rule (P1) governs history, not the live prescription.
             const configs = Array.isArray(ex.set_configs) ? ex.set_configs : [];
             const setCount = configs.length || 1;
             const firstConfig = configs.length > 0 ? parseSetConfig(configs[0]) : undefined;

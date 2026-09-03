@@ -1,11 +1,7 @@
 import { useState } from "react";
 import type { Workout } from "@momentum/shared";
-import {
-  workoutExerciseTargetKey,
-  type WorkoutExerciseTargetKey,
-  type WorkoutLogWithSets,
-} from "../../queries/useClientDetail";
-import type { SetConfig } from "@momentum/shared";
+import { type WorkoutLogWithSets } from "../../queries/useClientDetail";
+import { parseSetConfig } from "@momentum/shared";
 import {
   computePace,
   DIFFICULTY_LABELS,
@@ -20,7 +16,6 @@ import {
 interface Props {
   logs: WorkoutLogWithSets[];
   workoutsById: Map<string, Workout>;
-  targetsByWorkoutExercise: Map<WorkoutExerciseTargetKey, SetConfig[]>;
 }
 
 const COLLAPSED_COUNT = 15;
@@ -31,17 +26,14 @@ const COLLAPSED_COUNT = 15;
  *  - exercises/sets are nested rows (`exercise_logs` -> `set_logs`), not
  *    embedded arrays on the log document — fetched via useClientDetail's
  *    `select("*, exercise_logs(*, set_logs(*)))")`.
- *  - per-set *targets* (what the old app read off `workout.exercises[i].setConfigs`)
- *    now come from `targetsByWorkoutExercise` (built in useClientDetail from
- *    `workout_exercises.set_configs`), looked up by workout+exercise id — a
- *    coach may have edited/reordered the workout since this log was
- *    recorded, so this is a best-effort match, not a guaranteed one (falls
- *    back to "—" targets if the workout_exercise row is gone).
+ *  - per-set *targets* come from each set's own `prescribed` snapshot, taken
+ *    when the client logged it. Editing or reordering the workout afterwards
+ *    cannot change what a past log shows.
  *  - mode is read off `exercise_logs.mode` (the log), not the current
  *    workout — the coach may have changed the exercise's mode since this
  *    session was recorded.
  */
-export function RecentWorkouts({ logs, workoutsById, targetsByWorkoutExercise }: Props) {
+export function RecentWorkouts({ logs, workoutsById }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
 
@@ -100,10 +92,6 @@ export function RecentWorkouts({ logs, workoutsById, targetsByWorkoutExercise }:
                 {exerciseLogs.map((ex) => {
                   const mode = ex.mode;
                   const sets = [...ex.set_logs].sort((a, b) => a.set_number - b.set_number);
-                  const targets =
-                    log.workout_id && ex.exercise_id
-                      ? targetsByWorkoutExercise.get(workoutExerciseTargetKey(log.workout_id, ex.exercise_id))
-                      : undefined;
 
                   return (
                     <div key={ex.id}>
@@ -125,13 +113,13 @@ export function RecentWorkouts({ logs, workoutsById, targetsByWorkoutExercise }:
                           </tr>
                         </thead>
                         <tbody>
-                          {sets.map((set, i) => (
+                          {sets.map((set) => (
                             <tr key={set.id}>
                               <td className="py-0.5 pr-3">{set.set_number}</td>
                               <td className="py-0.5 pr-3">
                                 {mode === "distance"
                                   ? formatLogMiles(set.actual_miles)
-                                  : formatTargetWeight(targets?.[i])}
+                                  : formatTargetWeight(parseSetConfig(set.prescribed))}
                               </td>
                               <td className="py-0.5 pr-3">
                                 {mode === "distance"

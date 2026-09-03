@@ -2,21 +2,23 @@ import { useQuery } from "@tanstack/react-query";
 import type { Workout } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
-import type { WorkoutLogWithChildren, WorkoutExerciseWithName } from "./useWorkoutDay";
+import type { WorkoutLogWithChildren } from "./useWorkoutDay";
 
 export interface WorkoutHistoryResult {
   logs: WorkoutLogWithChildren[];
   workoutsById: Map<string, Workout>;
-  /** workout_exercises for every referenced workout — used to show each set's
-   * TARGET weight (exercise_logs/set_logs only carry what was actually logged,
-   * not the coach-prescribed target). Keyed by workout_id, then exercise_id. */
-  workoutExercisesByWorkoutId: Map<string, Map<string, WorkoutExerciseWithName>>;
 }
 
 /**
- * Completed workout_logs, most recent first, plus the distinct workouts
- * referenced by them (batched into one `.in()` fetch rather than N+1). The
- * history screen slices this to the collapsed-15 view client-side.
+ * Completed workout_logs, most recent first, plus the workouts they
+ * reference — for the workout NAME only.
+ *
+ * Targets are NOT fetched: each set carries its own `prescribed` snapshot
+ * from when it was logged. This used to join `workout_exercises` and match
+ * targets back to sets by array position, so editing or reordering a workout
+ * retroactively changed what past logs claimed the client was asked to do,
+ * and deleting an exercise blanked its targets permanently (violations B5,
+ * P-1, P-3). History now renders from the log alone.
  */
 export function useWorkoutHistory(uid: string | undefined) {
   return useQuery<WorkoutHistoryResult>({
@@ -35,35 +37,15 @@ export function useWorkoutHistory(uid: string | undefined) {
         ...new Set((logs ?? []).map((l) => l.workout_id).filter((id): id is string => Boolean(id))),
       ];
 
-      const [{ data: workouts, error: workoutsError }, { data: workoutExercises, error: exercisesError }] =
+      const { data: workouts, error: workoutsError } =
         workoutIds.length > 0
-          ? await Promise.all([
-              supabase.from("workouts").select("*").in("id", workoutIds),
-              supabase
-                .from("workout_exercises")
-                .select("*, exercises(name, video_url)")
-                .in("workout_id", workoutIds),
-            ])
-          : [
-              { data: [] as Workout[], error: null },
-              { data: [] as WorkoutExerciseWithName[], error: null },
-            ];
+          ? await supabase.from("workouts").select("*").in("id", workoutIds)
+          : { data: [] as Workout[], error: null };
       if (workoutsError) throw workoutsError;
-      if (exercisesError) throw exercisesError;
-
-      const workoutExercisesByWorkoutId = new Map<string, Map<string, WorkoutExerciseWithName>>();
-      for (const we of (workoutExercises ?? []) as WorkoutExerciseWithName[]) {
-        if (!we.exercise_id) continue;
-        if (!workoutExercisesByWorkoutId.has(we.workout_id)) {
-          workoutExercisesByWorkoutId.set(we.workout_id, new Map());
-        }
-        workoutExercisesByWorkoutId.get(we.workout_id)!.set(we.exercise_id, we);
-      }
 
       return {
         logs: (logs ?? []) as WorkoutLogWithChildren[],
         workoutsById: new Map((workouts ?? []).map((w) => [w.id, w])),
-        workoutExercisesByWorkoutId,
       };
     },
   });

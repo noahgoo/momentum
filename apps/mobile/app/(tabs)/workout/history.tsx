@@ -106,15 +106,7 @@ export default function WorkoutHistoryScreen() {
 
                 {open && (
                   <View style={styles.breakdown}>
-                    {log.exercise_logs.map((ex) => {
-                      const workoutExercise = log.workout_id
-                        ? (ex.exercise_id
-                            ? data?.workoutExercisesByWorkoutId.get(log.workout_id)?.get(ex.exercise_id)
-                            : undefined)
-                        : undefined;
-                      const configs = Array.isArray(workoutExercise?.set_configs) ? workoutExercise.set_configs : [];
-
-                      return (
+                    {log.exercise_logs.map((ex) => (
                       <View key={ex.id} style={styles.exerciseSection}>
                         <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
                         <View style={styles.setsHeaderRow}>
@@ -128,7 +120,10 @@ export default function WorkoutHistoryScreen() {
                         {ex.set_logs.map((set) => {
                           const pace =
                             ex.mode === "distance" ? computePace(set.actual_miles, set.actual_seconds) : undefined;
-                          const targetCfg = parseSetConfig(configs[set.set_number - 1]);
+                          // The target this set was logged against, snapshotted
+                          // on the row itself — never re-read from the live
+                          // workout, which the coach may have edited since.
+                          const targetCfg = parseSetConfig(set.prescribed);
                           return (
                             <View key={set.id} style={styles.setRow}>
                               <Text style={styles.setCell}>{set.set_number}</Text>
@@ -158,8 +153,7 @@ export default function WorkoutHistoryScreen() {
                           );
                         })}
                       </View>
-                      );
-                    })}
+                    ))}
                   </View>
                 )}
               </View>

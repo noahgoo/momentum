@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { parseDateStr, parseSetConfigs, type SetConfig } from "@momentum/shared";
+import { parseDateStr } from "@momentum/shared";
 import type {
   BodyMeasurement,
   ClientSummary,
@@ -24,9 +24,6 @@ export type ProgramStatus =
   | { kind: "not_started"; program: Program; startDateStr: string }
   | { kind: "active"; program: Program; currentWeek: number; totalWeeks: number };
 
-/** Key for `targetsByWorkoutExercise`: `${workoutId}:${exerciseId}`. */
-export type WorkoutExerciseTargetKey = string;
-
 export interface ClientDetail {
   profile: Profile;
   /** Streak comes from `client_summaries` — trigger-maintained by `compute_streak` (plan finding #8), never re-derived here. */
@@ -35,18 +32,7 @@ export interface ClientDetail {
   /** Last 12 weeks (84 days) of workout logs, for the heatmap + recent-workouts list, newest first. */
   logs: WorkoutLogWithSets[];
   workoutsById: Map<string, Workout>;
-  /**
-   * Per-set target configs, keyed by `${workoutId}:${exerciseId}`, for
-   * RecentWorkouts' target columns. A coach may have since edited/reordered
-   * the workout, so a log's exercise may have no matching entry here — that
-   * is a normal "targets unavailable" case, not an error.
-   */
-  targetsByWorkoutExercise: Map<WorkoutExerciseTargetKey, SetConfig[]>;
   measurements: BodyMeasurement[];
-}
-
-export function workoutExerciseTargetKey(workoutId: string, exerciseId: string): WorkoutExerciseTargetKey {
-  return `${workoutId}:${exerciseId}`;
 }
 
 const HEATMAP_DAYS = 84; // 12 weeks
@@ -131,25 +117,17 @@ export function useClientDetail(clientId: string | undefined, todayStr: string) 
 
       const logs = (logsRes.data ?? []) as unknown as WorkoutLogWithSets[];
 
+      // Workouts are fetched for their NAME only. Targets come from each
+      // set's own `prescribed` snapshot — see WorkoutLogWithSets.
       const workoutIds = [...new Set(logs.map((l) => l.workout_id).filter((v): v is string => Boolean(v)))];
       let workoutsById = new Map<string, Workout>();
-      const targetsByWorkoutExercise = new Map<WorkoutExerciseTargetKey, SetConfig[]>();
       if (workoutIds.length > 0) {
-        const [{ data: workouts, error: workoutsError }, { data: workoutExercises, error: weError }] =
-          await Promise.all([
-            supabase.from("workouts").select("*").in("id", workoutIds),
-            supabase.from("workout_exercises").select("*").in("workout_id", workoutIds),
-          ]);
+        const { data: workouts, error: workoutsError } = await supabase
+          .from("workouts")
+          .select("*")
+          .in("id", workoutIds);
         if (workoutsError) throw workoutsError;
-        if (weError) throw weError;
         workoutsById = new Map((workouts ?? []).map((w) => [w.id, w]));
-        for (const we of workoutExercises ?? []) {
-          if (!we.exercise_id) continue;
-          targetsByWorkoutExercise.set(
-            workoutExerciseTargetKey(we.workout_id, we.exercise_id),
-            parseSetConfigs(we.set_configs)
-          );
-        }
       }
 
       return {
@@ -161,7 +139,6 @@ export function useClientDetail(clientId: string | undefined, todayStr: string) 
         ),
         logs,
         workoutsById,
-        targetsByWorkoutExercise,
         measurements: measurementsRes.data ?? [],
       };
     },

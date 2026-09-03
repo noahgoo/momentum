@@ -283,6 +283,66 @@ begin
   end;
 
   -- ---------------------------------------------------------------------
+  -- Phase 2: history renders from the log alone (P-1, B5, P-3)
+  -- ---------------------------------------------------------------------
+
+  perform set_config('request.jwt.claims', json_build_object('sub', client_a)::text, true);
+
+  -- Re-establish a logged set with its snapshot: the W2 check above
+  -- deliberately saved an empty exercise list, which cleared the children.
+  perform public.save_workout_log(
+    v_scheduled, w_mon, true,
+    '[{"exercise_id":"e9000000-0000-0000-0000-000000000001","exercise_name":"Squat",
+       "mode":"reps","sort_order":0,
+       "sets":[{"set_number":1,"completed":true,"reps":5,"weight":135,"weight_unit":"lbs",
+                "weight_entered":true,"prescribed":{"reps":5,"weight":135,"weight_unit":"lbs"}}]}]'::jsonb);
+
+  -- Reorder AND shrink the workout: the old readers matched targets to sets
+  -- by array position, so this is exactly the edit that used to misattribute
+  -- or blank them.
+  update public.workout_exercises
+  set set_configs = '[{"reps":3,"weight":315,"weight_unit":"lbs"}]'::jsonb,
+      sort_order = 5
+  where workout_id = w_mon;
+
+  select sl.prescribed->>'weight' into v_text
+  from public.set_logs sl join public.exercise_logs el on el.id = sl.exercise_log_id
+  where el.workout_log_id = v_log_id and sl.set_number = 1;
+  if v_text is distinct from '135' then
+    failures := array_append(failures,
+      format('after reordering/shrinking the workout the log should still read 135, got %s',
+        coalesce(v_text, 'null')));
+  end if;
+
+  -- Deleting the exercise outright must not blank the log's targets either.
+  delete from public.workout_exercises where workout_id = w_mon;
+
+  select sl.prescribed->>'weight' into v_text
+  from public.set_logs sl join public.exercise_logs el on el.id = sl.exercise_log_id
+  where el.workout_log_id = v_log_id and sl.set_number = 1;
+  if v_text is distinct from '135' then
+    failures := array_append(failures,
+      'deleting the workout''s exercises blanked a past log''s targets');
+  end if;
+
+  -- And deleting the workout itself leaves history readable (R4: the
+  -- workout_id FK is provenance, set null, not a dependency).
+  delete from public.week_schedules where workout_id = w_mon;
+  delete from public.workouts where id = w_mon;
+
+  select count(*) into v_count from public.workout_logs where id = v_log_id;
+  if v_count <> 1 then
+    failures := array_append(failures, 'deleting a workout destroyed its past logs');
+  end if;
+
+  select sl.prescribed->>'weight' into v_text
+  from public.set_logs sl join public.exercise_logs el on el.id = sl.exercise_log_id
+  where el.workout_log_id = v_log_id and sl.set_number = 1;
+  if v_text is distinct from '135' then
+    failures := array_append(failures, 'deleting a workout blanked its past logs'' targets');
+  end if;
+
+  -- ---------------------------------------------------------------------
   -- Report
   -- ---------------------------------------------------------------------
   raise exception 'WRITE_RPC_ASSERTIONS % — %',
