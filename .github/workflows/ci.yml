@@ -36,3 +36,38 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Apply migrations and seed
+        run: supabase db reset
+
+      # Each assertion file raises on BOTH outcomes (the raise is what forces
+      # the ROLLBACK), so psql always exits non-zero and the exit code cannot
+      # be the gate. The PASSED/FAILED marker in the raised message is.
+      - name: Run SQL assertions
+        run: |
+          DB_URL="$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '\"')"
+          failed=0
+          for f in supabase/tests/*.sql; do
+            echo "--- $f"
+            out="$(psql "$DB_URL" -f "$f" 2>&1)" || true
+            echo "$out"
+            if ! grep -q 'PASSED' <<< "$out"; then
+              echo "::error file=$f::assertions FAILED"
+              failed=1
+            fi
+          done
+          exit "$failed"

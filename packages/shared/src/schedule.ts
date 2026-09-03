@@ -2,7 +2,6 @@ import type {
   AssignmentPreview,
   DayOfWeek,
   ProgramPreview,
-  SwapOverrides,
   WeekSchedule,
 } from "./types.js";
 
@@ -81,25 +80,4 @@ export function getWorkoutIdForDate(
   const dayName = DAY_NAMES[target.getDay()] as DayOfWeek;
   const schedule = resolveWeekSchedule(program);
   return schedule[String(weekNumber)]?.[dayName] || null;
-}
-
-/**
- * Computes the pair of date overrides that SWAP what's scheduled on `fromDate`
- * and `toDate`: toDate receives fromWorkoutId, and fromDate receives
- * toWorkoutId-or-null (rest). Returns null if there's nothing to swap (dates
- * equal, or nothing scheduled on fromDate).
- */
-export function computeSwapOverrides(
-  fromDate: string,
-  toDate: string,
-  fromWorkoutId: string | null,
-  toWorkoutId: string | null
-): SwapOverrides | null {
-  if (fromDate === toDate) return null;
-  if (!fromWorkoutId) return null; // nothing scheduled on fromDate to move
-
-  return {
-    [fromDate]: toWorkoutId ?? null,
-    [toDate]: fromWorkoutId,
-  };
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  computeSwapOverrides,
   getWorkoutIdForDate,
   parseDateStr,
   resolveWeekSchedule,
@@ -99,36 +98,4 @@ describe("getWorkoutIdForDate (fixture-driven)", () => {
       expect(getWorkoutIdForDate(assignment, c.date)).toBe(c.expected);
     });
   }
-});
-
-describe("computeSwapOverrides", () => {
-  it("swaps two scheduled workouts", () => {
-    expect(computeSwapOverrides("2026-06-29", "2026-06-30", "w1", "w2")).toEqual({
-      "2026-06-29": "w2",
-      "2026-06-30": "w1",
-    });
-  });
-
-  it("swaps a workout with a rest day (toDate had no workout)", () => {
-    expect(computeSwapOverrides("2026-06-29", "2026-06-30", "w1", null)).toEqual({
-      "2026-06-29": null,
-      "2026-06-30": "w1",
-    });
-  });
-
-  it("returns null when the dates are the same", () => {
-    expect(computeSwapOverrides("2026-06-29", "2026-06-29", "w1", "w2")).toBeNull();
-  });
-
-  it("returns null when nothing is scheduled on the from-date", () => {
-    expect(computeSwapOverrides("2026-06-29", "2026-06-30", null, "w2")).toBeNull();
-  });
-
-  it("moving a workout onto a rest day and back is a no-op round trip", () => {
-    const first = computeSwapOverrides("2026-06-29", "2026-06-30", "w1", null);
-    expect(first).toEqual({ "2026-06-29": null, "2026-06-30": "w1" });
-    // Swapping back: fromDate is now toDate (has w1), toDate is now fromDate (rest, null).
-    const back = computeSwapOverrides("2026-06-30", "2026-06-29", "w1", null);
-    expect(back).toEqual({ "2026-06-30": null, "2026-06-29": "w1" });
-  });
 });

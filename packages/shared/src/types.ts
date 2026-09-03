@@ -37,14 +37,12 @@ export interface ProgramPreview {
   phases?: PhasePreview[];
 }
 
-/** Per-date overrides: workoutId string, or null for an explicit rest day. */
-export type SwapOverrides = Record<string, string | null>;
-
 /** Inputs needed to resolve a scheduled workout for a date. */
 export interface AssignmentPreview {
   startDate: string; // YYYY-MM-DD
   program: ProgramPreview;
-  overrides?: SwapOverrides;
+  /** Per-date overrides: workoutId string, or null for an explicit rest day. */
+  overrides?: Record<string, string | null>;
 }
 
 /** Body-fat calculation inputs: profile-level measurements. */
