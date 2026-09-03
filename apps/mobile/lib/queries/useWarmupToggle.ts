@@ -3,34 +3,34 @@ import { supabase } from "../supabase";
 import { qk } from "./keys";
 
 interface WarmupToggleInput {
+  /** Only for cache keys — the server takes the client from auth.uid(). */
   clientId: string;
   date: string;
-  workoutId: string;
   completed: boolean;
 }
 
 /**
- * Toggles warmup_completed independently of the workout logger (plan finding
- * #5: "warmup tick creates stub log if none exists; warmup completion
- * independent of workout"). Upsert against the (client_id, date) unique
- * constraint so a first warmup tick on a day with no log yet creates a
- * minimal stub row rather than requiring the full logger to run first.
+ * Toggles warmup_completed, independently of workout completion — finishing
+ * the warm-up and finishing the workout are separate facts and neither gates
+ * the other (docs/rules/notifications.md W2).
+ *
+ * Goes through the `set_warmup_completed` RPC rather than upserting
+ * workout_logs directly. Two hooks upserting the same (client_id, date) row
+ * with different column sets was a latent clobber (violation W-1), and the
+ * client-side version could also create a stub log for a rest day. The RPC
+ * patches an existing row by id and only creates a stub when the date is
+ * actually scheduled.
  */
 export function useWarmupToggle() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ clientId, date, workoutId, completed }: WarmupToggleInput) => {
-      const { error } = await supabase.from("workout_logs").upsert(
-        {
-          client_id: clientId,
-          date,
-          workout_id: workoutId,
-          warmup_completed: completed,
-        },
-        { onConflict: "client_id,date", ignoreDuplicates: false }
-      );
-      if (error) throw error;
+    mutationFn: async ({ date, completed }: WarmupToggleInput) => {
+      const { error } = await supabase.rpc("set_warmup_completed", {
+        p_date: date,
+        p_completed: completed,
+      });
+      if (error) throw new Error(error.message);
     },
 
     onMutate: async ({ clientId, date, completed }) => {

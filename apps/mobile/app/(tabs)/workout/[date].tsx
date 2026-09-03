@@ -61,7 +61,7 @@ export default function WorkoutDayScreen() {
 
   function handleWarmupToggle(next: boolean) {
     if (!uid || !dateParam || !workout) return;
-    warmupToggle.mutate({ clientId: uid, date: dateParam, workoutId: workout.id, completed: next });
+    warmupToggle.mutate({ clientId: uid, date: dateParam, completed: next });
   }
 
   function handleDifficultyChange(value: WorkoutDifficulty) {
@@ -180,7 +180,6 @@ export default function WorkoutDayScreen() {
               exercises={data.exercises}
               existingLog={log?.exercise_logs}
               previousLog={data.previousLog?.exercise_logs}
-              warmupCompleted={data.warmup ? (log?.warmup_completed ?? false) : undefined}
               onComplete={() => setViewingCompletedLog(false)}
             />
           </View>

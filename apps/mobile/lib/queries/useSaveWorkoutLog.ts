@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ExerciseMode, WeightUnit } from "@momentum/shared";
+import type { ExerciseMode, SetConfig, WeightUnit } from "@momentum/shared";
+import { serializeSetConfig, serializeSetConfigs } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 
@@ -12,6 +13,10 @@ export interface SetLogInput {
   targetSeconds?: number;
   actualSeconds?: number;
   actualMiles?: number;
+  /** True only when the client actually typed a weight — see P2. */
+  weightEntered?: boolean;
+  /** This set's target as it stood right now; snapshotted onto the log. */
+  prescribed?: SetConfig;
 }
 
 export interface ExerciseLogInput {
@@ -20,115 +25,65 @@ export interface ExerciseLogInput {
   mode: ExerciseMode;
   sortOrder: number;
   sets: SetLogInput[];
+  /** The exercise's full target list at log time; snapshotted onto the log. */
+  prescribed?: SetConfig[];
 }
 
 export interface SaveWorkoutLogInput {
-  clientId: string;
   date: string;
   workoutId: string;
   exercises: ExerciseLogInput[];
-  /** true = "Complete ✓" (all sets done); false = "Save progress" (partial). */
+  /** true = "Complete ✓" (all sets done); false = a background autosave. */
   completed: boolean;
-  /** Carries forward warmup_completed on an existing log; omit to leave unset (false) on a new log. */
-  warmupCompleted?: boolean;
+  /** Only for cache invalidation — the server takes the client from auth.uid(). */
+  clientId: string;
 }
 
 /**
- * Upserts a workout_log for (client_id, date), then replaces its
- * exercise_logs/set_logs children wholesale: delete existing children of
- * this log, reinsert from the current form state. Plan/constraint #5 calls
- * this out explicitly as "fine and simple" — avoids diffing set-by-set.
+ * Saves the whole log tree through the `save_workout_log` RPC: one round
+ * trip, one transaction.
  *
- * Not written as an optimistic mutation (unlike useToggleGoalLog): this
- * writes a whole nested tree in one submit action (explicit Save/Complete
- * button, not a tap-to-toggle), so instant optimistic UI has little value
- * here and the multi-statement replace-on-save shape doesn't fit the
- * onMutate snapshot/rollback pattern cleanly. Callers should show their own
- * pending/saving state (see WorkoutLogger) and rely on onSettled
- * invalidation to reconcile.
+ * This used to be an upsert, two deletes, and a loop of inserts per exercise
+ * over separate connections — so a drop midway destroyed a completed workout
+ * with nothing to roll back to (violation B7). The client no longer sends
+ * client_id at all: the RPC reads auth.uid(), so a client can only ever log
+ * their own work.
+ *
+ * Deliberately not optimistic: this writes a whole nested tree from an
+ * explicit action, so there is no single cached value to flip. Callers show
+ * their own saving state and rely on onSettled to reconcile.
  */
 export function useSaveWorkoutLog() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: SaveWorkoutLogInput) => {
-      const { clientId, date, workoutId, exercises, completed, warmupCompleted } = input;
-
-      const { data: log, error: upsertError } = await supabase
-        .from("workout_logs")
-        .upsert(
-          {
-            client_id: clientId,
-            date,
-            workout_id: workoutId,
-            completed,
-            completed_at: completed ? new Date().toISOString() : null,
-            ...(warmupCompleted !== undefined ? { warmup_completed: warmupCompleted } : {}),
-          },
-          { onConflict: "client_id,date" }
-        )
-        .select()
-        .single();
-      if (upsertError) throw upsertError;
-
-      // Replace-on-save: wipe this log's existing children (cascades to
-      // set_logs via exercise_log_id FK on delete? No ON DELETE CASCADE is
-      // assumed here — delete children explicitly in dependency order to be
-      // safe regardless of the migration's cascade setting).
-      const { data: existingExerciseLogs, error: fetchExError } = await supabase
-        .from("exercise_logs")
-        .select("id")
-        .eq("workout_log_id", log.id);
-      if (fetchExError) throw fetchExError;
-
-      const existingExerciseLogIds = (existingExerciseLogs ?? []).map((e) => e.id);
-      if (existingExerciseLogIds.length > 0) {
-        const { error: deleteSetsError } = await supabase
-          .from("set_logs")
-          .delete()
-          .in("exercise_log_id", existingExerciseLogIds);
-        if (deleteSetsError) throw deleteSetsError;
-
-        const { error: deleteExError } = await supabase
-          .from("exercise_logs")
-          .delete()
-          .eq("workout_log_id", log.id);
-        if (deleteExError) throw deleteExError;
-      }
-
-      for (const exercise of exercises) {
-        const { data: exerciseLog, error: exInsertError } = await supabase
-          .from("exercise_logs")
-          .insert({
-            workout_log_id: log.id,
-            exercise_id: exercise.exerciseId,
-            exercise_name: exercise.exerciseName,
-            mode: exercise.mode,
-            sort_order: exercise.sortOrder,
-          })
-          .select()
-          .single();
-        if (exInsertError) throw exInsertError;
-
-        if (exercise.sets.length > 0) {
-          const { error: setsInsertError } = await supabase.from("set_logs").insert(
-            exercise.sets.map((set) => ({
-              exercise_log_id: exerciseLog.id,
-              set_number: set.setNumber,
-              completed: set.completed,
-              reps: set.reps ?? null,
-              weight: set.weight ?? null,
-              weight_unit: set.weightUnit ?? null,
-              target_seconds: set.targetSeconds ?? null,
-              actual_seconds: set.actualSeconds ?? null,
-              actual_miles: set.actualMiles ?? null,
-            }))
-          );
-          if (setsInsertError) throw setsInsertError;
-        }
-      }
-
-      return log;
+    mutationFn: async ({ date, workoutId, exercises, completed }: SaveWorkoutLogInput) => {
+      const { data, error } = await supabase.rpc("save_workout_log", {
+        p_date: date,
+        p_workout_id: workoutId,
+        p_completed: completed,
+        p_exercises: exercises.map((exercise) => ({
+          exercise_id: exercise.exerciseId,
+          exercise_name: exercise.exerciseName,
+          mode: exercise.mode,
+          sort_order: exercise.sortOrder,
+          prescribed: exercise.prescribed ? serializeSetConfigs(exercise.prescribed) : null,
+          sets: exercise.sets.map((set) => ({
+            set_number: set.setNumber,
+            completed: set.completed,
+            reps: set.reps ?? null,
+            weight: set.weight ?? null,
+            weight_unit: set.weightUnit ?? null,
+            target_seconds: set.targetSeconds ?? null,
+            actual_seconds: set.actualSeconds ?? null,
+            actual_miles: set.actualMiles ?? null,
+            weight_entered: set.weightEntered ?? false,
+            prescribed: set.prescribed ? serializeSetConfig(set.prescribed) : null,
+          })),
+        })),
+      });
+      if (error) throw new Error(error.message);
+      return data;
     },
 
     onSettled: (_data, _error, variables) => {

@@ -1,5 +1,3 @@
-// GENERATED FILE — do not edit. Regenerate with: pnpm gen:types
-
 export type Json =
   | string
   | number
@@ -9,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -296,6 +289,7 @@ export type Database = {
           exercise_name: string
           id: string
           mode: Database["public"]["Enums"]["exercise_mode"]
+          prescribed: Json | null
           sort_order: number | null
           workout_log_id: string
         }
@@ -305,6 +299,7 @@ export type Database = {
           exercise_name: string
           id?: string
           mode?: Database["public"]["Enums"]["exercise_mode"]
+          prescribed?: Json | null
           sort_order?: number | null
           workout_log_id: string
         }
@@ -314,6 +309,7 @@ export type Database = {
           exercise_name?: string
           id?: string
           mode?: Database["public"]["Enums"]["exercise_mode"]
+          prescribed?: Json | null
           sort_order?: number | null
           workout_log_id?: string
         }
@@ -881,10 +877,12 @@ export type Database = {
           completed: boolean
           exercise_log_id: string
           id: string
+          prescribed: Json | null
           reps: number | null
           set_number: number
           target_seconds: number | null
           weight: number | null
+          weight_entered: boolean
           weight_unit: Database["public"]["Enums"]["weight_unit"] | null
         }
         Insert: {
@@ -893,10 +891,12 @@ export type Database = {
           completed?: boolean
           exercise_log_id: string
           id?: string
+          prescribed?: Json | null
           reps?: number | null
           set_number: number
           target_seconds?: number | null
           weight?: number | null
+          weight_entered?: boolean
           weight_unit?: Database["public"]["Enums"]["weight_unit"] | null
         }
         Update: {
@@ -905,10 +905,12 @@ export type Database = {
           completed?: boolean
           exercise_log_id?: string
           id?: string
+          prescribed?: Json | null
           reps?: number | null
           set_number?: number
           target_seconds?: number | null
           weight?: number | null
+          weight_entered?: boolean
           weight_unit?: Database["public"]["Enums"]["weight_unit"] | null
         }
         Relationships: [
@@ -1248,6 +1250,23 @@ export type Database = {
       }
       run_daily_maintenance: { Args: never; Returns: undefined }
       run_hourly_reminders: { Args: never; Returns: undefined }
+      save_workout_log: {
+        Args: {
+          p_completed: boolean
+          p_date: string
+          p_exercises: Json
+          p_workout_id: string
+        }
+        Returns: string
+      }
+      send_message: {
+        Args: { p_text: string; p_thread_client_id: string }
+        Returns: Json
+      }
+      set_warmup_completed: {
+        Args: { p_completed: boolean; p_date: string }
+        Returns: undefined
+      }
     }
     Enums: {
       change_request_status: "pending" | "accepted" | "rejected"
@@ -1416,3 +1435,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -125,7 +125,7 @@ export default function Messages() {
     setText("");
     setLastFailedText(null);
     sendMessage.mutate(
-      { clientId: uid, coachId, thread: thread ?? null, text: trimmed },
+      { clientId: uid, text: trimmed },
       {
         onError: () => setLastFailedText(trimmed),
       }

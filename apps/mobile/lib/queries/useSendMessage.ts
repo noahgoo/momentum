@@ -1,73 +1,37 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Message, Thread } from "@momentum/shared";
+import type { Message } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 
 interface SendMessageInput {
   clientId: string;
-  coachId: string;
-  /** Existing thread row, if `useThread` already resolved one. */
-  thread: Thread | null;
   text: string;
 }
 
 /**
- * Sends a message in the client's own thread, creating the thread row first
- * if this is the client's first-ever message (plan finding #7 / RLS policy
- * `threads_client_insert` — client may create their own thread as long as
- * `coach_id` matches their actual `invited_by`).
+ * Sends a message through the `send_message` RPC.
  *
- * Overwrite semantics on the thread row (constraint #7 — see the plan): every
- * send unconditionally sets `last_message`/`last_message_at`/`last_message_by`
- * and flips both unread booleans (`unread_for_coach = true`,
- * `unread_for_client = false`) rather than merging/conditionally updating —
- * this mirrors the old Firestore `sendMessage` service's `setDoc(..., {merge:
- * true})` of the same four+two fields every time, just as a plain `update`
- * here since the thread row already exists or was just created above.
+ * Was three sequential writes — create thread, insert message, update the
+ * thread's denormalized fields. A failure after the insert stored the message
+ * but never flipped unread_for_coach, so the coach was never told about it
+ * (violation M-1). The RPC does all of it in one transaction and returns the
+ * server `sent_at`, so the optimistic row reconciles against the server clock
+ * rather than the device's (M-3).
  *
- * Optimistic: appends a temp message to the `qk.messages(clientId)` cache
- * immediately; `onError` rolls back to the snapshot (failure banner + retry
- * is the screen's job, driven by mutation state); `onSettled` invalidates so
- * the temp-id row is replaced by the real one.
+ * Sender comes from auth.uid(); the RPC sets the unread flag for whichever
+ * side did not send, so the same function serves both apps.
  */
 export function useSendMessage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ clientId, coachId, thread, text }: SendMessageInput) => {
-      let threadId = thread?.id;
-
-      if (!threadId) {
-        const { data: createdThread, error: threadError } = await supabase
-          .from("threads")
-          .insert({ client_id: clientId, coach_id: coachId })
-          .select("*")
-          .single();
-        if (threadError) throw threadError;
-        threadId = createdThread.id;
-        queryClient.setQueryData<Thread>(qk.thread(clientId), createdThread);
-      }
-
-      const { data: message, error: messageError } = await supabase
-        .from("messages")
-        .insert({ thread_id: threadId, sender_id: clientId, text })
-        .select("*")
-        .single();
-      if (messageError) throw messageError;
-
-      const { error: threadUpdateError } = await supabase
-        .from("threads")
-        .update({
-          last_message: text,
-          last_message_at: message.sent_at,
-          last_message_by: clientId,
-          unread_for_coach: true,
-          unread_for_client: false,
-        })
-        .eq("id", threadId);
-      if (threadUpdateError) throw threadUpdateError;
-
-      return message;
+    mutationFn: async ({ clientId, text }: SendMessageInput) => {
+      const { data, error } = await supabase.rpc("send_message", {
+        p_thread_client_id: clientId,
+        p_text: text,
+      });
+      if (error) throw new Error(error.message);
+      return data as { message_id: string; thread_id: string; sent_at: string };
     },
 
     onMutate: async ({ clientId, text }) => {

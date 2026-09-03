@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Linking, Modal } from "react-native";
 import { Check, Play, X } from "lucide-react-native";
-import { parseSetConfig, type ExerciseMode, type WeightUnit } from "@momentum/shared";
+import { parseSetConfig, type ExerciseMode, type SetConfig, type WeightUnit } from "@momentum/shared";
 import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
 import type { WorkoutExerciseWithName, ExerciseLogWithSets } from "../../lib/queries/useWorkoutDay";
 import { useSaveWorkoutLog, type ExerciseLogInput, type SetLogInput } from "../../lib/queries/useSaveWorkoutLog";
@@ -14,7 +14,6 @@ interface WorkoutLoggerProps {
   exercises: WorkoutExerciseWithName[];
   existingLog: ExerciseLogWithSets[] | undefined;
   previousLog: ExerciseLogWithSets[] | undefined;
-  warmupCompleted?: boolean;
   onComplete?: () => void;
 }
 
@@ -23,10 +22,14 @@ interface SetDraft {
   completed: boolean;
   reps?: number;
   weight?: number;
+  /** True once the client types a weight — distinguishes a real lift from a bare check-off (P2). */
+  weightEntered?: boolean;
   weightUnit?: WeightUnit;
   targetSeconds?: number;
   actualSeconds?: number;
   actualMiles?: number;
+  /** This set's target at render time, snapshotted onto the log on save (P1). */
+  prescribed?: SetConfig;
 }
 
 interface ExerciseDraft {
@@ -55,9 +58,15 @@ function buildInitialDrafts(
         setNumber: i + 1,
         completed: existingSet?.completed ?? false,
         reps: existingSet?.reps ?? undefined,
-        weight: existingSet?.weight ?? cfg.weight,
+        // Never seed `weight` from the target (cfg.weight): a client who taps
+        // the checkbox without typing would record the prescription as their
+        // actual, making the two indistinguishable in the data. The target is
+        // shown read-only in the TARGET column instead. See rules P2.
+        weight: existingSet?.weight ?? undefined,
+        weightEntered: existingSet?.weight_entered ?? false,
         weightUnit: existingSet?.weight_unit ?? cfg.weightUnit,
         targetSeconds: cfg.seconds,
+        prescribed: cfg,
         actualSeconds: existingSet?.actual_seconds ?? undefined,
         actualMiles: existingSet?.actual_miles ?? undefined,
       };
@@ -91,7 +100,6 @@ export function WorkoutLogger({
   exercises,
   existingLog,
   previousLog,
-  warmupCompleted,
   onComplete,
 }: WorkoutLoggerProps) {
   const [drafts, setDrafts] = useState<ExerciseDraft[]>(() => buildInitialDrafts(exercises, existingLog));
@@ -109,9 +117,7 @@ export function WorkoutLogger({
           ...ex,
           sets: ex.sets.map((s, si) => {
             if (si !== setIdx) return s;
-            const completed = !s.completed;
-            const weight = completed && s.weight == null ? undefined : s.weight;
-            return { ...s, completed, weight };
+            return { ...s, completed: !s.completed };
           }),
         };
       })
@@ -142,15 +148,18 @@ export function WorkoutLogger({
       exerciseName: ex.exerciseName,
       mode: ex.mode,
       sortOrder: ex.sortOrder,
+      prescribed: ex.sets.map((s) => s.prescribed ?? {}),
       sets: ex.sets.map<SetLogInput>((s) => ({
         setNumber: s.setNumber,
         completed: s.completed,
         reps: s.reps,
         weight: s.weight,
+        weightEntered: s.weightEntered ?? false,
         weightUnit: s.weightUnit,
         targetSeconds: s.targetSeconds,
         actualSeconds: s.actualSeconds,
         actualMiles: s.actualMiles,
+        prescribed: s.prescribed,
       })),
     }));
 
@@ -160,7 +169,6 @@ export function WorkoutLogger({
       workoutId,
       exercises: exercisesInput,
       completed,
-      warmupCompleted,
     });
 
     if (completed) onComplete?.();
@@ -311,7 +319,11 @@ export function WorkoutLogger({
                         placeholderTextColor={colors.ink30}
                         value={set.weight != null ? String(set.weight) : ""}
                         onChangeText={(text) =>
-                          updateSet(exIdx, setIdx, { weight: text === "" ? undefined : Number(text) })
+                          updateSet(exIdx, setIdx, {
+                            weight: text === "" ? undefined : Number(text),
+                            // Typing is what makes a weight the client's own.
+                            weightEntered: text !== "",
+                          })
                         }
                         style={styles.textInput}
                       />

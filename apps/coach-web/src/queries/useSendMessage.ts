@@ -39,39 +39,13 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ clientId, coachId, thread, text }: SendMessageInput) => {
-      let threadId = thread?.id;
-
-      if (!threadId) {
-        const { data: createdThread, error: threadError } = await supabase
-          .from("threads")
-          .insert({ client_id: clientId, coach_id: coachId })
-          .select("*")
-          .single();
-        if (threadError) throw threadError;
-        threadId = createdThread.id;
-      }
-
-      const { data: message, error: messageError } = await supabase
-        .from("messages")
-        .insert({ thread_id: threadId, sender_id: coachId, text })
-        .select("*")
-        .single();
-      if (messageError) throw messageError;
-
-      const { error: threadUpdateError } = await supabase
-        .from("threads")
-        .update({
-          last_message: text,
-          last_message_at: message.sent_at,
-          last_message_by: coachId,
-          unread_for_client: true,
-          unread_for_coach: false,
-        })
-        .eq("id", threadId);
-      if (threadUpdateError) throw threadUpdateError;
-
-      return { message, threadId };
+    mutationFn: async ({ clientId, text }: SendMessageInput) => {
+      const { data, error } = await supabase.rpc("send_message", {
+        p_thread_client_id: clientId,
+        p_text: text,
+      });
+      if (error) throw new Error(error.message);
+      return data as { message_id: string; thread_id: string; sent_at: string };
     },
 
     onMutate: async ({ thread, text, coachId }) => {
@@ -100,7 +74,7 @@ export function useSendMessage() {
       }
     },
 
-    onSuccess: ({ threadId }, { clientId, text }) => {
+    onSuccess: ({ thread_id: threadId, sent_at: sentAt }, { clientId, text }) => {
       queryClient.setQueryData<ThreadWithClient[]>(qk.threads(), (current) => {
         if (!current) return current;
         const existing = current.find((row) => row.client_id === clientId);
@@ -109,6 +83,9 @@ export function useSendMessage() {
           ...existing,
           id: threadId,
           last_message: text,
+          // The server's timestamp, not the device's — keeps the thread list
+          // ordering consistent with what everyone else sees (M-3).
+          last_message_at: sentAt,
         };
         return [...current.filter((row) => row.id !== existing.id), updated].sort((a, b) => {
           const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
@@ -120,7 +97,7 @@ export function useSendMessage() {
 
     onSettled: (data, _error, { thread }) => {
       void queryClient.invalidateQueries({ queryKey: qk.threads() });
-      const threadId = data?.threadId ?? thread?.id;
+      const threadId = data?.thread_id ?? thread?.id;
       if (threadId) {
         void queryClient.invalidateQueries({ queryKey: qk.threadMessages(threadId) });
       }
