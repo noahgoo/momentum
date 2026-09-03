@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, Linking, Modal } from "react-native";
 import { Check, Play, X } from "lucide-react-native";
 import { parseSetConfig, type ExerciseMode, type SetConfig, type WeightUnit } from "@momentum/shared";
 import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
 import type { WorkoutExerciseWithName, ExerciseLogWithSets } from "../../lib/queries/useWorkoutDay";
 import { useSaveWorkoutLog, type ExerciseLogInput, type SetLogInput } from "../../lib/queries/useSaveWorkoutLog";
+import { useWorkoutDraft } from "../../lib/useWorkoutDraft";
 import { computePace, formatDuration, formatMiles, formatPace, formatTargetWeight, parseDuration } from "./format";
+
+/** How long after checking a set off to push it to the server. */
+const AUTOSAVE_DEBOUNCE_MS = 2000;
 
 interface WorkoutLoggerProps {
   clientId: string;
@@ -13,6 +17,8 @@ interface WorkoutLoggerProps {
   workoutId: string;
   exercises: WorkoutExerciseWithName[];
   existingLog: ExerciseLogWithSets[] | undefined;
+  /** workout_logs.updated_at — decides whether a stored draft is still newer. */
+  logUpdatedAt?: string | null;
   previousLog: ExerciseLogWithSets[] | undefined;
   onComplete?: () => void;
 }
@@ -99,51 +105,93 @@ export function WorkoutLogger({
   workoutId,
   exercises,
   existingLog,
+  logUpdatedAt,
   previousLog,
   onComplete,
 }: WorkoutLoggerProps) {
   const [drafts, setDrafts] = useState<ExerciseDraft[]>(() => buildInitialDrafts(exercises, existingLog));
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
+  const [dismissedRestore, setDismissedRestore] = useState(false);
   const saveWorkoutLog = useSaveWorkoutLog();
+
+  const draft = useWorkoutDraft<ExerciseDraft[]>(clientId, date, workoutId, logUpdatedAt);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The debounced autosave fires later, from a closure created earlier. Going
+  // through a ref means it always calls the current saveDrafts rather than a
+  // stale one captured at scheduling time.
+  const saveDraftsRef = useRef<((next: ExerciseDraft[], completed: boolean) => Promise<void>) | null>(null);
+
+  // Adopt a restored draft once, after hydration. It only survives if it was
+  // newer than the server's copy (see useWorkoutDraft).
+  useEffect(() => {
+    if (draft.hydrated && draft.restored) setDrafts(draft.restored);
+  }, [draft.hydrated, draft.restored]);
+
+  /**
+   * Every edit persists locally so nothing is lost to a crash or a phone
+   * call. Only checking a set off also schedules a server save: that is the
+   * discrete "I did this" moment. Typing does not, so partially-entered
+   * values ("13" on the way to "135") never reach the server.
+   */
+  const updateDrafts = useCallback(
+    (next: ExerciseDraft[], opts?: { syncToServer?: boolean }) => {
+      setDrafts(next);
+      draft.save(next);
+
+      if (!opts?.syncToServer) return;
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = setTimeout(() => {
+        void saveDraftsRef.current?.(next, false);
+      }, AUTOSAVE_DEBOUNCE_MS);
+    },
+    [draft]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, []);
 
   const totalSets = drafts.reduce((acc, ex) => acc + ex.sets.length, 0);
   const completedSets = drafts.reduce((acc, ex) => acc + ex.sets.filter((s) => s.completed).length, 0);
 
   function toggleSet(exIdx: number, setIdx: number) {
-    setDrafts((prev) =>
-      prev.map((ex, ei) => {
-        if (ei !== exIdx) return ex;
-        return {
-          ...ex,
-          sets: ex.sets.map((s, si) => {
-            if (si !== setIdx) return s;
-            return { ...s, completed: !s.completed };
-          }),
-        };
-      })
+    updateDrafts(
+      drafts.map((ex, ei) =>
+        ei !== exIdx
+          ? ex
+          : {
+              ...ex,
+              sets: ex.sets.map((s, si) => (si !== setIdx ? s : { ...s, completed: !s.completed })),
+            }
+      ),
+      { syncToServer: true }
     );
   }
 
   function toggleExercise(exIdx: number) {
-    setDrafts((prev) =>
-      prev.map((ex, ei) => {
+    updateDrafts(
+      drafts.map((ex, ei) => {
         if (ei !== exIdx) return ex;
         const shouldComplete = !ex.sets.every((s) => s.completed);
         return { ...ex, sets: ex.sets.map((s) => ({ ...s, completed: shouldComplete })) };
-      })
+      }),
+      { syncToServer: true }
     );
   }
 
   function updateSet(exIdx: number, setIdx: number, patch: Partial<SetDraft>) {
-    setDrafts((prev) =>
-      prev.map((ex, ei) =>
+    // Local draft only — typing must not hit the network mid-keystroke.
+    updateDrafts(
+      drafts.map((ex, ei) =>
         ei !== exIdx ? ex : { ...ex, sets: ex.sets.map((s, si) => (si !== setIdx ? s : { ...s, ...patch })) }
       )
     );
   }
 
-  async function handleSave(completed: boolean) {
-    const exercisesInput: ExerciseLogInput[] = drafts.map((ex) => ({
+  async function saveDrafts(current: ExerciseDraft[], completed: boolean) {
+    const exercisesInput: ExerciseLogInput[] = current.map((ex) => ({
       exerciseId: ex.exerciseId,
       exerciseName: ex.exerciseName,
       mode: ex.mode,
@@ -171,13 +219,35 @@ export function WorkoutLogger({
       completed,
     });
 
+    // Only drop the local draft once the server has confirmed the write.
+    draft.clear();
     if (completed) onComplete?.();
+  }
+
+  saveDraftsRef.current = saveDrafts;
+
+  async function handleComplete() {
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    await saveDrafts(drafts, true);
   }
 
   const saving = saveWorkoutLog.isPending;
 
   return (
     <View>
+      {draft.didRestore && !dismissedRestore && (
+        <View style={styles.restoreBanner}>
+          <Text style={styles.restoreText}>Restored your unsaved progress</Text>
+          <TouchableOpacity
+            onPress={() => setDismissedRestore(true)}
+            accessibilityLabel="Dismiss restored progress notice"
+            hitSlop={8}
+          >
+            <X color={colors.ink50} size={14} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={[styles.card, shadows.card]}>
         {drafts.map((ex, exIdx) => {
           const workoutEx = exercises[exIdx];
@@ -348,16 +418,12 @@ export function WorkoutLogger({
         {completedSets}/{totalSets} sets done
       </Text>
 
+      {/* No "Save progress" button: every set you check off saves itself, so
+          there is nothing for the client to remember to do. Complete is the
+          only explicit action left. */}
       <View style={styles.actionsRow}>
         <TouchableOpacity
-          onPress={() => void handleSave(false)}
-          disabled={saving}
-          style={[styles.saveButton, saving ? styles.buttonDisabled : undefined]}
-        >
-          <Text style={styles.saveButtonText}>Save progress</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => void handleSave(true)}
+          onPress={() => void handleComplete()}
           disabled={saving || completedSets < totalSets}
           style={[
             styles.completeButton,
@@ -592,18 +658,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.lg,
   },
-  saveButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.line,
+  restoreBanner: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radii.control,
+    backgroundColor: colors.cream,
   },
-  saveButtonText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
+  restoreText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
     color: colors.ink70,
   },
   completeButton: {

@@ -2,6 +2,7 @@ export * from "./types.js";
 export * from "./bodyFat.js";
 export * from "./schedule.js";
 export * from "./clientDate.js";
+export * from "./draft.js";
 export * from "./rpcErrors.js";
 export * from "./domain.js";
 export * from "./schemas.js";

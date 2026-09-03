@@ -179,6 +179,7 @@ export default function WorkoutDayScreen() {
               workoutId={workout.id}
               exercises={data.exercises}
               existingLog={log?.exercise_logs}
+              logUpdatedAt={log?.updated_at}
               previousLog={data.previousLog?.exercise_logs}
               onComplete={() => setViewingCompletedLog(false)}
             />
