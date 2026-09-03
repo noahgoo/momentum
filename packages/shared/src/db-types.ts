@@ -1215,11 +1215,28 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: undefined
       }
+      assign_program: {
+        Args: {
+          p_client_id: string
+          p_program_id: string
+          p_start_date: string
+        }
+        Returns: string
+      }
       client_today: { Args: { p_client_id: string }; Returns: string }
       compute_streak: {
         Args: { p_as_of?: string; p_client_id: string }
         Returns: number
       }
+      copy_program_tree: {
+        Args: {
+          p_client_id: string
+          p_name_suffix?: string
+          p_program_id: string
+        }
+        Returns: string
+      }
+      duplicate_program: { Args: { p_program_id: string }; Returns: string }
       get_my_streak: { Args: never; Returns: number }
       is_coach: { Args: never; Returns: boolean }
       is_coach_of: { Args: { p_client_id: string }; Returns: boolean }
@@ -1231,6 +1248,10 @@ export type Database = {
         }[]
       }
       my_coach_id: { Args: never; Returns: string }
+      program_delete_blockers: {
+        Args: { p_program_id: string }
+        Returns: number
+      }
       recompute_friendship_stats: {
         Args: { p_pair_id: string }
         Returns: undefined
@@ -1250,6 +1271,14 @@ export type Database = {
       }
       run_daily_maintenance: { Args: never; Returns: undefined }
       run_hourly_reminders: { Args: never; Returns: undefined }
+      save_workout: {
+        Args: {
+          p_expected_updated_at?: string
+          p_payload: Json
+          p_workout_id?: string
+        }
+        Returns: string
+      }
       save_workout_log: {
         Args: {
           p_completed: boolean
@@ -1266,6 +1295,10 @@ export type Database = {
       set_warmup_completed: {
         Args: { p_completed: boolean; p_date: string }
         Returns: undefined
+      }
+      workout_delete_blockers: {
+        Args: { p_workout_id: string }
+        Returns: number
       }
     }
     Enums: {

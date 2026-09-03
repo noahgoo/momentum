@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router";
-import { useDeleteProgram, useDuplicateProgram, usePrograms } from "../queries/usePrograms";
+import { useDeleteProgram, useDuplicateProgram, usePrograms, ProgramInUseError } from "../queries/usePrograms";
 
 /**
  * Lists the coach's programs: name, total weeks, phase count, and
@@ -16,7 +16,17 @@ export function ProgramsPage() {
   async function handleDelete(id: string, name: string) {
     const ok = window.confirm(`Delete "${name}"? This removes its phases and schedule too. This can't be undone.`);
     if (!ok) return;
-    await deleteProgram.mutateAsync(id);
+    try {
+      await deleteProgram.mutateAsync(id);
+    } catch (error) {
+      // A program still in use is a normal outcome, not a crash: say who
+      // depends on it rather than letting a foreign-key error escape.
+      window.alert(
+        error instanceof ProgramInUseError
+          ? `${error.message} Reassign them before deleting it.`
+          : `Could not delete "${name}". Please try again.`
+      );
+    }
   }
 
   return (

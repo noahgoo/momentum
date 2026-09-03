@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ExerciseMode, SetConfig, WorkoutType } from "@momentum/shared";
-import { parseSetConfigs, serializeSetConfigs } from "@momentum/shared";
+import { describeRpcError, parseSetConfigs, serializeSetConfigs } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
 
@@ -21,6 +21,8 @@ export interface WorkoutDetail {
   estimatedDurationMinutes: number | null;
   equipment: string[];
   warmupId: string | null;
+  /** Carried into the next save so a concurrent edit is detected (C3). */
+  updatedAt: string;
   exercises: WorkoutDetailExercise[]; // ordered by sort_order
 }
 
@@ -53,6 +55,7 @@ export function useWorkoutDetail(workoutId: string | undefined) {
         estimatedDurationMinutes: workout.estimated_duration_minutes,
         equipment: workout.equipment ?? [],
         warmupId: workout.warmup_id,
+        updatedAt: workout.updated_at,
         exercises: (exercises ?? []).map((ex) => ({
           id: ex.id,
           exerciseId: ex.exercise_id,
@@ -97,79 +100,62 @@ export interface SaveWorkoutInput {
   warmupId: string | null;
   exercises: BuilderExercise[]; // in final display order
   createdBy: string;
+  /** The workouts.updated_at this editor loaded; a competing save raises stale_write (C3). */
+  expectedUpdatedAt?: string | null;
+}
+
+/** Domain wording for the codes save_workout raises. */
+const SAVE_WORKOUT_ERRORS = {
+  stale_write:
+    "This workout changed while you were editing it. Reload to see the current version before saving.",
+  not_found_or_forbidden: "This workout no longer exists.",
+};
+
+export function describeSaveWorkoutError(error: unknown): string {
+  return describeRpcError(error, SAVE_WORKOUT_ERRORS);
 }
 
 /**
- * Saves a workout: insert/update the `workouts` row, then replace its
- * `workout_exercises` rows wholesale — delete every existing row for this
- * workout, then insert the kept/added rows in one batch with `sort_order`
- * reindexed to 0..n-1 from final display order. `workout_exercises` carries
- * `unique (workout_id, sort_order) deferrable initially deferred`
- * specifically so this delete-then-insert round trip (and, more generally,
- * any reorder) never trips the uniqueness constraint on intermediate states
- * — Postgres only checks a DEFERRABLE constraint at transaction commit.
+ * Saves a workout through the `save_workout` RPC.
  *
- * Delete-then-batch-insert (rather than per-row update) is deliberate: a
- * dropped row's id is simply not carried into the new insert, and a
- * reordered/edited row gets a fresh id with its new `sort_order` — there is
- * no need to diff old vs. new rows to decide update vs. insert vs. delete
- * per row. This assumes nothing else references `workout_exercises.id`
- * across a save (true today: no FK points at it, and set/exercise logs key
- * off `workout_id` + `exercise_id`, not this join row's id).
+ * The old version updated the workout, deleted every workout_exercises row,
+ * and reinserted — so each save handed every row a new primary key and,
+ * across three separate requests, could leave a workout stripped of its
+ * exercises if the connection dropped between them (B3, R2). The RPC
+ * reconciles rows by (workout_id, sort_order) in one transaction, so
+ * unchanged rows keep their ids.
+ *
+ * Passing `expectedUpdatedAt` (the value the editor loaded) makes a
+ * concurrent edit raise `stale_write` instead of silently overwriting the
+ * other coach's save (C3).
  */
 export function useSaveWorkout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: SaveWorkoutInput) => {
-      const workoutPayload = {
-        name: input.name,
-        description: input.description || null,
-        type: input.type,
-        estimated_duration_minutes: input.estimatedDurationMinutes ?? null,
-        equipment: input.equipment.length > 0 ? input.equipment : null,
-        warmup_id: input.warmupId,
-        created_by: input.createdBy,
-      };
-
-      let workoutId = input.workoutId;
-      if (workoutId) {
-        const { error } = await supabase.from("workouts").update(workoutPayload).eq("id", workoutId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("workouts")
-          .insert(workoutPayload)
-          .select("id")
-          .single();
-        if (error) throw error;
-        workoutId = data.id;
-      }
-
-      const { error: deleteError } = await supabase
-        .from("workout_exercises")
-        .delete()
-        .eq("workout_id", workoutId);
-      if (deleteError) throw deleteError;
-
-      if (input.exercises.length > 0) {
-        const { error: insertError } = await supabase.from("workout_exercises").insert(
-          input.exercises.map((ex, index) => ({
-            workout_id: workoutId,
+      const { data, error } = await supabase.rpc("save_workout", {
+        p_workout_id: input.workoutId ?? undefined,
+        p_payload: {
+          name: input.name,
+          description: input.description || null,
+          type: input.type,
+          estimated_duration_minutes: input.estimatedDurationMinutes ?? null,
+          equipment: input.equipment.length > 0 ? input.equipment : null,
+          warmup_id: input.warmupId,
+          exercises: input.exercises.map((ex) => ({
             exercise_id: ex.exerciseId,
-            sort_order: index,
-            // mode is NOT NULL with no absent-means-reps fallback (constraint
-            // #12) — always write it explicitly, never omit the field.
             mode: ex.mode,
             set_configs: serializeSetConfigs(ex.setConfigs),
             rest_seconds: ex.restSeconds,
             notes: ex.notes,
           })),
-        );
-        if (insertError) throw insertError;
-      }
-
-      return workoutId;
+        },
+        p_expected_updated_at: input.expectedUpdatedAt ?? undefined,
+      });
+      if (error) throw new Error(error.message);
+      return data as string;
     },
+
     onSuccess: (workoutId, input) => {
       void queryClient.invalidateQueries({ queryKey: qk.workoutDetail(workoutId) });
       void queryClient.invalidateQueries({

@@ -53,11 +53,35 @@ export function usePrograms() {
   });
 }
 
-/** Deletes a program (cascades to program_phases + week_schedules via FK). */
+/** Raised instead of a raw foreign-key error when clients depend on a program. */
+export class ProgramInUseError extends Error {
+  constructor(public readonly assignmentCount: number) {
+    super(
+      assignmentCount === 1
+        ? "1 client is assigned to this program."
+        : `${assignmentCount} clients are assigned to this program.`
+    );
+    this.name = "ProgramInUseError";
+  }
+}
+
+/**
+ * Deletes a program, checking first what depends on it so the coach sees
+ * "3 clients are assigned to this program" rather than a raw 23503 (R4).
+ * The FK is `on delete restrict`, so this check is a better error message,
+ * not the safety mechanism — the database refuses either way.
+ */
 export function useDeleteProgram() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (programId: string) => {
+      const { data: blockers, error: blockersError } = await supabase.rpc(
+        "program_delete_blockers",
+        { p_program_id: programId }
+      );
+      if (blockersError) throw new Error(blockersError.message);
+      if ((blockers ?? 0) > 0) throw new ProgramInUseError(blockers as number);
+
       const { error } = await supabase.from("programs").delete().eq("id", programId);
       if (error) throw error;
     },
@@ -68,107 +92,21 @@ export function useDeleteProgram() {
 }
 
 /**
- * Duplicates a program: copies the program row (name suffixed " (copy)"),
- * every program_phases row, and every week_schedules row — both
- * program-scoped (flat) and phase-scoped (phased), remapping phase_id to
- * each newly-inserted phase.
+ * Duplicates a program via the `duplicate_program` RPC.
+ *
+ * This was ~100 lines of client-side tree walking — insert the program, the
+ * phases, remap phase ids by sort_order, then branch on phased vs flat to
+ * copy week_schedules. The RPC shares `copy_program_tree` with
+ * `assign_program`, so there is one implementation of the copy instead of two
+ * that can drift apart.
  */
 export function useDuplicateProgram() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (programId: string) => {
-      const { data: source, error: sourceError } = await supabase
-        .from("programs")
-        .select("*")
-        .eq("id", programId)
-        .single();
-      if (sourceError) throw sourceError;
-
-      const { data: inserted, error: insertError } = await supabase
-        .from("programs")
-        .insert({
-          name: `${source.name} (copy)`,
-          description: source.description,
-          weeks: source.weeks,
-          created_by: source.created_by,
-        })
-        .select("*")
-        .single();
-      if (insertError) throw insertError;
-
-      const { data: sourcePhases, error: phasesError } = await supabase
-        .from("program_phases")
-        .select("*")
-        .eq("program_id", programId)
-        .order("sort_order", { ascending: true });
-      if (phasesError) throw phasesError;
-
-      if (sourcePhases && sourcePhases.length > 0) {
-        const { data: insertedPhases, error: insertPhasesError } = await supabase
-          .from("program_phases")
-          .insert(
-            sourcePhases.map((phase) => ({
-              program_id: inserted.id,
-              name: phase.name,
-              sort_order: phase.sort_order,
-              weeks: phase.weeks,
-              active_days: phase.active_days,
-            })),
-          )
-          .select("*")
-          .order("sort_order", { ascending: true });
-        if (insertPhasesError) throw insertPhasesError;
-
-        // Map old phase id -> new phase id by matching sort_order (both
-        // arrays are ordered by sort_order, and sort_order is unique per
-        // program per the schema's ordering contract).
-        const oldPhaseIdBySortOrder = new Map(sourcePhases.map((p) => [p.sort_order, p.id]));
-        const newPhaseIdByOldId = new Map<string, string>();
-        for (const newPhase of insertedPhases ?? []) {
-          const oldId = oldPhaseIdBySortOrder.get(newPhase.sort_order);
-          if (oldId) newPhaseIdByOldId.set(oldId, newPhase.id);
-        }
-
-        const oldPhaseIds = sourcePhases.map((p) => p.id);
-        const { data: sourceWeekSchedules, error: weekSchedulesError } = await supabase
-          .from("week_schedules")
-          .select("*")
-          .in("phase_id", oldPhaseIds);
-        if (weekSchedulesError) throw weekSchedulesError;
-
-        if (sourceWeekSchedules && sourceWeekSchedules.length > 0) {
-          const { error: copyError } = await supabase.from("week_schedules").insert(
-            sourceWeekSchedules.map((row) => ({
-              phase_id: newPhaseIdByOldId.get(row.phase_id ?? "") ?? null,
-              week_number: row.week_number,
-              day_of_week: row.day_of_week,
-              workout_id: row.workout_id,
-            })),
-          );
-          if (copyError) throw copyError;
-        }
-      } else {
-        // Flat (unphased) program: week_schedules rows are program-scoped.
-        const { data: sourceWeekSchedules, error: weekSchedulesError } = await supabase
-          .from("week_schedules")
-          .select("*")
-          .eq("program_id", programId);
-        if (weekSchedulesError) throw weekSchedulesError;
-
-        if (sourceWeekSchedules && sourceWeekSchedules.length > 0) {
-          const { error: copyError } = await supabase.from("week_schedules").insert(
-            sourceWeekSchedules.map((row) => ({
-              program_id: inserted.id,
-              week_number: row.week_number,
-              day_of_week: row.day_of_week,
-              workout_id: row.workout_id,
-            })),
-          );
-          if (copyError) throw copyError;
-        }
-      }
-
-      return inserted;
+      const { data, error } = await supabase.rpc("duplicate_program", { p_program_id: programId });
+      if (error) throw new Error(error.message);
+      return data as string;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.programs() });

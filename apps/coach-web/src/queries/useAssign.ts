@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { parseDateStr } from "@momentum/shared";
 import type { Program } from "@momentum/shared";
+import { describeRpcError } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
 
@@ -67,60 +68,47 @@ export function useClientActiveAssignment(clientId: string | undefined, todayStr
 // Assign mutation
 // ---------------------------------------------------------------------------
 
-const UNIQUE_VIOLATION = "23505";
-
 export interface AssignProgramInput {
   clientId: string;
   programId: string;
   startDate: string; // YYYY-MM-DD
 }
 
-/**
- * Deactivates the client's existing active assignment (if any), then inserts
- * a new active one. The partial unique index `assignments_one_active_per_client`
- * (WHERE active) means a second coach session — or a double-click — racing
- * this same client can hit a 23505 on the insert even after our own
- * deactivate succeeded. We retry the whole deactivate-then-insert sequence
- * once; a second failure surfaces as a real error rather than looping.
- */
-async function deactivateThenInsert(input: AssignProgramInput) {
-  const { error: deactivateError } = await supabase
-    .from("assignments")
-    .update({ active: false })
-    .eq("client_id", input.clientId)
-    .eq("active", true);
-  if (deactivateError) throw deactivateError;
+/** Domain wording for the codes assign_program raises. */
+const ASSIGN_ERRORS = {
+  not_your_client: "That client isn't one of yours.",
+  program_not_found: "That program no longer exists.",
+  not_a_template: "That program is already a client's copy — assign from your library instead.",
+};
 
-  const { data, error: insertError } = await supabase
-    .from("assignments")
-    .insert({
-      client_id: input.clientId,
-      program_id: input.programId,
-      start_date: input.startDate,
-      active: true,
-    })
-    .select("id")
-    .single();
-
-  if (insertError) throw insertError;
-  return data.id as string;
+export function describeAssignError(error: unknown): string {
+  return describeRpcError(error, ASSIGN_ERRORS);
 }
 
+/**
+ * Assigns a program through the `assign_program` RPC, which DEEP-COPIES the
+ * program tree into rows owned by this client before pointing the assignment
+ * at the copy.
+ *
+ * Assignment used to link the coach's template row directly, so every client
+ * on a program shared one set of rows: editing the template reshuffled the
+ * live schedule of everyone already mid-program (B1, B2). The deactivate and
+ * insert also ran as separate requests, leaving a window with no active
+ * assignment and a 23505 retry to paper over it (B8). Both are now one
+ * transaction server-side.
+ */
 export function useAssignProgram() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: AssignProgramInput) => {
-      try {
-        return await deactivateThenInsert(input);
-      } catch (err) {
-        const code = (err as { code?: string } | null)?.code;
-        if (code !== UNIQUE_VIOLATION) throw err;
-        // Retry once: another active row may have been (re)created between
-        // our deactivate and insert (e.g. a concurrent assign for the same
-        // client). One retry re-runs deactivate-then-insert from scratch.
-        return await deactivateThenInsert(input);
-      }
+      const { data, error } = await supabase.rpc("assign_program", {
+        p_client_id: input.clientId,
+        p_program_id: input.programId,
+        p_start_date: input.startDate,
+      });
+      if (error) throw new Error(error.message);
+      return data as string;
     },
     onSuccess: (_assignmentId, input) => {
       void queryClient.invalidateQueries({ queryKey: qk.clientDetail(input.clientId) });

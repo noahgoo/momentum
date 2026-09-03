@@ -50,11 +50,35 @@ function invalidateListsFor(type: WorkoutType) {
   return type === "warmup" ? qk.warmups() : qk.workouts();
 }
 
-/** Deletes a workout (cascades to its workout_exercises rows via FK). */
+/** Raised instead of a raw foreign-key error when a workout is still scheduled. */
+export class WorkoutInUseError extends Error {
+  constructor(public readonly scheduleCount: number) {
+    super(
+      scheduleCount === 1
+        ? "This workout is scheduled on 1 day of a program."
+        : `This workout is scheduled on ${scheduleCount} days across your programs.`
+    );
+    this.name = "WorkoutInUseError";
+  }
+}
+
+/**
+ * Deletes a workout (its workout_exercises cascade). Checks what depends on
+ * it first so the coach sees which programs still schedule it rather than a
+ * raw 23503 (R4). The FK is `on delete restrict`, so this is the message,
+ * not the guard.
+ */
 export function useDeleteWorkout(type: WorkoutType) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (workoutId: string) => {
+      const { data: blockers, error: blockersError } = await supabase.rpc(
+        "workout_delete_blockers",
+        { p_workout_id: workoutId }
+      );
+      if (blockersError) throw new Error(blockersError.message);
+      if ((blockers ?? 0) > 0) throw new WorkoutInUseError(blockers as number);
+
       const { error } = await supabase.from("workouts").delete().eq("id", workoutId);
       if (error) throw error;
     },

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import type { WorkoutType } from "@momentum/shared";
-import { useDeleteWorkout, useDuplicateWorkout, useWorkoutExerciseCounts, useWorkouts } from "../queries/useWorkouts";
+import { useDeleteWorkout, useDuplicateWorkout, useWorkoutExerciseCounts, useWorkouts, WorkoutInUseError } from "../queries/useWorkouts";
 
 export interface WorkoutsPageProps {
   /** "warmup" renders the Warmups list (same component, filtered + relabeled). */
@@ -29,7 +29,15 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
   async function handleDelete(id: string, name: string) {
     const ok = window.confirm(`Delete "${name}"? This removes all its exercises too. This can't be undone.`);
     if (!ok) return;
-    await deleteWorkout.mutateAsync(id);
+    try {
+      await deleteWorkout.mutateAsync(id);
+    } catch (error) {
+      window.alert(
+        error instanceof WorkoutInUseError
+          ? `${error.message} Remove it from those programs before deleting it.`
+          : `Could not delete "${name}". Please try again.`
+      );
+    }
   }
 
   return (

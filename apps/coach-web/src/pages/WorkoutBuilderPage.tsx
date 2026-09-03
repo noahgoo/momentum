@@ -9,7 +9,12 @@ import { defaultSetConfig } from "../components/builder/defaultSetConfig";
 import { ExerciseLibraryPanel } from "../components/exercises/ExerciseLibraryPanel";
 import { useExercises } from "../queries/useExercises";
 import { useWorkouts } from "../queries/useWorkouts";
-import { useSaveWorkout, useWorkoutDetail, type BuilderExercise } from "../queries/useWorkoutDetail";
+import {
+  describeSaveWorkoutError,
+  useSaveWorkout,
+  useWorkoutDetail,
+  type BuilderExercise,
+} from "../queries/useWorkoutDetail";
 import { parseDurationMinutes, formatDurationMinutes, parseEquipmentTags } from "../lib/workoutFormat";
 
 export interface WorkoutBuilderPageProps {
@@ -71,6 +76,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
   const [warmupId, setWarmupId] = useState<string>("");
   const [exercises, setExercises] = useState<BuilderExercise[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(!isEditing);
 
   // Hydrate form state once the workout detail AND the exercise library have
@@ -139,18 +145,28 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
     });
     if (!parsed.success || exercises.length === 0) return;
 
-    const savedId = await saveWorkout.mutateAsync({
-      workoutId,
-      type,
-      name: parsed.data.name,
-      description: parsed.data.description ?? "",
-      estimatedDurationMinutes: parsed.data.estimatedDurationMinutes,
-      equipment: parsed.data.equipment ?? [],
-      warmupId: isWarmup ? null : parsed.data.warmupId ?? null,
-      exercises,
-      createdBy: profile.id,
-    });
+    let savedId: string;
+    try {
+      savedId = await saveWorkout.mutateAsync({
+        workoutId,
+        type,
+        name: parsed.data.name,
+        description: parsed.data.description ?? "",
+        estimatedDurationMinutes: parsed.data.estimatedDurationMinutes,
+        equipment: parsed.data.equipment ?? [],
+        warmupId: isWarmup ? null : parsed.data.warmupId ?? null,
+        exercises,
+        createdBy: profile.id,
+        // What this editor loaded. If someone else saved in the meantime the
+        // RPC raises stale_write rather than silently discarding their edit.
+        expectedUpdatedAt: detail?.updatedAt ?? null,
+      });
+    } catch (error) {
+      setSaveError(describeSaveWorkoutError(error));
+      return;
+    }
 
+    setSaveError(null);
     navigate(`${basePath}/${savedId}`, { replace: true });
   }
 
@@ -308,6 +324,11 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
             >
               Cancel
             </button>
+            {saveError && (
+              <p className="mb-3 rounded-lg bg-[var(--bad-bg,#fdeceb)] px-3 py-2 text-sm text-[var(--bad)]">
+                {saveError}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => void handleSave()}
