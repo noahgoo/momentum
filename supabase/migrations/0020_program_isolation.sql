@@ -415,3 +415,176 @@ comment on function public.save_workout(jsonb, uuid, timestamptz) is
 
 revoke execute on function public.save_workout(jsonb, uuid, timestamptz) from public, anon;
 grant execute on function public.save_workout(jsonb, uuid, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- save_program: reconcile phases and schedules by natural key (B3, C-3)
+-- ---------------------------------------------------------------------------
+-- The builder deleted every program_phases row (cascading their
+-- week_schedules) and reinserted, so each save handed every phase and every
+-- scheduled slot a new primary key. Reconciling on (program_id, sort_order)
+-- for phases and (scope, week_number, day_of_week) for schedules leaves
+-- unchanged rows alone (R3).
+--
+-- Week-number scoping is preserved exactly as the builder defines it:
+--   phased -> rows carry phase_id, week_number is PHASE-LOCAL (1..phase.weeks)
+--   flat   -> rows carry program_id, week_number is GLOBAL (1..weeks)
+-- A program has one or the other, never both (enforced by week_schedules'
+-- check constraint), so switching modes clears the other scope's rows.
+
+create function public.save_program(
+  p_payload jsonb,
+  p_program_id uuid default null,
+  p_expected_updated_at timestamptz default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_program_id uuid := p_program_id;
+  v_current timestamptz;
+  v_phased boolean := coalesce((p_payload->>'phased')::boolean, false);
+  v_weeks int := (p_payload->>'weeks')::int;
+  v_phase jsonb;
+  v_index int := 0;
+  v_phase_id uuid;
+  v_phase_ids uuid[] := '{}';
+  v_sort_orders int[] := '{}';
+  v_slot jsonb;
+begin
+  if v_program_id is null then
+    insert into public.programs (name, description, weeks, created_by)
+    values (
+      p_payload->>'name',
+      nullif(p_payload->>'description', ''),
+      v_weeks,
+      auth.uid()
+    )
+    returning id into v_program_id;
+  else
+    select updated_at into v_current from public.programs where id = v_program_id;
+    if v_current is null then
+      raise exception 'not_found_or_forbidden';
+    end if;
+    if p_expected_updated_at is not null and v_current <> p_expected_updated_at then
+      raise exception 'stale_write';
+    end if;
+
+    update public.programs set
+      name = p_payload->>'name',
+      description = nullif(p_payload->>'description', ''),
+      weeks = v_weeks
+    where id = v_program_id;
+  end if;
+
+  -- Phases, reconciled by position. A phase that keeps its slot keeps its id,
+  -- so its week_schedules rows survive with it.
+  if v_phased then
+    for v_phase in select * from jsonb_array_elements(coalesce(p_payload->'phases', '[]'::jsonb))
+    loop
+      update public.program_phases set
+        name = nullif(v_phase->>'name', ''),
+        weeks = (v_phase->>'weeks')::int,
+        active_days = array(
+          select jsonb_array_elements_text(coalesce(v_phase->'active_days', '[]'::jsonb))
+        )::public.day_of_week[]
+      where program_id = v_program_id and sort_order = v_index
+      returning id into v_phase_id;
+
+      if v_phase_id is null then
+        insert into public.program_phases (program_id, name, sort_order, weeks, active_days)
+        values (
+          v_program_id,
+          nullif(v_phase->>'name', ''),
+          v_index,
+          (v_phase->>'weeks')::int,
+          array(
+            select jsonb_array_elements_text(coalesce(v_phase->'active_days', '[]'::jsonb))
+          )::public.day_of_week[]
+        )
+        returning id into v_phase_id;
+      end if;
+
+      v_phase_ids := array_append(v_phase_ids, v_phase_id);
+      v_sort_orders := array_append(v_sort_orders, v_index);
+      v_index := v_index + 1;
+      v_phase_id := null;
+    end loop;
+  end if;
+
+  -- Phases past the new end are genuinely gone (their schedules cascade).
+  delete from public.program_phases
+  where program_id = v_program_id and not (sort_order = any(v_sort_orders));
+
+  -- Schedule slots. `slots` is a flat array of
+  -- {phase_index?, week_number, day_of_week, workout_id} so both modes share
+  -- one path; phase_index resolves against the phases just reconciled.
+  for v_slot in select * from jsonb_array_elements(coalesce(p_payload->'slots', '[]'::jsonb))
+  loop
+    if v_phased then
+      v_phase_id := v_phase_ids[(v_slot->>'phase_index')::int + 1];
+      if v_phase_id is null then
+        continue; -- slot referenced a phase that no longer exists
+      end if;
+
+      update public.week_schedules set workout_id = (v_slot->>'workout_id')::uuid
+      where phase_id = v_phase_id
+        and week_number = (v_slot->>'week_number')::int
+        and day_of_week = (v_slot->>'day_of_week')::public.day_of_week;
+
+      if not found then
+        insert into public.week_schedules (phase_id, week_number, day_of_week, workout_id)
+        values (
+          v_phase_id,
+          (v_slot->>'week_number')::int,
+          (v_slot->>'day_of_week')::public.day_of_week,
+          (v_slot->>'workout_id')::uuid
+        );
+      end if;
+    else
+      update public.week_schedules set workout_id = (v_slot->>'workout_id')::uuid
+      where program_id = v_program_id
+        and week_number = (v_slot->>'week_number')::int
+        and day_of_week = (v_slot->>'day_of_week')::public.day_of_week;
+
+      if not found then
+        insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
+        values (
+          v_program_id,
+          (v_slot->>'week_number')::int,
+          (v_slot->>'day_of_week')::public.day_of_week,
+          (v_slot->>'workout_id')::uuid
+        );
+      end if;
+    end if;
+  end loop;
+
+  -- Drop slots the payload no longer contains, in whichever scope applies.
+  -- Switching modes leaves the other scope with no surviving rows, which is
+  -- what clears it.
+  delete from public.week_schedules ws
+  where (
+      (ws.program_id = v_program_id)
+      or (ws.phase_id = any(v_phase_ids))
+    )
+    and not exists (
+      select 1
+      from jsonb_array_elements(coalesce(p_payload->'slots', '[]'::jsonb)) s
+      where (s->>'week_number')::int = ws.week_number
+        and (s->>'day_of_week')::public.day_of_week = ws.day_of_week
+        and case
+              when v_phased then v_phase_ids[(s->>'phase_index')::int + 1] = ws.phase_id
+              else ws.program_id = v_program_id
+            end
+    );
+
+  return v_program_id;
+end;
+$$;
+
+comment on function public.save_program(jsonb, uuid, timestamptz) is
+  'RPC: creates or updates a program and reconciles its phases by (program_id, sort_order) and its schedule slots by (scope, week_number, day_of_week), instead of deleting and reinserting — so unchanged phases and slots keep their ids (R3). `slots` is a flat array carrying phase_index in phased mode, so both scopings share one path. p_expected_updated_at gives optimistic concurrency (C3). Raises: not_found_or_forbidden, stale_write.';
+
+revoke execute on function public.save_program(jsonb, uuid, timestamptz) from public, anon;
+grant execute on function public.save_program(jsonb, uuid, timestamptz) to authenticated;

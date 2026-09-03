@@ -5,6 +5,7 @@ import { programCreateSchema } from "@momentum/shared";
 import { useAuth } from "../lib/auth";
 import { useWorkouts } from "../queries/useWorkouts";
 import {
+  describeSaveProgramError,
   useProgramDetail,
   useSaveProgram,
   type BuilderPhase,
@@ -61,6 +62,7 @@ export function ProgramBuilderPage() {
   const [flatActiveDays, setFlatActiveDays] = useState<DayOfWeek[]>([]);
   const [flatWeekSchedule, setFlatWeekSchedule] = useState<WeekSchedule>({});
   const [submitted, setSubmitted] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(!isEditing);
 
   useEffect(() => {
@@ -212,18 +214,28 @@ export function ProgramBuilderPage() {
     });
     if (!parsed.success) return;
 
-    const savedId = await saveProgram.mutateAsync({
-      programId,
-      name: parsed.data.name,
-      description: parsed.data.description ?? "",
-      createdBy: profile.id,
-      phased,
-      phases,
-      flatWeeks,
-      flatActiveDays,
-      flatWeekSchedule,
-    });
+    let savedId: string;
+    try {
+      savedId = await saveProgram.mutateAsync({
+        programId,
+        name: parsed.data.name,
+        description: parsed.data.description ?? "",
+        createdBy: profile.id,
+        phased,
+        phases,
+        flatWeeks,
+        flatActiveDays,
+        flatWeekSchedule,
+        // What this editor loaded. If someone else saved in the meantime the
+        // RPC raises stale_write rather than silently discarding their edit.
+        expectedUpdatedAt: detail?.updatedAt ?? null,
+      });
+    } catch (error) {
+      setSaveError(describeSaveProgramError(error));
+      return;
+    }
 
+    setSaveError(null);
     navigate(`/programs/${savedId}`, { replace: true });
   }
 
@@ -356,6 +368,7 @@ export function ProgramBuilderPage() {
           {submitted && validationErrors.length > 0 && (
             <span className="text-xs font-medium text-[var(--bad)]">{validationErrors[0]}</span>
           )}
+          {saveError && <span className="text-xs font-medium text-[var(--bad)]">{saveError}</span>}
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"

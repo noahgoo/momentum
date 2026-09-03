@@ -318,6 +318,162 @@ begin
     end if;
   end;
 
+  -- -----------------------------------------------------------------------
+  -- save_program reconciles phases and slots instead of churning ids (B3)
+  -- and detects concurrent edits (C-3)
+  -- -----------------------------------------------------------------------
+  declare
+    v_prog uuid;
+    v_phase_id_before uuid;
+    v_phase_id_after uuid;
+    v_slot_id_before uuid;
+    v_slot_id_after uuid;
+    v_updated timestamptz;
+  begin
+    v_prog := public.save_program(
+      p_payload => jsonb_build_object(
+        'name', 'Phased Program', 'description', '', 'weeks', 4, 'phased', true,
+        'phases', jsonb_build_array(
+          jsonb_build_object('name','Base','weeks',2,'active_days', jsonb_build_array('monday')),
+          jsonb_build_object('name','Peak','weeks',2,'active_days', jsonb_build_array('monday'))
+        ),
+        'slots', jsonb_build_array(
+          jsonb_build_object('phase_index',0,'week_number',1,'day_of_week','monday','workout_id',w_push::text),
+          jsonb_build_object('phase_index',1,'week_number',1,'day_of_week','monday','workout_id',w_push::text)
+        )
+      )
+    );
+
+    select count(*) into v_count from public.program_phases where program_id = v_prog;
+    if v_count <> 2 then
+      failures := array_append(failures, format('expected 2 phases, got %s', v_count));
+    end if;
+
+    select count(*) into v_count
+    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    where ph.program_id = v_prog;
+    if v_count <> 2 then
+      failures := array_append(failures, format('expected 2 phase-scoped slots, got %s', v_count));
+    end if;
+
+    select id into v_phase_id_before from public.program_phases
+    where program_id = v_prog and sort_order = 0;
+    select ws.id into v_slot_id_before
+    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    where ph.program_id = v_prog and ph.sort_order = 0;
+
+    -- Rename a phase and repoint a slot: ids must survive.
+    perform public.save_program(
+      p_payload => jsonb_build_object(
+        'name', 'Phased Program', 'description', '', 'weeks', 4, 'phased', true,
+        'phases', jsonb_build_array(
+          jsonb_build_object('name','Base Renamed','weeks',2,'active_days', jsonb_build_array('monday')),
+          jsonb_build_object('name','Peak','weeks',2,'active_days', jsonb_build_array('monday'))
+        ),
+        'slots', jsonb_build_array(
+          jsonb_build_object('phase_index',0,'week_number',1,'day_of_week','monday','workout_id',w_push::text),
+          jsonb_build_object('phase_index',1,'week_number',1,'day_of_week','monday','workout_id',w_push::text)
+        )
+      ),
+      p_program_id => v_prog
+    );
+
+    select id into v_phase_id_after from public.program_phases
+    where program_id = v_prog and sort_order = 0;
+    if v_phase_id_after is distinct from v_phase_id_before then
+      failures := array_append(failures, 'save_program churned the phase id instead of updating in place (B3)');
+    end if;
+
+    select ws.id into v_slot_id_after
+    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    where ph.program_id = v_prog and ph.sort_order = 0;
+    if v_slot_id_after is distinct from v_slot_id_before then
+      failures := array_append(failures, 'save_program churned the schedule slot id (B3)');
+    end if;
+
+    select name into v_text from public.program_phases where id = v_phase_id_after;
+    if v_text <> 'Base Renamed' then
+      failures := array_append(failures, 'save_program did not apply the phase rename');
+    end if;
+
+    -- Dropping a phase removes it and its slots, leaving the survivor intact.
+    perform public.save_program(
+      p_payload => jsonb_build_object(
+        'name','Phased Program','description','','weeks',2,'phased', true,
+        'phases', jsonb_build_array(
+          jsonb_build_object('name','Base Renamed','weeks',2,'active_days', jsonb_build_array('monday'))
+        ),
+        'slots', jsonb_build_array(
+          jsonb_build_object('phase_index',0,'week_number',1,'day_of_week','monday','workout_id',w_push::text)
+        )
+      ),
+      p_program_id => v_prog
+    );
+
+    select count(*) into v_count from public.program_phases where program_id = v_prog;
+    if v_count <> 1 then
+      failures := array_append(failures, format('expected 1 phase after dropping one, got %s', v_count));
+    end if;
+    select id into v_phase_id_after from public.program_phases where program_id = v_prog and sort_order = 0;
+    if v_phase_id_after is distinct from v_phase_id_before then
+      failures := array_append(failures, 'the surviving phase lost its id when a later phase was dropped');
+    end if;
+
+    -- Removing a slot from the payload deletes just that slot.
+    perform public.save_program(
+      p_payload => jsonb_build_object(
+        'name','Phased Program','description','','weeks',2,'phased', true,
+        'phases', jsonb_build_array(
+          jsonb_build_object('name','Base Renamed','weeks',2,'active_days', jsonb_build_array('monday'))
+        ),
+        'slots', '[]'::jsonb
+      ),
+      p_program_id => v_prog
+    );
+    select count(*) into v_count
+    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    where ph.program_id = v_prog;
+    if v_count <> 0 then
+      failures := array_append(failures, format('removing every slot should clear them, got %s', v_count));
+    end if;
+
+    -- Switching phased -> flat clears the phase scope and writes program-scoped rows.
+    perform public.save_program(
+      p_payload => jsonb_build_object(
+        'name','Now Flat','description','','weeks',2,'phased', false,
+        'phases','[]'::jsonb,
+        'slots', jsonb_build_array(
+          jsonb_build_object('week_number',1,'day_of_week','monday','workout_id',w_push::text)
+        )
+      ),
+      p_program_id => v_prog
+    );
+    select count(*) into v_count from public.program_phases where program_id = v_prog;
+    if v_count <> 0 then
+      failures := array_append(failures, format('switching to flat should drop phases, got %s', v_count));
+    end if;
+    select count(*) into v_count from public.week_schedules where program_id = v_prog;
+    if v_count <> 1 then
+      failures := array_append(failures, format('expected 1 flat slot, got %s', v_count));
+    end if;
+
+    -- Stale write refused.
+    select updated_at into v_updated from public.programs where id = v_prog;
+    begin
+      perform public.save_program(
+        p_payload => jsonb_build_object('name','Clobbered','description','','weeks',2,
+          'phased', false, 'phases','[]'::jsonb, 'slots','[]'::jsonb),
+        p_program_id => v_prog,
+        p_expected_updated_at => v_updated - interval '1 hour'
+      );
+      failures := array_append(failures, 'a stale program save should raise stale_write (C-3)');
+    exception when others then
+      if sqlerrm <> 'stale_write' then
+        failures := array_append(failures, format('expected stale_write, got: %s', sqlerrm));
+      end if;
+    end;
+  end;
+
   raise exception 'PROGRAM_ISOLATION_ASSERTIONS % — %',
     (case when failures = '{}' then 'PASSED' else 'FAILED' end),
     failures;

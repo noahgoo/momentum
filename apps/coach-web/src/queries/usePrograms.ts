@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { DayOfWeek, WeekSchedule } from "@momentum/shared";
+import { describeRpcError, type DayOfWeek, type WeekSchedule } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
 
@@ -138,6 +138,8 @@ export interface ProgramDetail {
   /** Flat-mode fields, only meaningful when `phased` is false. */
   flatActiveDays: DayOfWeek[];
   flatWeekSchedule: WeekSchedule;
+  /** Carried into the next save so a concurrent edit is detected (C3). */
+  updatedAt: string;
 }
 
 /** Loads one program plus its phases (if any) and week_schedules, for the builder's edit mode. */
@@ -196,6 +198,7 @@ export function useProgramDetail(programId: string | undefined) {
           })),
           flatActiveDays: [],
           flatWeekSchedule: {},
+          updatedAt: program.updated_at,
         };
       }
 
@@ -224,6 +227,7 @@ export function useProgramDetail(programId: string | undefined) {
         phases: [],
         flatActiveDays: Array.from(activeDaySet),
         flatWeekSchedule,
+        updatedAt: program.updated_at,
       };
     },
     enabled: !!programId,
@@ -240,6 +244,8 @@ export interface SaveProgramInput {
   flatWeeks: number; // flat mode only
   flatActiveDays: DayOfWeek[]; // flat mode only (informational; schedule rows are the source of truth)
   flatWeekSchedule: WeekSchedule; // flat mode only
+  /** The programs.updated_at this editor loaded; a competing save raises stale_write (C3). */
+  expectedUpdatedAt?: string | null;
 }
 
 /**
@@ -261,6 +267,34 @@ export interface SaveProgramInput {
  *   `phase_id`) and `week_number` is GLOBAL (1..weeks), since there are no
  *   phases to offset from.
  */
+/** Domain wording for the codes save_program raises. */
+const SAVE_PROGRAM_ERRORS = {
+  stale_write:
+    "This program changed while you were editing it. Reload to see the current version before saving.",
+  not_found_or_forbidden: "This program no longer exists.",
+};
+
+export function describeSaveProgramError(error: unknown): string {
+  return describeRpcError(error, SAVE_PROGRAM_ERRORS);
+}
+
+/**
+ * Saves a program through the `save_program` RPC.
+ *
+ * The old version deleted every program_phases row (cascading their
+ * week_schedules) and reinserted, so each save handed every phase and every
+ * scheduled slot a new primary key — and did it across up to six separate
+ * requests, any of which could leave the program half-written (B3, R2).
+ *
+ * Week-number scoping is unchanged and still the builder's contract:
+ * phased mode writes phase-scoped rows with PHASE-LOCAL week numbers
+ * (1..phase.weeks), flat mode writes program-scoped rows with GLOBAL ones.
+ * Both are flattened into one `slots` array here — phased slots carry
+ * `phase_index` — so the RPC has a single reconcile path.
+ *
+ * `expectedUpdatedAt` makes a concurrent edit raise `stale_write` rather than
+ * silently discarding the other coach's save (C3).
+ */
 export function useSaveProgram() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -269,126 +303,55 @@ export function useSaveProgram() {
         ? input.phases.reduce((sum, phase) => sum + (phase.weeks || 0), 0)
         : input.flatWeeks;
 
-      const programPayload = {
-        name: input.name,
-        description: input.description || null,
-        weeks,
-        created_by: input.createdBy,
-      };
+      const slots: {
+        phase_index?: number;
+        week_number: number;
+        day_of_week: DayOfWeek;
+        workout_id: string;
+      }[] = [];
 
-      let programId = input.programId;
-      if (programId) {
-        const { error } = await supabase.from("programs").update(programPayload).eq("id", programId);
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("programs")
-          .insert(programPayload)
-          .select("id")
-          .single();
-        if (error) throw error;
-        programId = data.id;
-      }
-
-      // Replace program_phases wholesale. Deleting phases cascades their
-      // week_schedules rows (phase_id references program_phases on delete
-      // cascade), so no separate phase-scoped week_schedules delete is
-      // needed before re-inserting.
-      const { error: deletePhasesError } = await supabase
-        .from("program_phases")
-        .delete()
-        .eq("program_id", programId);
-      if (deletePhasesError) throw deletePhasesError;
-
-      // Flat-mode week_schedules rows are program-scoped, not cascaded by
-      // the phase delete above — clear them explicitly so switching modes
-      // (or re-saving flat) never leaves stale rows behind.
-      const { error: deleteFlatSchedulesError } = await supabase
-        .from("week_schedules")
-        .delete()
-        .eq("program_id", programId)
-        .is("phase_id", null);
-      if (deleteFlatSchedulesError) throw deleteFlatSchedulesError;
-
-      if (input.phased) {
-        if (input.phases.length > 0) {
-          const { data: insertedPhases, error: insertPhasesError } = await supabase
-            .from("program_phases")
-            .insert(
-              input.phases.map((phase, index) => ({
-                program_id: programId,
-                name: phase.name || null,
-                sort_order: index,
-                weeks: phase.weeks,
-                active_days: phase.activeDays,
-              })),
-            )
-            .select("id")
-            .order("sort_order", { ascending: true });
-          if (insertPhasesError) throw insertPhasesError;
-
-          const scheduleRows: {
-            phase_id: string;
-            week_number: number;
-            day_of_week: DayOfWeek;
-            workout_id: string;
-          }[] = [];
-          input.phases.forEach((phase, index) => {
-            const phaseId = insertedPhases?.[index]?.id;
-            if (!phaseId) return;
-            for (const [weekKey, daySchedule] of Object.entries(phase.weekSchedule)) {
-              const weekNumber = Number(weekKey);
-              if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > phase.weeks) continue;
-              for (const [day, workoutId] of Object.entries(daySchedule)) {
-                if (!workoutId) continue; // empty/rest -> no row
-                scheduleRows.push({
-                  phase_id: phaseId,
-                  week_number: weekNumber,
-                  day_of_week: day as DayOfWeek,
-                  workout_id: workoutId,
-                });
-              }
-            }
-          });
-
-          if (scheduleRows.length > 0) {
-            const { error: insertSchedulesError } = await supabase
-              .from("week_schedules")
-              .insert(scheduleRows);
-            if (insertSchedulesError) throw insertSchedulesError;
-          }
-        }
-      } else {
-        const scheduleRows: {
-          program_id: string;
-          week_number: number;
-          day_of_week: DayOfWeek;
-          workout_id: string;
-        }[] = [];
-        for (const [weekKey, daySchedule] of Object.entries(input.flatWeekSchedule)) {
+      const collect = (schedule: WeekSchedule, maxWeek: number, phaseIndex?: number) => {
+        for (const [weekKey, daySchedule] of Object.entries(schedule)) {
           const weekNumber = Number(weekKey);
-          if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > input.flatWeeks) continue;
+          if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > maxWeek) continue;
           for (const [day, workoutId] of Object.entries(daySchedule)) {
-            if (!workoutId) continue;
-            scheduleRows.push({
-              program_id: programId,
+            if (!workoutId) continue; // empty/rest -> no row
+            slots.push({
+              ...(phaseIndex === undefined ? {} : { phase_index: phaseIndex }),
               week_number: weekNumber,
               day_of_week: day as DayOfWeek,
               workout_id: workoutId,
             });
           }
         }
+      };
 
-        if (scheduleRows.length > 0) {
-          const { error: insertSchedulesError } = await supabase
-            .from("week_schedules")
-            .insert(scheduleRows);
-          if (insertSchedulesError) throw insertSchedulesError;
-        }
+      if (input.phased) {
+        input.phases.forEach((phase, index) => collect(phase.weekSchedule, phase.weeks, index));
+      } else {
+        collect(input.flatWeekSchedule, input.flatWeeks);
       }
 
-      return programId;
+      const { data, error } = await supabase.rpc("save_program", {
+        p_payload: {
+          name: input.name,
+          description: input.description || null,
+          weeks,
+          phased: input.phased,
+          phases: input.phases.map((phase) => ({
+            name: phase.name || null,
+            weeks: phase.weeks,
+            active_days: phase.activeDays,
+          })),
+          slots,
+        },
+        p_program_id: input.programId ?? undefined,
+        p_expected_updated_at: input.expectedUpdatedAt ?? undefined,
+      });
+      if (error) throw new Error(error.message);
+      return data as string;
     },
+
     onSuccess: (programId) => {
       void queryClient.invalidateQueries({ queryKey: qk.programDetail(programId) });
       void queryClient.invalidateQueries({ queryKey: qk.programs() });
