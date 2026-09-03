@@ -3,8 +3,9 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
-import { bodyFatFromEntry, dateStr, type BodyMeasurement, type BodyMeasurementCreate } from "@momentum/shared";
+import { bodyFatFromEntry, type BodyMeasurement, type BodyMeasurementCreate } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
+import { useClientDate } from "../../../lib/useClientDate";
 import { useProfile } from "../../../lib/queries/useProfile";
 import { useBodyMeasurements } from "../../../lib/queries/useBodyMeasurements";
 import { useCreateBodyMeasurement } from "../../../lib/queries/useCreateBodyMeasurement";
@@ -51,6 +52,7 @@ function entryOtherSitesLine(entry: BodyMeasurement): string {
 export default function ProgressMeasurementsScreen() {
   const { session } = useAuth();
   const uid = session?.user.id;
+  const { today } = useClientDate();
 
   const { data: profile } = useProfile(uid);
   const { data: entries = [], isPending } = useBodyMeasurements(uid);
@@ -72,7 +74,7 @@ export default function ProgressMeasurementsScreen() {
     if (!uid || createMutation.isPending) return;
     setFormError(null);
     createMutation.mutate(
-      { clientId: uid, entry: { ...entry, date: dateStr(new Date()) } },
+      { clientId: uid, entry: { ...entry, date: today } },
       {
         onError: (err) => {
           console.error("Failed to save measurement:", err);
@@ -125,7 +127,7 @@ export default function ProgressMeasurementsScreen() {
 
         <View style={styles.section}>
           <MeasurementForm
-            date={dateStr(new Date())}
+            date={today}
             saving={createMutation.isPending}
             error={formError}
             onSubmit={handleSave}

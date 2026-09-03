@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getWorkoutIdForDate,
-  dateStr,
   type DayOfWeek,
   type Program,
   type ProgramPhase,
@@ -56,13 +55,14 @@ export interface TodayWorkoutResult {
  * Every branch that finds "nothing scheduled" returns `workout: null`
  * rather than throwing — that's a valid state (rest day / no program).
  */
-export function useTodayWorkout(uid: string | undefined) {
+export function useTodayWorkout(uid: string | undefined, today: string) {
   return useQuery<TodayWorkoutResult>({
-    queryKey: qk.todayWorkout(uid ?? ""),
+    // `today` is part of the key: when the client's date rolls over, that is a
+    // different query, not a stale one.
+    queryKey: qk.todayWorkout(uid ?? "", today),
     enabled: Boolean(uid),
     queryFn: async () => {
       const clientId = uid as string;
-      const today = dateStr(new Date());
 
       // (a) streak — canonical SQL, not recomputed here.
       const { data: streak, error: streakError } = await supabase.rpc("get_my_streak");

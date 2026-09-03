@@ -33,9 +33,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * weekday leads (constraint: "rotated so program's start weekday leads"),
  * rather than the old app's fixed Monday-Sunday calendar week.
  */
-export function useWorkoutWeek(uid: string | undefined, weekNumber: number) {
+export function useWorkoutWeek(uid: string | undefined, weekNumber: number, todayStr: string) {
   return useQuery<WorkoutWeekResult | null>({
-    queryKey: qk.workoutWeek(uid ?? "", weekNumber),
+    queryKey: qk.workoutWeek(uid ?? "", weekNumber, todayStr),
     enabled: Boolean(uid) && weekNumber >= 1,
     queryFn: async () => {
       const clientId = uid as string;
@@ -45,7 +45,6 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number) {
       const start = parseDateStr(ctx.startDateStr);
       if (!start) return null;
 
-      const todayStr = dateStr(new Date());
       const totalWeeks = ctx.program.weeks ?? 0;
       const daysDiffToday = Math.floor(
         (new Date(todayStr + "T00:00:00").getTime() - start.getTime()) / DAY_MS

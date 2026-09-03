@@ -5,6 +5,7 @@ import { MeasurementsPanel } from "../components/clients/MeasurementsPanel";
 import { ProgressPhotosStrip } from "../components/clients/ProgressPhotosStrip";
 import { RecentWorkouts } from "../components/clients/RecentWorkouts";
 import { WorkoutHeatmap } from "../components/clients/WorkoutHeatmap";
+import { useClientDate } from "../lib/useClientDate";
 import { useAuth } from "../lib/auth";
 import { useClientDetail, useToggleClientDisabled } from "../queries/useClientDetail";
 import { useClientProgressPhotos } from "../queries/useClientProgressPhotos";
@@ -38,7 +39,8 @@ function DetailSkeleton() {
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { profile: coachProfile } = useAuth();
-  const { data, isLoading, isError } = useClientDetail(id);
+  const { today: clientTodayStr } = useClientDate(id);
+  const { data, isLoading, isError } = useClientDetail(id, clientTodayStr);
   const { data: photos } = useClientProgressPhotos(id);
   const toggleDisabled = useToggleClientDisabled(id ?? "");
 
@@ -74,7 +76,7 @@ export function ClientDetailPage() {
       />
 
       <SectionCard title="Workout history">
-        <WorkoutHeatmap logs={logs} />
+        <WorkoutHeatmap logs={logs} todayStr={clientTodayStr} />
       </SectionCard>
 
       <SectionCard title="Recent workouts">

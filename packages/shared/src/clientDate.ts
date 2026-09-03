@@ -90,3 +90,15 @@ export function addDaysStr(dateStr: string, days: number): string {
   const dd = String(shifted.getUTCDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
 }
+
+/**
+ * The Monday of the week containing `dateStr`, as YYYY-MM-DD.
+ * Pure calendar arithmetic — no instant, so no timezone can shift it.
+ */
+export function mondayOfStr(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  const day = utc.getUTCDay(); // 0 = Sunday
+  return addDaysStr(dateStr, day === 0 ? -6 : 1 - day);
+}

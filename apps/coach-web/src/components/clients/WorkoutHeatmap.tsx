@@ -3,6 +3,8 @@ import type { WorkoutLog } from "@momentum/shared";
 
 interface Props {
   logs: WorkoutLog[];
+  /** The client's today (YYYY-MM-DD) — the heatmap's final column. */
+  todayStr: string;
 }
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -26,11 +28,12 @@ function getMondayOfWeek(date: Date): Date {
   return d;
 }
 
-export function WorkoutHeatmap({ logs }: Props) {
+export function WorkoutHeatmap({ logs, todayStr }: Props) {
   const completedDates = new Set(logs.filter((l) => l.completed).map((l) => l.date));
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // The CLIENT's today, not the coach's — a heatmap that ends on the
+  // coach's date shows the wrong final column for a client further west.
+  const today = parseDateStr(todayStr) ?? new Date();
   const thisMonday = getMondayOfWeek(today);
 
   // columns[0] = oldest week, columns[WEEKS-1] = this week

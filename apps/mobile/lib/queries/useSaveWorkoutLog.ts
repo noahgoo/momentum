@@ -135,7 +135,7 @@ export function useSaveWorkoutLog() {
       void queryClient.invalidateQueries({
         queryKey: qk.workoutDay(variables.clientId, variables.date),
       });
-      void queryClient.invalidateQueries({ queryKey: ["workoutWeek", variables.clientId] });
+      void queryClient.invalidateQueries({ queryKey: qk.workoutWeek(variables.clientId) });
       void queryClient.invalidateQueries({ queryKey: qk.workoutHistory(variables.clientId) });
       void queryClient.invalidateQueries({ queryKey: qk.todayWorkout(variables.clientId) });
       void queryClient.invalidateQueries({ queryKey: qk.dashboard(variables.clientId) });

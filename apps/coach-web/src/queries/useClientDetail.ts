@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { dateStr, parseDateStr, parseSetConfigs, type SetConfig } from "@momentum/shared";
+import { parseDateStr, parseSetConfigs, type SetConfig } from "@momentum/shared";
 import type {
   BodyMeasurement,
   ClientSummary,
@@ -52,14 +52,16 @@ export function workoutExerciseTargetKey(workoutId: string, exerciseId: string):
 const HEATMAP_DAYS = 84; // 12 weeks
 
 function resolveProgramStatus(
-  assignment: { start_date: string; programs: Program | null } | null
+  assignment: { start_date: string; programs: Program | null } | null,
+  /** The CLIENT's today (YYYY-MM-DD) — not the coach's. See concurrency.md C1. */
+  todayStr: string
 ): ProgramStatus {
   if (!assignment || !assignment.programs) return { kind: "none" };
   const program = assignment.programs;
   const totalWeeks = program.weeks ?? 0;
 
   const start = parseDateStr(assignment.start_date);
-  const today = parseDateStr(dateStr(new Date()));
+  const today = parseDateStr(todayStr);
   if (!start || !today) return { kind: "none" };
 
   if (today.getTime() < start.getTime()) {
@@ -89,9 +91,9 @@ function resolveProgramStatus(
  * No client-side `coach_id = auth.uid()` filter anywhere below — RLS scopes
  * every one of these tables to `is_coach_of(client_id)` already.
  */
-export function useClientDetail(clientId: string | undefined) {
+export function useClientDetail(clientId: string | undefined, todayStr: string) {
   return useQuery<ClientDetail>({
-    queryKey: qk.clientDetail(clientId ?? ""),
+    queryKey: qk.clientDetail(clientId ?? "", todayStr),
     enabled: Boolean(clientId),
     queryFn: async () => {
       const id = clientId as string;
@@ -154,7 +156,8 @@ export function useClientDetail(clientId: string | undefined) {
         profile: profileRes.data,
         streak: summary?.streak ?? 0,
         programStatus: resolveProgramStatus(
-          assignmentRes.data as { start_date: string; programs: Program | null } | null
+          assignmentRes.data as { start_date: string; programs: Program | null } | null,
+          todayStr
         ),
         logs,
         workoutsById,

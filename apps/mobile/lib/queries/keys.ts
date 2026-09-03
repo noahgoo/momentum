@@ -7,8 +7,8 @@
  *
  * Hierarchy is deliberate:
  *   ['profile', uid]
- *   ['dashboard', uid]
- *   ['todayWorkout', uid]
+ *   ['dashboard', uid, dateStr]
+ *   ['todayWorkout', uid, dateStr]
  *   ['goals', uid]
  *   ['goals', uid, 'logs', dateStr]
  *   ['goals', uid, 'logs', 'range', fromDateStr, toDateStr]
@@ -31,8 +31,14 @@
  */
 export const qk = {
   profile: (uid: string) => ["profile", uid] as const,
-  dashboard: (uid: string) => ["dashboard", uid] as const,
-  todayWorkout: (uid: string) => ["todayWorkout", uid] as const,
+  dashboard: (uid: string, date?: string) =>
+    date === undefined ? (["dashboard", uid] as const) : (["dashboard", uid, date] as const),
+  // Date-optional: qk.todayWorkout(uid) is a PREFIX that invalidates every
+  // date, so mutations never need to know what "today" is for this client.
+  todayWorkout: (uid: string, date?: string) =>
+    date === undefined
+      ? (["todayWorkout", uid] as const)
+      : (["todayWorkout", uid, date] as const),
   goals: (uid: string) => ["goals", uid] as const,
   goalLogs: (uid: string, dateStr: string) => ["goals", uid, "logs", dateStr] as const,
   /** Nested under `goals(uid)` too — a range covering `dateStr` includes it,
@@ -45,7 +51,10 @@ export const qk = {
   /** The client's own coach's `profiles` row (display_name for the messages header). */
   myCoach: (coachId: string) => ["myCoach", coachId] as const,
   /** One week's 7-day grid (workout tab index.tsx). weekNumber is 1-based. */
-  workoutWeek: (uid: string, weekNumber: number) => ["workoutWeek", uid, weekNumber] as const,
+  workoutWeek: (uid: string, weekNumber?: number, date?: string) =>
+    weekNumber === undefined
+      ? (["workoutWeek", uid] as const)
+      : (["workoutWeek", uid, weekNumber, date] as const),
   /** Single date's workout/warmup/log/previous-log bundle ([date].tsx). */
   workoutDay: (uid: string, dateStr: string) => ["workoutDay", uid, dateStr] as const,
   /** Completed workout_logs, most recent first (history.tsx). */

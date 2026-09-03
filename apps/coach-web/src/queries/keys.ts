@@ -32,10 +32,20 @@
  */
 export const qk = {
   clientSummaries: () => ["clientSummaries"] as const,
-  clientDetail: (id: string) => ["clientSummaries", id] as const,
+  // "detail" segment disambiguates from the sibling clientGoals /
+  // clientProgressPhotos keys, which also nest under ['clientSummaries', id].
+  // The date is part of the key so a client's day rollover is a new query;
+  // omitting it yields a prefix that invalidates every date.
+  clientDetail: (id: string, date?: string) =>
+    date === undefined
+      ? (["clientSummaries", id, "detail"] as const)
+      : (["clientSummaries", id, "detail", date] as const),
   clientGoals: (id: string) => ["clientSummaries", id, "goals"] as const,
   clientProgressPhotos: (id: string) => ["clientSummaries", id, "progressPhotos"] as const,
-  clientActiveAssignment: (id: string) => ["clientSummaries", id, "activeAssignment"] as const,
+  clientActiveAssignment: (id: string, date?: string) =>
+    date === undefined
+      ? (["clientSummaries", id, "activeAssignment"] as const)
+      : (["clientSummaries", id, "activeAssignment", date] as const),
   threads: () => ["threads"] as const,
   threadMessages: (threadId: string) => ["threads", threadId, "messages"] as const,
   workouts: () => ["workouts"] as const,

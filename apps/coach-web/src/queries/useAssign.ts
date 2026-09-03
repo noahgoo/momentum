@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { dateStr, parseDateStr } from "@momentum/shared";
+import { parseDateStr } from "@momentum/shared";
 import type { Program } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
@@ -28,9 +28,9 @@ export interface ActiveAssignmentInfo {
  * `coach_id` filter — RLS on `assignments`/`programs` already scopes reads
  * to `is_coach_of(client_id)` / `created_by = auth.uid()`.
  */
-export function useClientActiveAssignment(clientId: string | undefined) {
+export function useClientActiveAssignment(clientId: string | undefined, todayStr: string) {
   return useQuery<ActiveAssignmentInfo | null>({
-    queryKey: qk.clientActiveAssignment(clientId ?? "__none__"),
+    queryKey: qk.clientActiveAssignment(clientId ?? "__none__", todayStr),
     enabled: Boolean(clientId),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -44,7 +44,8 @@ export function useClientActiveAssignment(clientId: string | undefined) {
 
       const program = data.programs as Program;
       const start = parseDateStr(data.start_date);
-      const today = parseDateStr(dateStr(new Date()));
+      // The CLIENT's today, not the coach's — see docs/rules/concurrency.md C1.
+      const today = parseDateStr(todayStr);
       let currentWeek: number | null = null;
       if (start && today && today.getTime() >= start.getTime()) {
         const daysDiff = Math.floor((today.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));

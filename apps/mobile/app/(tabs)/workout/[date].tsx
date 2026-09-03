@@ -3,8 +3,9 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Check } from "lucide-react-native";
-import { dateStr, type WorkoutDifficulty } from "@momentum/shared";
+import { type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
+import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutDay } from "../../../lib/queries/useWorkoutDay";
 import { usePendingChangeRequest } from "../../../lib/queries/useChangeRequest";
 import { useWarmupToggle } from "../../../lib/queries/useWarmupToggle";
@@ -31,7 +32,7 @@ export default function WorkoutDayScreen() {
   const { session, profile } = useAuth();
   const uid = session?.user.id;
 
-  const todayStr = dateStr(new Date());
+  const { today: todayStr } = useClientDate();
   const isToday = dateParam === todayStr;
   const isFuture = Boolean(dateParam) && dateParam > todayStr;
 

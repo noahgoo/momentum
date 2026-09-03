@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { dateStr } from "@momentum/shared";
 import type { ClientSummary, Workout } from "@momentum/shared";
 import type { ProgramListRow } from "../../queries/usePrograms";
 import { useProgramDetail } from "../../queries/usePrograms";
+import { useClientDate } from "../../lib/useClientDate";
 import { useAssignProgram, useClientActiveAssignment } from "../../queries/useAssign";
 import { CurrentAssignmentCard } from "./CurrentAssignmentCard";
 import { SchedulePreview, toProgramPreview } from "./SchedulePreview";
@@ -24,13 +24,19 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
 
   const [clientId, setClientId] = useState(initialClientId);
   const [programId, setProgramId] = useState(initialProgramId);
-  const [startDate, setStartDate] = useState(() => dateStr(new Date()));
+  const [startDate, setStartDate] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [successAssignmentId, setSuccessAssignmentId] = useState<string | null>(null);
 
   const { data: programDetail } = useProgramDetail(programId || undefined);
-  const { data: activeAssignment } = useClientActiveAssignment(clientId || undefined);
+  // The CLIENT's today, not the coach's — a coach in NY assigning to an LA
+  // client must not default the start date to the client's tomorrow.
+  const { today: clientToday } = useClientDate(clientId || undefined);
+  // Null until the coach picks a date: fall back to the selected client's
+  // today, so switching clients re-defaults rather than keeping a stale date.
+  const effectiveStartDate = startDate ?? clientToday;
+  const { data: activeAssignment } = useClientActiveAssignment(clientId || undefined, clientToday);
   const assignProgram = useAssignProgram();
 
   // Re-preselect from URL params if they change after mount (e.g. nav from a
@@ -52,7 +58,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
   const validationErrors: string[] = [];
   if (!clientId) validationErrors.push("Choose a client.");
   if (!programId) validationErrors.push("Choose a program.");
-  if (!startDate) validationErrors.push("Choose a start date.");
+  if (!effectiveStartDate) validationErrors.push("Choose a start date.");
 
   const canSubmit = validationErrors.length === 0 && !assignProgram.isPending;
 
@@ -63,7 +69,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
     if (validationErrors.length > 0) return;
 
     try {
-      const assignmentId = await assignProgram.mutateAsync({ clientId, programId, startDate });
+      const assignmentId = await assignProgram.mutateAsync({ clientId, programId, startDate: effectiveStartDate });
       setSuccessAssignmentId(assignmentId);
     } catch (err) {
       const code = (err as { code?: string } | null)?.code;
@@ -142,9 +148,9 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
           <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Start date</label>
           <input
             type="date"
-            value={startDate}
+            value={effectiveStartDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className={`${selectClass} ${submitted && !startDate ? "border-[var(--bad)]" : ""}`}
+            className={`${selectClass} ${submitted && !effectiveStartDate ? "border-[var(--bad)]" : ""}`}
           />
           <p className="mt-1 text-xs text-[var(--ink-30)]">Any day of the week is allowed as a start date.</p>
         </div>
@@ -155,7 +161,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
             programName={selectedProgram?.name ?? ""}
             programWeeks={selectedProgram?.weeks ?? null}
             program={programPreview}
-            startDate={startDate}
+            startDate={effectiveStartDate}
             workoutNameById={workoutNameById}
           />
         </div>

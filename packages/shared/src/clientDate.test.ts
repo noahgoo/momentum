@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TIMEZONE,
   addDaysStr,
+  mondayOfStr,
   clientDateStr,
   clientToday,
   isSameClientDay,
@@ -114,5 +115,23 @@ describe("addDaysStr", () => {
 
   it("returns the input unchanged when it is not a date string", () => {
     expect(addDaysStr("nonsense", 1)).toBe("nonsense");
+  });
+});
+
+describe("mondayOfStr", () => {
+  it("returns the Monday of the containing week", () => {
+    // 2026-06-15 is a Monday.
+    expect(mondayOfStr("2026-06-15")).toBe("2026-06-15");
+    expect(mondayOfStr("2026-06-17")).toBe("2026-06-15"); // Wednesday
+    expect(mondayOfStr("2026-06-20")).toBe("2026-06-15"); // Saturday
+  });
+
+  it("treats Sunday as the END of its week, not the start", () => {
+    // 2026-06-21 is a Sunday; its Monday is six days back, not the next day.
+    expect(mondayOfStr("2026-06-21")).toBe("2026-06-15");
+  });
+
+  it("crosses a month boundary", () => {
+    expect(mondayOfStr("2026-07-01")).toBe("2026-06-29"); // Wednesday
   });
 });

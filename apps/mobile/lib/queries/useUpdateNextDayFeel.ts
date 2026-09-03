@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { dateStr } from "@momentum/shared";
+import { addDaysStr } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 import type { DashboardResult } from "./useDashboard";
 
 interface UpdateNextDayFeelInput {
+  /** The client's today (YYYY-MM-DD); yesterday is derived from it. */
+  todayStr: string;
   clientId: string;
   /** 1 (Wrecked) – 5 (Great). */
   feel: 1 | 2 | 3 | 4 | 5;
@@ -22,8 +24,9 @@ export function useUpdateNextDayFeel() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ clientId, feel }: UpdateNextDayFeelInput) => {
-      const yesterday = dateStr(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    mutationFn: async ({ clientId, feel, todayStr }: UpdateNextDayFeelInput) => {
+      // Yesterday in the CLIENT's calendar, not the device's.
+      const yesterday = addDaysStr(todayStr, -1);
       const { error } = await supabase
         .from("workout_logs")
         .update({ next_day_feel: feel })

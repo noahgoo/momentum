@@ -8,8 +8,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type { Goal } from "@momentum/shared";
+import { dateStr, type Goal } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
+import { useClientDate } from "../../lib/useClientDate";
 import { useGoals } from "../../lib/queries/useGoals";
 import { useGoalLogsRange } from "../../lib/queries/useGoalLogsRange";
 import { useToggleGoalLog } from "../../lib/queries/useToggleGoalLog";
@@ -25,22 +26,11 @@ import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-function todayStr(): string {
-  return toDateStr(new Date());
-}
-
-function toDateStr(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 function last7Dates(anchor: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(anchor);
     d.setDate(anchor.getDate() - (6 - i));
-    return toDateStr(d);
+    return dateStr(d);
   });
 }
 
@@ -67,7 +57,7 @@ export default function GoalsScreen() {
   const { session, profile } = useAuth();
   const uid = session?.user.id;
 
-  const today = todayStr();
+  const { today } = useClientDate();
   const last7 = useMemo(() => last7Dates(new Date(`${today}T12:00:00`)), [today]);
   const fromDate = last7[0];
   const toDate = last7[last7.length - 1];

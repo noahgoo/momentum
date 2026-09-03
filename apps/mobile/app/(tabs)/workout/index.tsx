@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../lib/auth";
+import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutWeek } from "../../../lib/queries/useWorkoutWeek";
 import { ProgressRing } from "../../../components/workout/ProgressRing";
 import { WeekGrid } from "../../../components/workout/WeekGrid";
@@ -17,14 +18,15 @@ import { colors, fonts, spacing } from "../../../theme/tokens";
 export default function WorkoutWeekScreen() {
   const { session } = useAuth();
   const uid = session?.user.id;
+  const { today: todayStr } = useClientDate();
 
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
   // First render: we don't know currentWeekNumber yet, so fetch week 1 to
   // discover totalWeeks/currentWeekNumber, then seed the selector from it.
-  const bootstrapQuery = useWorkoutWeek(uid, selectedWeek ?? 1);
+  const bootstrapQuery = useWorkoutWeek(uid, selectedWeek ?? 1, todayStr);
   const effectiveWeek = selectedWeek ?? bootstrapQuery.data?.currentWeekNumber ?? 1;
-  const { data, isPending } = useWorkoutWeek(uid, effectiveWeek);
+  const { data, isPending } = useWorkoutWeek(uid, effectiveWeek, todayStr);
 
   const weekPills = useMemo(
     () => Array.from({ length: data?.totalWeeks ?? 0 }, (_, i) => i + 1),

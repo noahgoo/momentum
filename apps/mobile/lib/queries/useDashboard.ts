@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  dateStr,
+  addDaysStr,
+  mondayOfStr,
   type Friendship,
   type Goal,
   type GoalLog,
@@ -45,16 +46,19 @@ export interface DashboardResult {
  * parallel, every "nothing found" branch returns a valid empty state
  * rather than throwing.
  */
-export function useDashboard(uid: string | undefined, coachId: string | null | undefined) {
+export function useDashboard(
+  uid: string | undefined,
+  coachId: string | null | undefined,
+  /** The client's today (YYYY-MM-DD), from useClientDate — never the device clock. */
+  todayStr: string
+) {
   return useQuery<DashboardResult>({
-    queryKey: qk.dashboard(uid ?? ""),
+    queryKey: qk.dashboard(uid ?? "", todayStr),
     enabled: Boolean(uid),
     queryFn: async () => {
       const clientId = uid as string;
-      const today = new Date();
-      const todayStr = dateStr(today);
-      const yesterdayStr = dateStr(new Date(today.getTime() - 24 * 60 * 60 * 1000));
-      const mondayStr = dateStr(mondayOf(today));
+      const yesterdayStr = addDaysStr(todayStr, -1);
+      const mondayStr = mondayOfStr(todayStr);
 
       const [motivation, goals, todayGoalLogs, yesterdayLog, friends, photos, measurement] =
         await Promise.all([
@@ -80,20 +84,6 @@ export function useDashboard(uid: string | undefined, coachId: string | null | u
   });
 }
 
-function mondayOf(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay(); // 0 = Sunday
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-/**
- * This week's motivation entry from the client's coach: `week_start` equal
- * to this Monday, falling back to the latest entry at-or-before today when
- * no exact match exists. `null` (no coach yet, or coach has posted nothing)
- * renders the dashboard's default quote.
- */
 async function fetchMotivation(
   coachId: string | null,
   mondayStr: string,

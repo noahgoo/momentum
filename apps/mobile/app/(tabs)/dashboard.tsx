@@ -1,8 +1,9 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { dateStr, type Goal } from "@momentum/shared";
+import { type Goal } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
 import { useProfile } from "../../lib/queries/useProfile";
+import { useClientDate } from "../../lib/useClientDate";
 import { useTodayWorkout } from "../../lib/queries/useTodayWorkout";
 import { useDashboard } from "../../lib/queries/useDashboard";
 import { useToggleGoalLog } from "../../lib/queries/useToggleGoalLog";
@@ -31,18 +32,19 @@ import { colors, fonts, spacing } from "../../theme/tokens";
 export default function Dashboard() {
   const { session } = useAuth();
   const uid = session?.user.id;
+  const { today: todayStr } = useClientDate();
 
   const { data: profile, isPending: profilePending, isError: profileError } = useProfile(uid);
   const {
     data: today,
     isPending: todayPending,
     isError: todayError,
-  } = useTodayWorkout(uid);
+  } = useTodayWorkout(uid, todayStr);
   const {
     data: dashboard,
     isPending: dashboardPending,
     isError: dashboardError,
-  } = useDashboard(uid, profile?.invited_by);
+  } = useDashboard(uid, profile?.invited_by, todayStr);
 
   const toggleGoalLog = useToggleGoalLog();
   const updateNextDayFeel = useUpdateNextDayFeel();
@@ -72,7 +74,7 @@ export default function Dashboard() {
 
   const firstName = profile.display_name?.split(" ")[0] ?? "there";
   const workoutDone = today.workout ? today.log?.completed ?? false : false;
-  const todayStr = dateStr(new Date());
+
 
   function handleToggleGoal(goal: Goal) {
     if (!uid) return;
@@ -87,7 +89,7 @@ export default function Dashboard() {
 
   function handleFeel(feel: 1 | 2 | 3 | 4 | 5) {
     if (!uid) return;
-    updateNextDayFeel.mutate({ clientId: uid, feel });
+    updateNextDayFeel.mutate({ clientId: uid, feel, todayStr });
   }
 
   return (

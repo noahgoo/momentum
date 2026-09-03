@@ -2,8 +2,8 @@ import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router";
-import { dateStr } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
+import { useClientDate } from "../../lib/useClientDate";
 import { useFriendships } from "../../lib/queries/useFriendships";
 import { useAcceptFriendRequest } from "../../lib/queries/useAcceptFriendRequest";
 import { useRemoveFriendship } from "../../lib/queries/useRemoveFriendship";
@@ -21,7 +21,7 @@ import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 export default function FriendsScreen() {
   const { session } = useAuth();
   const uid = session?.user.id;
-  const today = dateStr(new Date());
+  const { today } = useClientDate();
 
   const { data: friendships = [], isLoading, refetch } = useFriendships(uid);
   const acceptRequest = useAcceptFriendRequest();
