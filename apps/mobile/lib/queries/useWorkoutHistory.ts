@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Workout } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import { STATIC_CACHE } from "./cachePolicy";
 import type { WorkoutLogWithChildren } from "./useWorkoutDay";
 
 export interface WorkoutHistoryResult {
@@ -22,6 +23,7 @@ export interface WorkoutHistoryResult {
  */
 export function useWorkoutHistory(uid: string | undefined) {
   return useQuery<WorkoutHistoryResult>({
+    ...STATIC_CACHE,
     queryKey: qk.workoutHistory(uid ?? ""),
     enabled: Boolean(uid),
     queryFn: async () => {

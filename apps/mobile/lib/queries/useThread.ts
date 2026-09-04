@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Thread } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import { LIVE_CACHE } from "./cachePolicy";
 
 /**
  * The client's own messaging thread row. `threads.client_id` is unique
@@ -12,6 +13,7 @@ import { qk } from "./keys";
  */
 export function useThread(clientId: string | undefined) {
   return useQuery<Thread | null>({
+    ...LIVE_CACHE,
     queryKey: qk.thread(clientId ?? ""),
     enabled: Boolean(clientId),
     queryFn: async () => {

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Friendship } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import { LIVE_CACHE } from "./cachePolicy";
 
 /**
  * All friendship rows (any status) this client is a member of. RLS
@@ -17,6 +18,7 @@ import { qk } from "./keys";
  */
 export function useFriendships(uid: string | undefined) {
   return useQuery<Friendship[]>({
+    ...LIVE_CACHE,
     queryKey: qk.friendships(uid ?? ""),
     enabled: Boolean(uid),
     queryFn: async () => {

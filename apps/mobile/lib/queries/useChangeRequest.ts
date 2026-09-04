@@ -58,6 +58,11 @@ export function useCreateChangeRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Deliberately not queued offline: the request is about what is scheduled
+    // right now, and the one-pending-per-client constraint is checked
+    // server-side. Replaying a stale request would ask the coach to move a
+    // workout that has since moved. Fail fast instead (S3).
+    networkMode: "online",
     mutationFn: async (input: CreateChangeRequestInput) => {
       const parsed = changeRequestCreateSchema.safeParse({
         fromDate: input.fromDate,

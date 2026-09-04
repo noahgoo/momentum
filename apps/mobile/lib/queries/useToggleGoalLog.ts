@@ -31,6 +31,8 @@ export function useToggleGoalLog() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Keyed so an offline write replays after a restart (mutationDefaults.ts).
+    mutationKey: ["toggleGoalLog"],
     mutationFn: async ({ goal, clientId, date, isLogged }: ToggleGoalLogInput) => {
       if (isLogged) {
         const { error } = await supabase

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Profile } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import { STATIC_CACHE } from "./cachePolicy";
 
 /**
  * The signed-in client's own coach profile row, for display (name, in the
@@ -10,6 +11,7 @@ import { qk } from "./keys";
  */
 export function useMyCoach(coachId: string | null | undefined) {
   return useQuery<Profile | null>({
+    ...STATIC_CACHE,
     queryKey: qk.myCoach(coachId ?? ""),
     enabled: Boolean(coachId),
     queryFn: async () => {

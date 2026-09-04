@@ -25,6 +25,8 @@ export function useSendMessage() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Keyed so an offline write replays after a restart (mutationDefaults.ts).
+    mutationKey: ["sendMessage"],
     mutationFn: async ({ clientId, text }: SendMessageInput) => {
       const { data, error } = await supabase.rpc("send_message", {
         p_thread_client_id: clientId,

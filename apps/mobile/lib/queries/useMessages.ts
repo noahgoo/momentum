@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Message } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import { LIVE_CACHE } from "./cachePolicy";
 import { useRealtimeSubscription } from "./useRealtime";
 
 const PAGE_SIZE = 50;
@@ -40,6 +41,7 @@ export function useMessages(clientId: string | undefined, threadId: string | nul
   const key = qk.messages(clientId ?? "");
 
   const query = useQuery<Message[]>({
+    ...LIVE_CACHE,
     queryKey: key,
     enabled: Boolean(clientId && threadId),
     queryFn: async () => {

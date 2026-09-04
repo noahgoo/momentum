@@ -53,35 +53,53 @@ export interface SaveWorkoutLogInput {
  * explicit action, so there is no single cached value to flip. Callers show
  * their own saving state and rely on onSettled to reconcile.
  */
+/**
+ * Builds the RPC arguments from the hook's input.
+ *
+ * Exported because the offline replay path (mutationDefaults.ts) has to
+ * rebuild the same call from persisted variables — a second copy of this
+ * mapping would drift from this one.
+ */
+export function buildSaveWorkoutLogArgs(input: SaveWorkoutLogInput) {
+  const { date, workoutId, exercises, completed } = input;
+  return {
+    p_date: date,
+    p_workout_id: workoutId,
+    p_completed: completed,
+    p_exercises: exercises.map((exercise) => ({
+      exercise_id: exercise.exerciseId,
+      exercise_name: exercise.exerciseName,
+      mode: exercise.mode,
+      sort_order: exercise.sortOrder,
+      prescribed: exercise.prescribed ? serializeSetConfigs(exercise.prescribed) : null,
+      sets: exercise.sets.map((set) => ({
+        set_number: set.setNumber,
+        completed: set.completed,
+        reps: set.reps ?? null,
+        weight: set.weight ?? null,
+        weight_unit: set.weightUnit ?? null,
+        target_seconds: set.targetSeconds ?? null,
+        actual_seconds: set.actualSeconds ?? null,
+        actual_miles: set.actualMiles ?? null,
+        weight_entered: set.weightEntered ?? false,
+        prescribed: set.prescribed ? serializeSetConfig(set.prescribed) : null,
+      })),
+    })),
+  };
+}
+
 export function useSaveWorkoutLog() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ date, workoutId, exercises, completed }: SaveWorkoutLogInput) => {
-      const { data, error } = await supabase.rpc("save_workout_log", {
-        p_date: date,
-        p_workout_id: workoutId,
-        p_completed: completed,
-        p_exercises: exercises.map((exercise) => ({
-          exercise_id: exercise.exerciseId,
-          exercise_name: exercise.exerciseName,
-          mode: exercise.mode,
-          sort_order: exercise.sortOrder,
-          prescribed: exercise.prescribed ? serializeSetConfigs(exercise.prescribed) : null,
-          sets: exercise.sets.map((set) => ({
-            set_number: set.setNumber,
-            completed: set.completed,
-            reps: set.reps ?? null,
-            weight: set.weight ?? null,
-            weight_unit: set.weightUnit ?? null,
-            target_seconds: set.targetSeconds ?? null,
-            actual_seconds: set.actualSeconds ?? null,
-            actual_miles: set.actualMiles ?? null,
-            weight_entered: set.weightEntered ?? false,
-            prescribed: set.prescribed ? serializeSetConfig(set.prescribed) : null,
-          })),
-        })),
-      });
+    // Keyed so a save made offline can be replayed after a restart
+    // (mutationDefaults.ts registers the fn for this key).
+    mutationKey: ["saveWorkoutLog"],
+    mutationFn: async (input: SaveWorkoutLogInput) => {
+      const { data, error } = await supabase.rpc(
+        "save_workout_log",
+        buildSaveWorkoutLogArgs(input)
+      );
       if (error) throw new Error(error.message);
       return data;
     },

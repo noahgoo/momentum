@@ -25,6 +25,8 @@ export function useWarmupToggle() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Keyed so an offline write replays after a restart (mutationDefaults.ts).
+    mutationKey: ["setWarmupCompleted"],
     mutationFn: async ({ date, completed }: WarmupToggleInput) => {
       const { error } = await supabase.rpc("set_warmup_completed", {
         p_date: date,

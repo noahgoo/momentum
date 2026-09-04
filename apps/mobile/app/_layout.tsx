@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
   useFonts as useFraunces,
   Fraunces_400Regular_Italic,
@@ -14,7 +14,7 @@ import {
   Inter_600SemiBold,
 } from "@expo-google-fonts/inter";
 import { AuthProvider } from "../lib/auth";
-import { queryClient } from "../lib/queryClient";
+import { persister, queryClient } from "../lib/queryClient";
 import { TimezoneSyncGate } from "../components/TimezoneSyncGate";
 
 void SplashScreen.preventAutoHideAsync();
@@ -43,7 +43,16 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister }}
+      // Fires once the persisted cache has been restored. Writes made offline
+      // are paused mutations until something resumes them; without this a
+      // client's logged workout would sit in storage indefinitely.
+      onSuccess={() => {
+        void queryClient.resumePausedMutations();
+      }}
+    >
       <AuthProvider>
         <TimezoneSyncGate />
         <Stack screenOptions={{ headerShown: false }}>
@@ -53,6 +62,6 @@ export default function RootLayout() {
           <Stack.Screen name="settings" />
         </Stack>
       </AuthProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

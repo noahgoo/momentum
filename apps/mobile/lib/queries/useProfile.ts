@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Profile } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import { STATIC_CACHE } from "./cachePolicy";
 
 /**
  * Loads the signed-in user's own `profiles` row. `maybeSingle` (not
@@ -11,6 +12,7 @@ import { qk } from "./keys";
  */
 export function useProfile(uid: string | undefined) {
   return useQuery<Profile | null>({
+    ...STATIC_CACHE,
     queryKey: qk.profile(uid ?? ""),
     enabled: Boolean(uid),
     queryFn: async () => {

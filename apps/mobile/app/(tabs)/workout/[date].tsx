@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { OfflineBanner } from "../../../components/OfflineBanner";
 import { ChevronLeft, Check } from "lucide-react-native";
 import { type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
@@ -81,6 +82,7 @@ export default function WorkoutDayScreen() {
   if (!workout) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
+        <OfflineBanner />
         <ScrollView contentContainerStyle={styles.content}>
           {BackHeader}
           <Text style={styles.eyebrow}>{formatHeader(dateParam)}</Text>
@@ -95,6 +97,7 @@ export default function WorkoutDayScreen() {
   if (completed && !viewingCompletedLog) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
+        <OfflineBanner />
         <ScrollView contentContainerStyle={styles.content}>
           {BackHeader}
           <View style={styles.doneHero}>
