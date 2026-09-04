@@ -474,6 +474,79 @@ begin
     end;
   end;
 
+  -- -----------------------------------------------------------------------
+  -- Ownership: SECURITY DEFINER bypasses RLS, so each save/read RPC must
+  -- check the caller owns the row. Without this, any authenticated coach
+  -- could rewrite another coach's workout or program by guessing an id.
+  -- -----------------------------------------------------------------------
+  declare
+    v_other_prog uuid;
+  begin
+    -- coach_two owns nothing here; every call below targets coach_id's rows.
+    perform set_config('request.jwt.claims', json_build_object('sub', coach_two)::text, true);
+
+    begin
+      perform public.save_workout(
+        p_workout_id => w_push,
+        p_payload => jsonb_build_object('name','Hijacked','type','workout','exercises','[]'::jsonb)
+      );
+      failures := array_append(failures,
+        'save_workout let a coach edit another coach''s workout (IDOR)');
+    exception when others then
+      if sqlerrm <> 'not_found_or_forbidden' then
+        failures := array_append(failures, format('expected not_found_or_forbidden, got: %s', sqlerrm));
+      end if;
+    end;
+
+    select name into v_text from public.workouts where id = w_push;
+    if v_text = 'Hijacked' then
+      failures := array_append(failures, 'another coach''s workout was actually renamed');
+    end if;
+
+    begin
+      perform public.save_program(
+        p_payload => jsonb_build_object('name','Hijacked','description','','weeks',1,
+          'phased', false, 'phases','[]'::jsonb, 'slots','[]'::jsonb),
+        p_program_id => tmpl_program
+      );
+      failures := array_append(failures,
+        'save_program let a coach edit another coach''s program (IDOR)');
+    exception when others then
+      if sqlerrm <> 'not_found_or_forbidden' then
+        failures := array_append(failures, format('expected not_found_or_forbidden, got: %s', sqlerrm));
+      end if;
+    end;
+
+    select name into v_text from public.programs where id = tmpl_program;
+    if v_text = 'Hijacked' then
+      failures := array_append(failures, 'another coach''s program was actually renamed');
+    end if;
+
+    begin
+      perform public.duplicate_program(tmpl_program);
+      failures := array_append(failures,
+        'duplicate_program let a coach copy another coach''s program');
+    exception when others then
+      if sqlerrm <> 'not_found_or_forbidden' then
+        failures := array_append(failures, format('expected not_found_or_forbidden, got: %s', sqlerrm));
+      end if;
+    end;
+
+    -- The blocker counts must not report on rows the caller does not own.
+    select public.program_delete_blockers(tmpl_program) into v_count;
+    if v_count <> 0 then
+      failures := array_append(failures,
+        format('program_delete_blockers leaked another coach''s count: %s', v_count));
+    end if;
+    select public.workout_delete_blockers(w_push) into v_count;
+    if v_count <> 0 then
+      failures := array_append(failures,
+        format('workout_delete_blockers leaked another coach''s count: %s', v_count));
+    end if;
+
+    perform set_config('request.jwt.claims', json_build_object('sub', coach_id)::text, true);
+  end;
+
   raise exception 'PROGRAM_ISOLATION_ASSERTIONS % — %',
     (case when failures = '{}' then 'PASSED' else 'FAILED' end),
     failures;

@@ -278,9 +278,14 @@ stable
 security definer
 set search_path = ''
 as $$
+  -- Scoped to the caller's own programs: SECURITY DEFINER bypasses RLS, and
+  -- an unscoped count would confirm the existence of, and report activity on,
+  -- another coach's program by id.
   select count(*)::int
   from public.assignments a
-  where a.program_id = p_program_id;
+  join public.programs p on p.id = a.program_id
+  where a.program_id = p_program_id
+    and p.created_by = auth.uid();
 $$;
 
 comment on function public.program_delete_blockers(uuid) is
@@ -296,9 +301,12 @@ stable
 security definer
 set search_path = ''
 as $$
+  -- Scoped to the caller's own workouts, for the same reason.
   select count(*)::int
   from public.week_schedules ws
-  where ws.workout_id = p_workout_id;
+  join public.workouts w on w.id = ws.workout_id
+  where ws.workout_id = p_workout_id
+    and w.created_by = auth.uid();
 $$;
 
 comment on function public.workout_delete_blockers(uuid) is
@@ -353,7 +361,14 @@ begin
     )
     returning id into v_workout_id;
   else
-    select updated_at into v_current from public.workouts where id = v_workout_id;
+    -- SECURITY DEFINER bypasses RLS, so ownership must be checked here or
+    -- any authenticated user could rewrite any workout by id. Scoping the
+    -- lookup itself (rather than a separate check) means a future edit
+    -- cannot leave the update reachable without it.
+    select updated_at into v_current
+    from public.workouts
+    where id = v_workout_id and created_by = auth.uid();
+
     if v_current is null then
       raise exception 'not_found_or_forbidden';
     end if;
@@ -463,7 +478,12 @@ begin
     )
     returning id into v_program_id;
   else
-    select updated_at into v_current from public.programs where id = v_program_id;
+    -- SECURITY DEFINER bypasses RLS: scope by owner or any authenticated
+    -- user could rewrite any coach's program by id.
+    select updated_at into v_current
+    from public.programs
+    where id = v_program_id and created_by = auth.uid();
+
     if v_current is null then
       raise exception 'not_found_or_forbidden';
     end if;
