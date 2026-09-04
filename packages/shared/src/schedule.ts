@@ -35,7 +35,10 @@ export function dateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Flatten phased week schedules into global week keys ("1", "2", …). */
+/**
+ * Flatten phased week schedules into global week keys ("1", "2", …).
+ * Builder preview only — see getWorkoutIdForDate.
+ */
 export function resolveWeekSchedule(program: ProgramPreview): WeekSchedule {
   if (!program.phases || program.phases.length === 0) return program.weekSchedule;
   const global: WeekSchedule = {};
@@ -50,12 +53,21 @@ export function resolveWeekSchedule(program: ProgramPreview): WeekSchedule {
 }
 
 /**
- * Resolves the workoutId scheduled for `targetDateStr` given a program, assignment
- * start date, and any existing per-client date overrides. This is a client-side
- * PREVIEW only — the authoritative implementation lives in SQL
- * (resolve_scheduled_workout). Returns null if the date is before start, past the
- * program length, or a rest day. An override entry of null means explicit rest;
- * an override entry that is a non-empty string wins outright.
+ * Resolves the workoutId scheduled for `targetDateStr`.
+ *
+ * BUILDER PREVIEW ONLY. The authoritative implementation is SQL's
+ * `resolve_scheduled_workout`, reachable from the client through the
+ * `get_workout_day` / `get_workout_week` RPCs — use those for anything a
+ * client actually sees. This exists solely so the coach's builder can preview
+ * a program that has not been saved yet, where there is no server state to
+ * query.
+ *
+ * Never resolve live client data with this: two implementations of the same
+ * rules drift, which is exactly what violation B9 was.
+ *
+ * Returns null if the date is before start, past the program length, or a rest
+ * day. An override entry of null means explicit rest; a non-empty string wins
+ * outright.
  */
 export function getWorkoutIdForDate(
   assignment: AssignmentPreview,

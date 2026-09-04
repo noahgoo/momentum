@@ -1238,6 +1238,11 @@ export type Database = {
       }
       duplicate_program: { Args: { p_program_id: string }; Returns: string }
       get_my_streak: { Args: never; Returns: number }
+      get_workout_day: { Args: { p_date: string }; Returns: Json }
+      get_workout_week: {
+        Args: { p_days?: number; p_start_date: string }
+        Returns: Json
+      }
       is_coach: { Args: never; Returns: boolean }
       is_coach_of: { Args: { p_client_id: string }; Returns: boolean }
       list_coach_siblings: {
