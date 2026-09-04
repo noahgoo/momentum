@@ -38,9 +38,16 @@ export function useMarkMessagesRead() {
 
       const ids = (unread ?? []).map((m) => m.id);
 
+      // The fetch is capped, so a backlog larger than the cap is only
+      // partly marked. Clearing the unread flag anyway left the badge off
+      // while messages stayed unread forever — the flag and its rows
+      // disagreeing permanently (violation M-2). Keep it set and let the
+      // next focus drain the next batch.
+      const drained = ids.length < READ_MARK_LIMIT;
+
       const threadUpdate = supabase
         .from("threads")
-        .update({ unread_for_client: false })
+        .update({ unread_for_client: drained ? false : true })
         .eq("id", threadId);
 
       if (ids.length > 0) {

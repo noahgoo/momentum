@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { useAuth } from "./auth";
 import { syncDeviceTimezone } from "./timezone";
+import { registerPushToken } from "./pushToken";
 
 /**
  * Fires the device -> profiles.timezone sync on sign-in and again every
@@ -15,6 +16,9 @@ export function useTimezoneSync() {
   useEffect(() => {
     if (!session || !profile) return;
     void syncDeviceTimezone(session.user.id, profile.timezone);
+    // Registered alongside the timezone sync: both are per-device facts the
+    // server needs in order to reach this client at the right local time.
+    void registerPushToken(session.user.id);
   }, [session, profile]);
 
   useEffect(() => {

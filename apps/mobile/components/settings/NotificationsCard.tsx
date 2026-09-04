@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useFocusEffect } from "expo-router";
 import type { Profile } from "@momentum/shared";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import { useUpdateProfileSettings } from "../../lib/queries/useUpdateProfileSettings";
+import { getPermissionStatus } from "../../lib/pushToken";
 import { SavedLabel } from "./SavedLabel";
 import { SettingsCard } from "./SettingsCard";
 
@@ -41,6 +43,21 @@ interface NotificationsCardProps {
 export function NotificationsCard({ profile }: NotificationsCardProps) {
   const updateSettings = useUpdateProfileSettings();
   const [saved, setSaved] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+
+  // Re-checked on focus rather than once: the client may grant or revoke the
+  // permission in Settings while this screen is open.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getPermissionStatus().then((status) => {
+        if (!cancelled) setPermissionDenied(status === "denied");
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
 
   const { hour, minute } = useMemo(
     () => parseTime(profile.notification_time ?? DEFAULT_TIME),
@@ -74,6 +91,18 @@ export function NotificationsCard({ profile }: NotificationsCardProps) {
 
   return (
     <SettingsCard label="Notifications">
+      {/* The in-app preference and the OS permission are different things.
+          A client who turned reminders ON but denied the system prompt would
+          otherwise just hear nothing, with no way to know why (N4). */}
+      {profile.notifications_enabled && permissionDenied && (
+        <Pressable onPress={() => void Linking.openSettings()} style={styles.permissionNotice}>
+          <Text style={styles.permissionText}>
+            Reminders are on, but notifications are blocked for Momentum in your device
+            settings. Tap to open Settings.
+          </Text>
+        </Pressable>
+      )}
+
       <View style={styles.row}>
         <Text style={styles.rowLabel}>Enable reminders</Text>
         <Switch
@@ -131,6 +160,18 @@ export function NotificationsCard({ profile }: NotificationsCardProps) {
 }
 
 const styles = StyleSheet.create({
+  permissionNotice: {
+    backgroundColor: colors.creamDeep,
+    borderRadius: radii.control,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  permissionText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.ink70,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

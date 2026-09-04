@@ -9,6 +9,7 @@ import {
 import type { Session } from "@supabase/supabase-js";
 import type { Profile } from "@momentum/shared";
 import { supabase } from "./supabase";
+import { unregisterPushToken } from "./pushToken";
 
 interface AuthContextValue {
   session: Session | null;
@@ -92,6 +93,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signOut = useMemo(
     () => async () => {
+      // Before the session goes: a signed-out phone must stop receiving the
+      // previous user's reminders (N2).
+      await unregisterPushToken();
       await supabase.auth.signOut();
       setSession(null);
       setProfile(null);

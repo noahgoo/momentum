@@ -639,25 +639,34 @@ export type Database = {
       }
       notification_outbox: {
         Row: {
+          attempts: number
           created_at: string
           id: string
           kind: string
+          last_error: string | null
+          next_attempt_at: string
           payload: Json
           profile_id: string
           sent_at: string | null
         }
         Insert: {
+          attempts?: number
           created_at?: string
           id?: string
           kind: string
+          last_error?: string | null
+          next_attempt_at?: string
           payload?: Json
           profile_id: string
           sent_at?: string | null
         }
         Update: {
+          attempts?: number
           created_at?: string
           id?: string
           kind?: string
+          last_error?: string | null
+          next_attempt_at?: string
           payload?: Json
           profile_id?: string
           sent_at?: string | null
@@ -864,6 +873,41 @@ export type Database = {
           {
             foreignKeyName: "progress_photos_client_id_fkey"
             columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          last_seen_at: string
+          platform: string | null
+          profile_id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          platform?: string | null
+          profile_id: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string
+          platform?: string | null
+          profile_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_profile_id_fkey"
+            columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1257,6 +1301,7 @@ export type Database = {
         Args: { p_program_id: string }
         Returns: number
       }
+      prune_sent_outbox: { Args: never; Returns: undefined }
       recompute_friendship_stats: {
         Args: { p_pair_id: string }
         Returns: undefined
@@ -1276,6 +1321,7 @@ export type Database = {
       }
       run_daily_maintenance: { Args: never; Returns: undefined }
       run_hourly_reminders: { Args: never; Returns: undefined }
+      run_reminders: { Args: never; Returns: undefined }
       save_program: {
         Args: {
           p_expected_updated_at?: string
