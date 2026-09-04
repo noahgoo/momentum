@@ -63,44 +63,30 @@ export function useUpsertMotivationEntry() {
       imageUrl: string | null;
       weekStart: string;
     }) => {
-      // Get current coach's id
       const { data: sessionData } = await supabase.auth.getSession();
       const coachId = sessionData?.session?.user?.id;
       if (!coachId) throw new Error("Not authenticated");
 
-      // Check if exists
-      const { data: existing } = await supabase
+      // One upsert against the (created_by, week_start) index rather than
+      // select-then-branch: two sessions saving the same week both used to
+      // see "no existing row" and both insert, leaving duplicates the read
+      // path then chose between arbitrarily (C4). Also three round trips
+      // down to one.
+      const { data, error } = await supabase
         .from("motivation_entries")
-        .select("*")
-        .eq("week_start", weekStart)
-        .eq("created_by", coachId)
-        .maybeSingle();
-
-      if (existing) {
-        // Update
-        const { data, error } = await supabase
-          .from("motivation_entries")
-          .update({ quote, image_url: imageUrl })
-          .eq("id", existing.id)
-          .select("*")
-          .single();
-        if (error) throw error;
-        return data;
-      } else {
-        // Insert
-        const { data, error } = await supabase
-          .from("motivation_entries")
-          .insert({
+        .upsert(
+          {
             quote,
             image_url: imageUrl,
             week_start: weekStart,
             created_by: coachId,
-          })
-          .select("*")
-          .single();
-        if (error) throw error;
-        return data;
-      }
+          },
+          { onConflict: "created_by,week_start" }
+        )
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.motivationEntries() });

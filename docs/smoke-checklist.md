@@ -27,3 +27,47 @@ Automated checks already verified against the live DB are marked ✅; manual ite
 - ☐ Builder round-trip: new workout w/ 3 exercises reordered → assign program → client sees correct day
 - ☐ Friends: send request via Find friends → other client accepts (requester's Accept blocked)
 - ☐ Timezone: change simulator tz → relaunch → profile timezone updates, "today" shifts
+
+## Remediation paths (device-only — not covered by tests or CI)
+
+These behave correctly by construction and by SQL assertion, but the parts
+that need real hardware or a real network have never been observed running.
+Check each before shipping.
+
+### Offline (S-1, S-2, S-3)
+
+- ☐ Mid-workout data survives a crash: enter several sets, force-quit from the app
+      switcher, reopen the same day → values restored with "Restored your unsaved
+      progress"
+- ☐ Autosave without tapping anything: check a set off, wait ~3s, kill the app,
+      reopen → that set is still complete (there is no longer a "Save progress"
+      button to fall back on)
+- ☐ Airplane mode, cold start: force-quit, enable airplane mode, launch → today's
+      workout renders from cache rather than a spinner or an error
+- ☐ Log a full session in airplane mode → "Offline — your changes will sync"
+      shows; re-enable network → "Syncing…" then "All changes saved", and the log
+      is on the server exactly once (not duplicated)
+- ☐ **Queued write survives a restart**: log offline, force-quit *while still
+      offline*, reopen, then reconnect → the log still syncs. This is the path
+      that silently drops a workout if a mutation key has no registered default
+- ☐ Offline the coach cannot reach: sending a change request while offline fails
+      with a message rather than queueing
+
+### Push notifications (N-1, N-2, C-4)
+
+- ☐ Grant the OS prompt on first launch → a `push_tokens` row appears for that device
+- ☐ Set a reminder to the next quarter hour → push arrives within that slot (NOT at
+      :05 past the hour — that was the bug), and `notification_outbox.sent_at` is stamped
+- ☐ Complete the workout before the slot → no reminder arrives (re-checked at send time)
+- ☐ Deny the OS prompt but leave reminders on in-app → settings explains notifications
+      are blocked, with a working link to system Settings
+- ☐ Sign out → the device's `push_tokens` row is gone
+- ☐ Uninstall the app, let a reminder fire → the dead token is deleted rather than
+      retried (check `push_tokens` and `notification_outbox.attempts`)
+- ☐ Second device on the same account → both receive the reminder
+
+### Cross-timezone (C-1, C-2)
+
+- ☐ Coach in one timezone, client several hours behind: the coach's client detail and
+      heatmap show the *client's* day, and a workout is not shown missed while the
+      client still has hours left in it
