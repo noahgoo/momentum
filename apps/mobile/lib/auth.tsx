@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { Profile } from "@momentum/shared";
+import { router } from "expo-router";
 import { supabase } from "./supabase";
 import { unregisterPushToken } from "./pushToken";
 
@@ -78,11 +79,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       void loadProfileForSession(data.session);
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (cancelled) return;
       setSession(nextSession);
       setLoading(true);
       void loadProfileForSession(nextSession);
+      // A recovery link establishes a real session, so the profile load
+      // above would otherwise route straight to the dashboard — send the
+      // user to set a new password instead.
+      if (event === "PASSWORD_RECOVERY") {
+        router.replace("/reset-password");
+      }
     });
 
     return () => {

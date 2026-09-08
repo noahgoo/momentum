@@ -9,41 +9,38 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Link, Redirect } from "expo-router";
-import { useAuth } from "../lib/auth";
+import { Link } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { colors, fonts, radii, shadows, spacing } from "../theme/tokens";
 
-export default function Login() {
-  const { session, profile, loading: authLoading } = useAuth();
+export default function ForgotPassword() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  if (!authLoading && session && profile) {
-    return <Redirect href="/(tabs)/dashboard" />;
-  }
+  const [sent, setSent] = useState(false);
 
   async function handleSubmit() {
-    if (!email.trim() || !password) {
-      setFormError("Enter your email and password.");
+    if (!email.trim()) {
+      setFormError("Enter your email.");
       return;
     }
 
     setSubmitting(true);
     setFormError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: "momentum://reset-password",
     });
 
     setSubmitting(false);
 
+    // Always show the same success state, whether or not the email exists,
+    // so this screen can't be used to probe for registered accounts.
     if (error) {
-      setFormError(error.message);
+      setFormError("Something went wrong. Try again in a moment.");
+      return;
     }
+    setSent(true);
   }
 
   return (
@@ -52,52 +49,47 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.card}>
-        <Text style={styles.heading}>Momentum</Text>
-        <Text style={styles.subheading}>Sign in to keep your streak going.</Text>
+        <Text style={styles.heading}>Reset password</Text>
+        <Text style={styles.subheading}>
+          {sent
+            ? `If an account exists for ${email.trim()}, a reset link is on its way.`
+            : "Enter your email and we'll send you a reset link."}
+        </Text>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor={colors.ink30}
-          />
-        </View>
+        {!sent && (
+          <>
+            <View style={styles.field}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                placeholder="you@example.com"
+                placeholderTextColor={colors.ink30}
+              />
+            </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="password"
-            placeholder="••••••••"
-            placeholderTextColor={colors.ink30}
-          />
-        </View>
+            {formError ? <Text style={styles.error}>{formError}</Text> : null}
 
-        {formError ? <Text style={styles.error}>{formError}</Text> : null}
+            <Pressable
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+              onPress={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <Text style={styles.buttonText}>Send reset link</Text>
+              )}
+            </Pressable>
+          </>
+        )}
 
-        <Pressable
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.surface} />
-          ) : (
-            <Text style={styles.buttonText}>Sign in</Text>
-          )}
-        </Pressable>
-
-        <Link href="/forgot-password" style={styles.forgotLink}>
-          Forgot password?
+        <Link href="/login" style={styles.backLink}>
+          Back to sign in
         </Link>
       </View>
     </KeyboardAvoidingView>
@@ -173,7 +165,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.surface,
   },
-  forgotLink: {
+  backLink: {
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
     color: colors.ink50,

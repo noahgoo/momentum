@@ -9,41 +9,40 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Link, Redirect } from "expo-router";
+import { router } from "expo-router";
 import { useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { colors, fonts, radii, shadows, spacing } from "../theme/tokens";
 
-export default function Login() {
-  const { session, profile, loading: authLoading } = useAuth();
-  const [email, setEmail] = useState("");
+export default function ResetPassword() {
+  const { session, loading: authLoading } = useAuth();
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  if (!authLoading && session && profile) {
-    return <Redirect href="/(tabs)/dashboard" />;
-  }
-
   async function handleSubmit() {
-    if (!email.trim() || !password) {
-      setFormError("Enter your email and password.");
+    if (password.length < 8) {
+      setFormError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setFormError("Passwords don't match.");
       return;
     }
 
     setSubmitting(true);
     setFormError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { error } = await supabase.auth.updateUser({ password });
 
     setSubmitting(false);
 
     if (error) {
       setFormError(error.message);
+      return;
     }
+    router.replace("/(tabs)/dashboard");
   }
 
   return (
@@ -52,53 +51,58 @@ export default function Login() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.card}>
-        <Text style={styles.heading}>Momentum</Text>
-        <Text style={styles.subheading}>Sign in to keep your streak going.</Text>
+        <Text style={styles.heading}>Set a new password</Text>
+        <Text style={styles.subheading}>
+          {authLoading
+            ? "Confirming your reset link…"
+            : session
+              ? "Choose a new password for your account."
+              : "This reset link is invalid or has expired."}
+        </Text>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor={colors.ink30}
-          />
-        </View>
+        {!authLoading && session && (
+          <>
+            <View style={styles.field}>
+              <Text style={styles.label}>New password</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoComplete="password-new"
+                placeholder="••••••••"
+                placeholderTextColor={colors.ink30}
+              />
+            </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="password"
-            placeholder="••••••••"
-            placeholderTextColor={colors.ink30}
-          />
-        </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Confirm password</Text>
+              <TextInput
+                style={styles.input}
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry
+                autoComplete="password-new"
+                placeholder="••••••••"
+                placeholderTextColor={colors.ink30}
+              />
+            </View>
 
-        {formError ? <Text style={styles.error}>{formError}</Text> : null}
+            {formError ? <Text style={styles.error}>{formError}</Text> : null}
 
-        <Pressable
-          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.surface} />
-          ) : (
-            <Text style={styles.buttonText}>Sign in</Text>
-          )}
-        </Pressable>
-
-        <Link href="/forgot-password" style={styles.forgotLink}>
-          Forgot password?
-        </Link>
+            <Pressable
+              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+              onPress={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <Text style={styles.buttonText}>Save new password</Text>
+              )}
+            </Pressable>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -172,13 +176,5 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemiBold,
     fontSize: 16,
     color: colors.surface,
-  },
-  forgotLink: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    color: colors.ink50,
-    textAlign: "center",
-    marginTop: spacing.xl,
-    textDecorationLine: "underline",
   },
 });

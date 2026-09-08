@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import * as Linking from "expo-linking";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -14,10 +15,24 @@ import {
   Inter_600SemiBold,
 } from "@expo-google-fonts/inter";
 import { AuthProvider } from "../lib/auth";
+import { supabase } from "../lib/supabase";
 import { persister, queryClient } from "../lib/queryClient";
 import { TimezoneSyncGate } from "../components/TimezoneSyncGate";
 
 void SplashScreen.preventAutoHideAsync();
+
+// The Supabase client has detectSessionInUrl disabled (there's no browser
+// URL to parse in React Native), so a password-recovery deep link has to be
+// caught here and traded for a session by hand. Once exchanged, auth.tsx's
+// onAuthStateChange fires PASSWORD_RECOVERY and routes to /reset-password.
+function handleAuthDeepLink(url: string | null) {
+  if (!url) return;
+  const { queryParams } = Linking.parse(url);
+  const code = queryParams?.code;
+  if (typeof code === "string") {
+    void supabase.auth.exchangeCodeForSession(code);
+  }
+}
 
 export default function RootLayout() {
   const [frauncesLoaded] = useFraunces({
@@ -37,6 +52,12 @@ export default function RootLayout() {
       void SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    void Linking.getInitialURL().then(handleAuthDeepLink);
+    const subscription = Linking.addEventListener("url", ({ url }) => handleAuthDeepLink(url));
+    return () => subscription.remove();
+  }, []);
 
   if (!fontsLoaded) {
     return null;
@@ -58,6 +79,8 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="login" />
+          <Stack.Screen name="forgot-password" />
+          <Stack.Screen name="reset-password" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="settings" />
         </Stack>
