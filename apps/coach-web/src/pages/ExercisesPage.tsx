@@ -136,12 +136,9 @@ export function ExercisesPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl text-[var(--ink)]">Exercises</h1>
-          <p className="mt-1 text-sm text-[var(--ink-50)]">
-            {isLoading ? "Loading…" : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
+        <p className="text-sm text-[var(--ink-50)]">
+          {isLoading ? "Loading…" : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
+        </p>
         <button
           type="button"
           onClick={() => setCreateModalOpen(true)}

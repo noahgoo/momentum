@@ -60,7 +60,7 @@ export function MotivationPage() {
     <div className="max-w-2xl space-y-6">
       {/* Current Week Card */}
       <div className="admin-card p-6">
-        <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">This Week's Motivation</h2>
+        <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">This week's motivation</h2>
 
         {isLoading ? (
           <div className="space-y-3">
@@ -87,7 +87,7 @@ export function MotivationPage() {
 
       {/* Edit Form */}
       <div className="admin-card p-6">
-        <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">Set This Week's Motivation</h2>
+        <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">Set this week's motivation</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -134,7 +134,7 @@ export function MotivationPage() {
               disabled={!quote.trim() || upsertMutation.isPending}
               className="flex items-center gap-2 rounded-lg bg-[var(--blue)] px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50 hover:enabled:bg-[var(--blue-deep)]"
             >
-              {upsertMutation.isPending ? "Saving…" : "Save Motivation"}
+              {upsertMutation.isPending ? "Saving…" : "Save motivation"}
             </button>
             {isSaved && <span className="text-sm text-[var(--ok)]">Saved ✓</span>}
           </div>

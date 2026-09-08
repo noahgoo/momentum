@@ -1,3 +1,4 @@
+import { Dumbbell, Flame, Target } from "lucide-react";
 import { Link } from "react-router";
 import type { ClientSummary } from "@momentum/shared";
 import { avatarInitial, formatRelative } from "./format";
@@ -75,16 +76,21 @@ export function ClientCard({ client }: ClientCardProps) {
           <p className="truncate text-xs text-[var(--ink-30)]">{client.email}</p>
         </div>
         <div className="flex flex-none items-center gap-1 text-xs font-semibold text-[var(--ink-70)]">
-          🔥 {client.streak}
+          <Flame size={13} strokeWidth={1.8} className="text-orange-500" />
+          {client.streak}
         </div>
       </div>
 
       <div className="mb-3 flex items-center justify-between text-xs">
-        <span className="text-[var(--ink-50)]">Today</span>
+        <span className="flex items-center gap-1.5 text-[var(--ink-50)]">
+          <Dumbbell size={12} strokeWidth={1.8} />
+          Today
+        </span>
         <WorkoutStatusPill client={client} />
       </div>
 
-      <div className="mb-1.5 text-xs text-[var(--ink-50)]">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs text-[var(--ink-50)]">
+        <Target size={12} strokeWidth={1.8} />
         {client.active_goal_count === 0 ? (
           <span className="italic text-[var(--ink-30)]">No active goals</span>
         ) : (

@@ -1,3 +1,4 @@
+import { Dumbbell, Flame, MessageCircle, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ClientCard } from "../components/dashboard/ClientCard";
 import { ClientCardSkeleton } from "../components/dashboard/ClientCardSkeleton";
@@ -51,21 +52,24 @@ export function DashboardPage() {
 
       {/* Stat tiles */}
       <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Clients" value={isLoading ? "—" : totalClients} hint="active accounts" />
+        <StatTile label="Clients" Icon={Users} value={isLoading ? "—" : totalClients} hint="active accounts" />
         <StatTile
           label="Today's workouts"
+          Icon={Dumbbell}
           value={isLoading ? "—" : `${completedToday}/${scheduledToday}`}
           hint={scheduledToday > 0 ? `${Math.round((completedToday / scheduledToday) * 100)}% complete` : "none scheduled"}
           accent={scheduledToday > 0 && completedToday === scheduledToday ? "ok" : "default"}
         />
         <StatTile
           label="Unread messages"
+          Icon={MessageCircle}
           value={isLoading ? "—" : unreadCount}
           hint={unreadCount === 1 ? "client waiting" : "clients waiting"}
           accent={unreadCount > 0 ? "warn" : "default"}
         />
         <StatTile
           label="Top streak"
+          Icon={Flame}
           value={isLoading ? "—" : (topStreakClient?.streak ?? 0)}
           hint={topStreakClient ? topStreakClient.display_name ?? "—" : "no clients yet"}
         />

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { REALTIME_LISTEN_TYPES, type RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 
@@ -24,6 +24,14 @@ interface UseRealtimeSubscriptionOptions<T extends Record<string, unknown>> {
  * hook: one channel per call, torn down on unmount, and re-subscribed
  * whenever `table`/`filter`/`event`/`enabled` change (a channel's filter
  * can't be mutated in place — supabase-js requires a fresh channel).
+ *
+ * The channel name carries a per-hook-instance id. `supabase.channel(name)`
+ * hands back the *existing* channel for a name it already knows, and calling
+ * `.on()` on a channel that has already been subscribed throws
+ * ("cannot add `postgres_changes` callbacks ... after `subscribe()`"), so two
+ * mounted components watching the same table with the same filter — the coach
+ * inbox badge and the messages list both calling `useThreads`, say — would
+ * otherwise collide on one name and crash the second one to mount.
  *
  * RLS applies to realtime payloads exactly as it does to normal reads: a
  * coach only receives INSERT/UPDATE/DELETE events for rows their own
@@ -51,10 +59,13 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // Distinct per hook instance, stable across that instance's re-renders.
+  const instanceId = useId();
+
   useEffect(() => {
     if (!enabled) return;
 
-    const channelName = `${table}:${filter ?? "all"}:${event}`;
+    const channelName = `${table}:${filter ?? "all"}:${event}:${instanceId}`;
     const channel = supabase
       .channel(channelName)
       .on<T>(
@@ -72,5 +83,5 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>({
     // `onChange` is deliberately omitted from this dependency array — it's
     // read via `onChangeRef` above so a fresh closure per render doesn't
     // force a resubscribe.
-  }, [table, filter, event, enabled]);
+  }, [table, filter, event, enabled, instanceId]);
 }

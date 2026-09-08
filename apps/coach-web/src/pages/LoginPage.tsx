@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation } from "react-router";
+import { Link, Navigate, useLocation } from "react-router";
 import { useAuth } from "../lib/auth";
 
 export function LoginPage() {
@@ -27,14 +27,32 @@ export function LoginPage() {
   const message = error ?? rejectedReason;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-[var(--cream)] px-4">
-      <div className="admin-card w-full max-w-sm p-8">
-        <h1 className="font-display text-3xl text-[var(--ink)]">Momentum</h1>
-        <p className="mt-1 text-sm text-[var(--ink-50)]">Coach portal sign in</p>
+    <div className="flex min-h-dvh items-center justify-center bg-[var(--cream)] px-4 py-10">
+      <div className="w-full max-w-sm">
+        {/* The logo is the wordmark; its own background matches --cream, so it
+            sits on the page rather than in the card. */}
+        <img
+          src="/momentum-logo.png"
+          alt="Momentum"
+          width={260}
+          height={260}
+          className="mx-auto block h-auto w-[260px]"
+        />
 
-        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+        <div className="-mt-6 mb-6 text-center">
+          {/* .font-display forces italic, so the serif face is set directly
+              here — only "back" is italic, as on the brand's own page. */}
+          <h1 className="text-[34px] leading-none tracking-tight text-[var(--ink)] [font-family:'Fraunces',serif]">
+            Welcome <em>back</em>
+          </h1>
+          <p className="mt-2 text-[13px] text-[var(--ink-50)]">
+            Sign in to the coach portal.
+          </p>
+        </div>
+
+        <form className="admin-card space-y-3 p-5" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-[var(--ink-70)]">
+            <label htmlFor="email" className="mb-1.5 block text-sm text-[var(--ink-70)]">
               Email
             </label>
             <input
@@ -42,14 +60,15 @@ export function LoginPage() {
               type="email"
               required
               autoComplete="email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-[var(--radius-control)] border border-[var(--line)] bg-white px-3 py-2 text-[var(--ink)] outline-none focus:border-[var(--blue-deep)]"
+              className="w-full rounded-[14px] border border-[var(--ink-08)] bg-white px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--ink-30)] focus:border-[var(--blue)]"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-[var(--ink-70)]">
+            <label htmlFor="password" className="mb-1.5 block text-sm text-[var(--ink-70)]">
               Password
             </label>
             <input
@@ -57,22 +76,29 @@ export function LoginPage() {
               type="password"
               required
               autoComplete="current-password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-[var(--radius-control)] border border-[var(--line)] bg-white px-3 py-2 text-[var(--ink)] outline-none focus:border-[var(--blue-deep)]"
+              className="w-full rounded-[14px] border border-[var(--ink-08)] bg-white px-4 py-3 text-[15px] text-[var(--ink)] outline-none transition placeholder:text-[var(--ink-30)] focus:border-[var(--blue)]"
             />
           </div>
 
-          {message && <p className="text-sm text-[var(--bad)]">{message}</p>}
+          {message && <p className="text-[13px] text-[var(--bad)]">{message}</p>}
 
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-[var(--radius-control)] bg-[var(--blue-deep)] px-4 py-2.5 font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="mt-2 h-[50px] w-full rounded-[18px] bg-[var(--ink)] text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <p className="mt-8 text-center text-xs text-[var(--ink-30)]">
+          <Link to="/forgot-password" className="underline">
+            Forgot your password?
+          </Link>
+        </p>
       </div>
     </div>
   );

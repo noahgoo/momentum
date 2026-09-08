@@ -26,19 +26,13 @@ export interface ThreadWithClient extends Thread {
  * directly as the single source for the whole row instead of joining two
  * independently-realtime-updating tables.
  *
- * ── Realtime ──────────────────────────────────────────────────────────
- * Subscribes to `threads` (in the realtime publication) and patches the
- * cache in place — upsert-by-id on INSERT/UPDATE, remove-by-id on DELETE —
- * per the README's live-dashboard pattern, then re-sorts by
- * `last_message_at desc`. The realtime payload doesn't carry the joined
- * `client_display_name`, so an UPDATE event preserves whatever name is
- * already in the cache for that row (falls back to a refetch-free `null`
- * only if the thread is brand new — see the merge below).
+ * This is the query on its own, with no realtime subscription attached —
+ * for read-only consumers like the sidebar's inbox badge, which want the
+ * same cached rows the inbox is already keeping live but must not open a
+ * second channel of their own. Use `useThreads` to also keep them live.
  */
-export function useThreads() {
-  const queryClient = useQueryClient();
-
-  const query = useQuery<ThreadWithClient[]>({
+export function useThreadsQuery() {
+  return useQuery<ThreadWithClient[]>({
     queryKey: qk.threads(),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -52,6 +46,26 @@ export function useThreads() {
       }));
     },
   });
+}
+
+/**
+ * The thread list plus the realtime subscription that keeps it live.
+ *
+ * Subscribes to `threads` (in the realtime publication) and patches the
+ * cache in place — upsert-by-id on INSERT/UPDATE, remove-by-id on DELETE —
+ * per the README's live-dashboard pattern, then re-sorts by
+ * `last_message_at desc`. The realtime payload doesn't carry the joined
+ * `client_display_name`, so an UPDATE event preserves whatever name is
+ * already in the cache for that row (falls back to a refetch-free `null`
+ * only if the thread is brand new — see the merge below).
+ *
+ * Exactly one mounted component should own this — the inbox — since every
+ * mount adds its own channel; anything that only reads the rows uses
+ * `useThreadsQuery`.
+ */
+export function useThreads() {
+  const queryClient = useQueryClient();
+  const query = useThreadsQuery();
 
   useRealtimeSubscription<Thread>({
     table: "threads",

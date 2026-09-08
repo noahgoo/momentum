@@ -3,9 +3,8 @@ import { useDeleteProgram, useDuplicateProgram, usePrograms, ProgramInUseError }
 
 /**
  * Lists the coach's programs: name, total weeks, phase count, and
- * edit/duplicate/delete actions. Assigning a program to a client happens
- * from the /assign flow (out of scope here — see NON-GOALS), so each card
- * links there instead of hosting an assign action inline.
+ * edit/duplicate/delete actions. Each card's Assign button carries the
+ * program into the assign flow, which has no sidebar entry of its own.
  */
 export function ProgramsPage() {
   const navigate = useNavigate();
@@ -32,15 +31,12 @@ export function ProgramsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl text-[var(--ink)]">Programs</h1>
-          <p className="mt-1 text-sm text-[var(--ink-50)]">
-            {isLoading ? "Loading…" : `${programs.length} program${programs.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
+        <p className="text-sm text-[var(--ink-50)]">
+          {isLoading ? "Loading…" : `${programs.length} program${programs.length === 1 ? "" : "s"}`}
+        </p>
         <button
           type="button"
-          onClick={() => navigate("/programs/new")}
+          onClick={() => navigate("/library/programs/new")}
           className="rounded-lg bg-[var(--blue-deep)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
         >
           New program
@@ -73,7 +69,7 @@ export function ProgramsPage() {
               <div className="mt-4 flex items-center gap-2 border-t border-[var(--ink-08)] pt-4">
                 <button
                   type="button"
-                  onClick={() => navigate(`/programs/${program.id}`)}
+                  onClick={() => navigate(`/library/programs/${program.id}`)}
                   className="flex-1 rounded-lg border border-[var(--ink-08)] px-3 py-1.5 text-xs font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
                 >
                   Edit

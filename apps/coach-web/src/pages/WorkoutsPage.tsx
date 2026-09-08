@@ -11,14 +11,14 @@ export interface WorkoutsPageProps {
 /**
  * Lists the coach's workouts (or warmups, via `type="warmup"`): name,
  * exercise count, duration, and edit/duplicate/delete actions. Shared by
- * the /workouts and /warmups routes — WarmupsPage is a thin wrapper that
- * passes `type="warmup"`.
+ * the /library/workouts and /library/warmups routes, which differ only in
+ * the `type` they pass.
  */
 export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
   const navigate = useNavigate();
   const isWarmup = type === "warmup";
   const noun = isWarmup ? "warmup" : "workout";
-  const basePath = isWarmup ? "/warmups" : "/workouts";
+  const basePath = isWarmup ? "/library/warmups" : "/library/workouts";
 
   const { data: workouts = [], isLoading } = useWorkouts(type);
   const workoutIds = useMemo(() => workouts.map((w) => w.id), [workouts]);
@@ -43,12 +43,9 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl text-[var(--ink)]">{isWarmup ? "Warmups" : "Workouts"}</h1>
-          <p className="mt-1 text-sm text-[var(--ink-50)]">
-            {isLoading ? "Loading…" : `${workouts.length} ${noun}${workouts.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
+        <p className="text-sm text-[var(--ink-50)]">
+          {isLoading ? "Loading…" : `${workouts.length} ${noun}${workouts.length === 1 ? "" : "s"}`}
+        </p>
         <button
           type="button"
           onClick={() => navigate(`${basePath}/new`)}

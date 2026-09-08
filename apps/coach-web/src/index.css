@@ -18,6 +18,11 @@
   --warn: #c8924e;
   --radius-card: 24px;
   --radius-control: 14px;
+  /* Small and tight: a wider, darker shadow reads as grey haze once cards
+     stack in a grid, since each one's blur bleeds onto the row below. The
+     1px border on .admin-card defines the edge, so the shadow only has to
+     lift the card slightly. */
+  --shadow-card: 0 8px 24px rgba(28, 28, 28, 0.045);
 }
 
 html,
@@ -44,6 +49,7 @@ body {
 
 .admin-card {
   background: #ffffff;
+  border: 1px solid var(--ink-08);
   border-radius: var(--radius-card);
-  box-shadow: 0 14px 36px rgba(28, 28, 28, 0.06);
+  box-shadow: var(--shadow-card);
 }

@@ -109,10 +109,10 @@ export function MessagesPage() {
   }
 
   return (
-    <div className="admin-card flex h-[calc(100dvh-4rem)] overflow-hidden">
+    <div className="admin-card flex h-[calc(100dvh-11rem)] max-h-full overflow-hidden">
       <div className="flex w-80 shrink-0 flex-col border-r border-[var(--ink-08)] bg-[var(--paper)]/60">
         <div className="shrink-0 border-b border-[var(--ink-08)] px-5 py-4">
-          <h1 className="font-display text-xl text-[var(--ink)]">Messages</h1>
+          <h2 className="font-display text-lg text-[var(--ink)]">Conversations</h2>
           <p className="mt-1 text-[11px] tracking-wide text-[var(--ink-50)]">
             {threads.length} conversation{threads.length !== 1 ? "s" : ""}
           </p>

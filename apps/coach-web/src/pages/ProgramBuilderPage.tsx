@@ -236,7 +236,7 @@ export function ProgramBuilderPage() {
     }
 
     setSaveError(null);
-    navigate(`/programs/${savedId}`, { replace: true });
+    navigate(`/library/programs/${savedId}`, { replace: true });
   }
 
   if (isEditing && (detailLoading || !hydrated)) {
@@ -248,7 +248,7 @@ export function ProgramBuilderPage() {
       <div className="mb-6">
         <button
           type="button"
-          onClick={() => navigate("/programs")}
+          onClick={() => navigate("/library/programs")}
           className="text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
         >
           &larr; Back to programs
@@ -372,7 +372,7 @@ export function ProgramBuilderPage() {
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate("/programs")}
+              onClick={() => navigate("/library/programs")}
               className="rounded-lg border border-[var(--ink-08)] px-4 py-2 text-sm font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
             >
               Cancel

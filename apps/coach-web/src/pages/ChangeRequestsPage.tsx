@@ -63,12 +63,9 @@ export function ChangeRequestsPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6">
-        <h1 className="font-display text-3xl text-[var(--ink)]">Change Requests</h1>
-        <p className="mt-1 text-sm text-[var(--ink-30)]">
-          Clients asking to move a scheduled workout to a different day.
-        </p>
-      </div>
+      <p className="mb-6 text-sm text-[var(--ink-50)]">
+        Clients asking to move a scheduled workout to a different day.
+      </p>
 
       {isLoading && (
         <div className="space-y-3">

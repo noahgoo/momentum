@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { REALTIME_LISTEN_TYPES, type RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { supabase } from "../supabase";
 
@@ -31,9 +31,15 @@ interface UseRealtimeSubscriptionOptions<T extends Record<string, unknown>> {
  * add client-side filtering as a security measure, `filter` is a
  * convenience for reducing traffic, not an access boundary.
  *
- * Each subscription gets its own channel (named from table+filter+event) —
- * channels are cheap and this keeps failure/reconnect of one subscription
- * from affecting unrelated ones.
+ * Each subscription gets its own channel (named from table+filter+event
+ * plus a per-hook-instance id) — channels are cheap and this keeps
+ * failure/reconnect of one subscription from affecting unrelated ones.
+ * The instance id matters: `supabase.channel(name)` hands back the
+ * *existing* channel for a name it already knows, and `.on()` on an
+ * already-subscribed channel throws ("cannot add `postgres_changes`
+ * callbacks ... after `subscribe()`"), so two mounted components watching
+ * the same table with the same filter would otherwise collide on one name
+ * and crash the second one to mount.
  */
 export function useRealtimeSubscription<T extends Record<string, unknown>>({
   table,
@@ -49,10 +55,13 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  // Distinct per hook instance, stable across that instance's re-renders.
+  const instanceId = useId();
+
   useEffect(() => {
     if (!enabled) return;
 
-    const channelName = `${table}:${filter ?? "all"}:${event}`;
+    const channelName = `${table}:${filter ?? "all"}:${event}:${instanceId}`;
     const channel = supabase
       .channel(channelName)
       .on<T>(
@@ -70,5 +79,5 @@ export function useRealtimeSubscription<T extends Record<string, unknown>>({
     // `onChange` is deliberately omitted from this dependency array — it's
     // read via `onChangeRef` above so a fresh closure per render doesn't
     // force a resubscribe.
-  }, [table, filter, event, enabled]);
+  }, [table, filter, event, enabled, instanceId]);
 }

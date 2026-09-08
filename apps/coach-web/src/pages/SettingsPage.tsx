@@ -56,7 +56,7 @@ export function SettingsPage() {
           {/* Display Name */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--ink-50)]">
-              Display Name
+              Display name
             </label>
             <div className="mt-2 flex items-center gap-3">
               <input
@@ -93,6 +93,15 @@ export function SettingsPage() {
         </div>
       </div>
 
+      {/* Reminders Card */}
+      <div className="admin-card p-6">
+        <h2 className="text-sm font-semibold text-[var(--ink)]">Workout reminders</h2>
+        <p className="mt-2 text-sm text-[var(--ink-70)]">
+          Clients get one reminder a day, in their own timezone, at the hour they choose. Rest days
+          are skipped. Each client sets their reminder time and timezone in their app settings.
+        </p>
+      </div>
+
       {/* Sign Out Card */}
       <div className="admin-card p-6">
         <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">Account</h2>
@@ -100,7 +109,7 @@ export function SettingsPage() {
           onClick={handleSignOut}
           className="rounded-lg bg-[var(--bad)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-opacity-90"
         >
-          Sign Out
+          Sign out
         </button>
       </div>
     </div>

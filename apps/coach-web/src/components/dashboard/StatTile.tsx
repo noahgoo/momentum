@@ -1,5 +1,9 @@
+import type { LucideIcon } from "lucide-react";
+
 interface StatTileProps {
   label: string;
+  /** Sits beside the label, at the label's muted weight — the number stays the loud part. */
+  Icon?: LucideIcon;
   value: string | number;
   hint?: string;
   accent?: "default" | "ok" | "warn";
@@ -12,10 +16,11 @@ const ACCENT_CLASSES: Record<NonNullable<StatTileProps["accent"]>, string> = {
 };
 
 /** One of the 4 hero stat tiles on the coach dashboard. */
-export function StatTile({ label, value, hint, accent = "default" }: StatTileProps) {
+export function StatTile({ label, Icon, value, hint, accent = "default" }: StatTileProps) {
   return (
     <div className="admin-card p-5">
-      <div className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-30)]">
+      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--ink-30)]">
+        {Icon && <Icon size={14} strokeWidth={1.8} />}
         {label}
       </div>
       <div className={`mt-2 text-3xl font-semibold tracking-tight ${ACCENT_CLASSES[accent]}`}>

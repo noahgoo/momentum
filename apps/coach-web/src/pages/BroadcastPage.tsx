@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useClientSummaries } from "../queries/useClientSummaries";
 
-export function NotificationsPage() {
+/**
+ * Sends a one-off push message to a hand-picked set of clients. Lives in the
+ * Inbox because it is outbound client messaging; how the *automatic* workout
+ * reminders are scheduled is a configuration question and lives in Settings.
+ */
+export function BroadcastPage() {
   const { data: clients, isLoading } = useClientSummaries();
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState("");
@@ -27,26 +32,15 @@ export function NotificationsPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      {/* Info Card */}
-      <div className="admin-card border-l-4 border-[var(--warn)] p-6">
-        <h2 className="text-sm font-semibold text-[var(--ink)]">How Reminders Work</h2>
-        <p className="mt-2 text-sm text-[var(--ink-70)]">
-          Automatic workout reminders are sent hourly, in each client's local timezone. They notify
-          once per day (during their preferred notification hour) and skip rest days. Clients can
-          configure their notification time and timezone in their settings.
-        </p>
-      </div>
-
-      {/* Notification Composer */}
       <div className="admin-card p-6">
-        <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">Compose Message</h2>
+        <h2 className="mb-4 text-sm font-semibold text-[var(--ink)]">Compose message</h2>
 
         <div className="space-y-4">
           {/* Client Selection */}
           <div>
             <div className="mb-3 flex items-center justify-between">
               <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--ink-50)]">
-                Select Clients
+                Send to
               </label>
               {clients && clients.length > 0 && (
                 <button
@@ -97,7 +91,7 @@ export function NotificationsPage() {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Type a message to send to selected clients..."
+              placeholder="What do you want to tell them?"
               className="mt-2 w-full rounded-lg border border-[var(--ink-08)] bg-white px-4 py-3 text-sm text-[var(--ink)] placeholder-[var(--ink-30)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]"
               rows={4}
             />
@@ -110,7 +104,7 @@ export function NotificationsPage() {
               disabled
               className="w-full rounded-lg bg-[var(--ink-08)] px-4 py-2 text-sm font-semibold text-[var(--ink-30)] transition disabled:cursor-not-allowed"
             >
-              Send Push Notification
+              Send message
             </button>
             <p className="text-xs text-[var(--warn)]">
               Push delivery ships post-MVP — reminders currently queue server-side only.

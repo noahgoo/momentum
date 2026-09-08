@@ -1,10 +1,14 @@
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { AssignForm } from "../components/assign/AssignForm";
 import { useClientSummaries } from "../queries/useClientSummaries";
 import { usePrograms } from "../queries/usePrograms";
 import { useWorkouts } from "../queries/useWorkouts";
 
 /**
+ * Reached from a client ("Assign program") or a program card ("Assign"),
+ * never from the sidebar — it is an action taken about something, so it
+ * lives where that decision gets made.
+ *
  * Coach-web Assign slice (9.5): assign a library program directly to a
  * client, starting on a chosen date. No per-client program copies (that's a
  * later feature per NON-GOALS) — the assignment just references the
@@ -27,7 +31,13 @@ export function AssignPage() {
 
   return (
     <div className="max-w-2xl pb-16">
-      <h1 className="mb-6 font-display text-2xl text-[var(--ink)]">Assign program</h1>
+      <Link
+        to={initialClientId ? `/clients/${initialClientId}` : "/library/programs"}
+        className="text-sm text-[var(--ink-50)] transition hover:text-[var(--ink)]"
+      >
+        {initialClientId ? "← Client" : "← Programs"}
+      </Link>
+      <h1 className="mb-6 mt-4 font-display text-2xl text-[var(--ink)]">Assign program</h1>
       <AssignForm
         clients={activeClients}
         programs={programs ?? []}
