@@ -244,7 +244,7 @@ export function ProgramBuilderPage() {
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-36 lg:pb-28">
       <div className="mb-6">
         <button
           type="button"
@@ -283,7 +283,7 @@ export function ProgramBuilderPage() {
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg border border-[var(--ink-08)] bg-[var(--paper)] px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--ink-08)] bg-[var(--paper)] px-3 py-2.5">
             <div>
               <p className="text-sm font-medium text-[var(--ink-70)]">Phased program</p>
               <p className="text-xs text-[var(--ink-30)]">
@@ -359,7 +359,7 @@ export function ProgramBuilderPage() {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-3 lg:pl-[calc(16rem+1.5rem)]">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:px-6 lg:pb-3 lg:pl-[calc(16rem+1.5rem)]">
           <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--ink-50)]">
             <span>{totalWeeks} weeks</span>
             <span>·</span>

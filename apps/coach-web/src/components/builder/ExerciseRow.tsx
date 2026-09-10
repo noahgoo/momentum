@@ -93,7 +93,7 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
           ref={dragHandleProps.setActivatorNodeRef}
           {...dragHandleProps.attributes}
           {...dragHandleProps.listeners}
-          className="mt-1 flex-none cursor-grab text-[var(--ink-30)] hover:text-[var(--ink-50)] active:cursor-grabbing"
+          className="-my-1 -ml-2 flex h-10 w-10 flex-none items-center justify-center cursor-grab text-[var(--ink-30)] hover:text-[var(--ink-50)] active:cursor-grabbing lg:-ml-0 lg:mt-1 lg:h-auto lg:w-auto lg:items-start"
           aria-label="Drag to reorder"
         >
           <GripIcon />

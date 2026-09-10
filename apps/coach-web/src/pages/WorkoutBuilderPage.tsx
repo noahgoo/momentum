@@ -7,6 +7,7 @@ import { SortableList } from "../components/builder/SortableList";
 import { ExerciseRow } from "../components/builder/ExerciseRow";
 import { defaultSetConfig } from "../components/builder/defaultSetConfig";
 import { ExerciseLibraryPanel } from "../components/exercises/ExerciseLibraryPanel";
+import { MobileSheet } from "../components/MobileSheet";
 import { useExercises } from "../queries/useExercises";
 import { useWorkouts } from "../queries/useWorkouts";
 import {
@@ -77,6 +78,8 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
   const [exercises, setExercises] = useState<BuilderExercise[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Mobile-only: the exercise library as a bottom sheet. Ignored at `lg` and up. */
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [hydrated, setHydrated] = useState(!isEditing);
 
   // Hydrate form state once the workout detail AND the exercise library have
@@ -107,6 +110,8 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
 
   function addExercise(ex: Exercise) {
     setExercises((prev) => [...prev, exerciseToBuilderRow(ex)]);
+    // No-op on desktop, where the library is a permanent rail.
+    setLibraryOpen(false);
   }
 
   const equipment = useMemo(() => parseEquipmentTags(equipmentStr), [equipmentStr]);
@@ -175,7 +180,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-36 lg:pb-28">
       <div className="mb-6">
         <button
           type="button"
@@ -263,10 +268,22 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
           </div>
 
           <div>
-            <h2 className="mb-2 text-sm font-semibold text-[var(--ink-70)]">Exercises</h2>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-[var(--ink-70)]">Exercises</h2>
+              {/* Below `lg` the library rail is stacked underneath this list,
+                  so adding a fifth exercise would mean scrolling past four of
+                  them and back. Same panel, reached from here instead. */}
+              <button
+                type="button"
+                onClick={() => setLibraryOpen(true)}
+                className="admin-secondary px-3 py-2 text-xs lg:hidden"
+              >
+                + Add exercise
+              </button>
+            </div>
             {exercises.length === 0 ? (
               <div className="admin-card p-6 text-center text-sm text-[var(--ink-30)]">
-                No exercises yet — add some from the library on the right.
+                No exercises yet — add some from the library.
               </div>
             ) : (
               <SortableList
@@ -296,13 +313,24 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
           </div>
         </div>
 
-        <div>
+        <div className="hidden lg:block">
           {profile && <ExerciseLibraryPanel coachId={profile.id} onAdd={addExercise} />}
         </div>
       </div>
 
+      <MobileSheet
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        side="bottom"
+        label="Exercise library"
+      >
+        <div className="overflow-y-auto p-4">
+          {profile && <ExerciseLibraryPanel coachId={profile.id} onAdd={addExercise} />}
+        </div>
+      </MobileSheet>
+
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-3 lg:pl-[calc(16rem+1.5rem)]">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:px-6 lg:pb-3 lg:pl-[calc(16rem+1.5rem)]">
           <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--ink-50)]">
             <span>{exercises.length} exercises</span>
             <span>·</span>

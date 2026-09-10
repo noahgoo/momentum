@@ -2,6 +2,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -42,8 +43,15 @@ import type { ReactNode } from "react";
  *   itself (transform/transition/opacity via `useSortable`), so
  *   `renderItem` should return the row's *content* — SortableList supplies
  *   the wrapping `<div>` with the sortable ref and style already applied.
- * - Activation constraint is a 5px pointer-move threshold (matches the old
- *   app), so plain clicks on buttons/inputs inside a row never start a drag.
+ * - Activation is per input type. Mouse and pen go through `PointerSensor`
+ *   with a 5px move threshold (matches the old app), so plain clicks on
+ *   buttons/inputs inside a row never start a drag. Touch goes through
+ *   `TouchSensor` with a 200ms press delay instead: a distance threshold on
+ *   touch would turn the first 5px of any swipe that began on the handle into
+ *   a reorder, leaving no way to scroll the page from that spot. Long-press to
+ *   drag, swipe to scroll.
+ * - Because the handle carries `touch-action: none`, keep it a reasonable
+ *   finger target (~40px) so the press is easy to land.
  *
  * This component holds no domain knowledge (no exercises, no phases) — it
  * is intentionally generic so both 9.3 and 9.4 can import the same file.
@@ -108,7 +116,10 @@ export function SortableList<T>({
   rowClassName,
   className,
 }: SortableListProps<T>) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
+  );
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;

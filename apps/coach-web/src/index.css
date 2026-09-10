@@ -91,3 +91,27 @@ body {
   color: var(--ink);
   background: var(--paper);
 }
+
+/* Mobile Safari zooms the viewport whenever a focused field is under 16px, and
+   does not zoom back out afterwards. Every input in this app is `text-sm`
+   (14px), so rather than annotating each one, override the computed size below
+   the breakpoint where the sidebar collapses. The `text-sm` classes still
+   apply at `lg` and up, where no browser does this. */
+@media (max-width: 1023.98px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* For strips that scroll horizontally by design (the section sub-nav): the
+   clipped edge already signals it, and a scrollbar over a 3px-tall tab row
+   only obscures it. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

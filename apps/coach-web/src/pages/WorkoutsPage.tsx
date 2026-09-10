@@ -42,7 +42,7 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--ink-50)]">
           {isLoading ? "Loading…" : `${workouts.length} ${noun}${workouts.length === 1 ? "" : "s"}`}
         </p>

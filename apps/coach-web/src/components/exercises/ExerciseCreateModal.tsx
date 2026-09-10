@@ -79,12 +79,18 @@ export function ExerciseCreateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-0 py-0 backdrop-blur-sm sm:items-center sm:px-4 sm:py-8"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <form onSubmit={handleSubmit} className="admin-card w-full max-w-lg overflow-hidden">
+      <form
+        onSubmit={handleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-label="New exercise"
+        className="admin-card max-h-full w-full max-w-lg overflow-y-auto"
+      >
         <div className="flex items-start justify-between gap-4 border-b border-[var(--ink-08)] px-5 py-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--ink-30)]">

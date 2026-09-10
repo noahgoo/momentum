@@ -78,11 +78,20 @@ function RosterRow({ client }: { client: ClientSummary }) {
           )}
         </div>
         <p className="truncate text-xs text-[var(--ink-30)]">{client.email}</p>
+        {/* Streak and today's workout ride under the name on a phone. As
+            separate flex columns they leave the name about 90px to live in,
+            which truncates almost every real client to two words. */}
+        <p className="mt-1 flex items-center gap-2 text-xs text-[var(--ink-50)] sm:hidden">
+          <span className="flex-none font-semibold text-[var(--ink-70)]">🔥 {client.streak}</span>
+          <span className="truncate">
+            {client.has_program ? (client.today_workout_name ?? "Rest day") : "No program"}
+          </span>
+        </p>
       </div>
-      <div className="flex-none text-xs font-semibold whitespace-nowrap text-[var(--ink-70)]">
+      <div className="hidden flex-none text-xs font-semibold whitespace-nowrap text-[var(--ink-70)] sm:block">
         🔥 {client.streak}
       </div>
-      <div className="w-36 flex-none text-right text-xs text-[var(--ink-50)]">
+      <div className="hidden w-36 flex-none text-right text-xs text-[var(--ink-50)] sm:block">
         {client.has_program ? (client.today_workout_name ?? "Rest day") : "No program"}
       </div>
       <div className="flex-none">
@@ -106,10 +115,10 @@ export function ClientsPage() {
     : rows;
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between gap-4">
+    <div className="mx-auto w-full max-w-4xl">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl text-[var(--ink)]">Clients</h1>
+          <h1 className="font-display text-2xl text-[var(--ink)] sm:text-3xl">Clients</h1>
           <p className="mt-1 text-sm text-[var(--ink-50)]">
             {isLoading ? "Loading…" : `${rows.length} client${rows.length === 1 ? "" : "s"}`}
           </p>

@@ -159,7 +159,10 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
           <p className="px-4 py-6 text-center text-sm text-[var(--ink-30)]">No exercises match.</p>
         )}
 
-        <div className="max-h-[70vh] divide-y divide-[var(--ink-08)] overflow-y-auto">
+        {/* The height cap is for the desktop rail. Below `lg` this panel lives
+            in a bottom sheet that scrolls as a whole, and a second scroller
+            nested inside it just traps the coach's flick. */}
+        <div className="divide-y divide-[var(--ink-08)] lg:max-h-[70vh] lg:overflow-y-auto">
           {filtered.map((ex) => {
             const isOpen = expandedId === ex.id;
             return (
@@ -183,7 +186,7 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
                     onClick={() => openEdit(ex)}
                     aria-label={`Edit ${ex.name}`}
                     aria-expanded={isOpen}
-                    className="rounded-lg p-1.5 text-[var(--ink-30)] hover:bg-white hover:text-[var(--ink)]"
+                    className="flex h-10 w-10 flex-none items-center justify-center rounded-lg text-[var(--ink-30)] hover:bg-white hover:text-[var(--ink)] lg:h-auto lg:w-auto lg:p-1.5"
                   >
                     {isOpen ? "▴" : "▾"}
                   </button>

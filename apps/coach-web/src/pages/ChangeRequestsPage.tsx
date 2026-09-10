@@ -62,7 +62,7 @@ export function ChangeRequestsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl">
       <p className="mb-6 text-sm text-[var(--ink-50)]">
         Clients asking to move a scheduled workout to a different day.
       </p>

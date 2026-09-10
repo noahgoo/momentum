@@ -38,7 +38,7 @@ function PhaseRow({
         {...dragHandleProps.listeners}
         ref={dragHandleProps.setActivatorNodeRef}
         onClick={(e) => e.stopPropagation()}
-        className={`shrink-0 cursor-grab text-sm active:cursor-grabbing ${
+        className={`-my-2 flex h-10 w-8 shrink-0 items-center justify-center cursor-grab text-sm active:cursor-grabbing lg:my-0 lg:h-auto lg:w-auto ${
           isSelected ? "text-white/60" : "text-[var(--ink-30)]"
         }`}
         aria-label="Drag to reorder"
@@ -52,7 +52,7 @@ function PhaseRow({
           e.stopPropagation();
           onRemove();
         }}
-        className={`shrink-0 text-xs transition-colors ${
+        className={`-my-2 flex h-10 w-8 shrink-0 items-center justify-center text-xs transition-colors lg:my-0 lg:h-auto lg:w-auto ${
           isSelected ? "text-white/70 hover:text-white" : "text-[var(--ink-30)] hover:text-[var(--bad)]"
         }`}
         aria-label="Remove phase"

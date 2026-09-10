@@ -4,14 +4,24 @@ import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, sectionForPath } from "../lib/navigation";
 import { useInboxCount } from "../queries/useInboxCount";
 
-export function Sidebar() {
+export interface SidebarProps {
+  /**
+   * Layout classes for the `<aside>`. The sidebar itself is position-neutral so
+   * the same component can be the permanent desktop rail (fixed width, right
+   * border, `lg:flex`) and the contents of the mobile nav drawer, rather than
+   * the nav rows being forked into two files that drift apart.
+   */
+  className?: string;
+}
+
+export function Sidebar({ className = "" }: SidebarProps) {
   const { profile, signOut } = useAuth();
   const { pathname } = useLocation();
   const activeSection = sectionForPath(pathname);
   const inboxCount = useInboxCount();
 
   return (
-    <aside className="flex h-dvh w-64 shrink-0 flex-col border-r border-[var(--ink-08)] bg-white/95 backdrop-blur">
+    <aside className={`flex flex-col bg-white/95 backdrop-blur ${className}`}>
       <div className="border-b border-[var(--ink-08)] px-6 py-6">
         <span className="font-display text-lg tracking-tight text-[var(--ink)]">Momentum</span>
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-[var(--ink-30)]">

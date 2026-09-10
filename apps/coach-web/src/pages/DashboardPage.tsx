@@ -39,13 +39,13 @@ export function DashboardPage() {
   const firstName = profile?.display_name?.split(" ")[0] ?? "Coach";
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl">
       {/* Hero */}
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--ink-30)]">
           {now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
         </p>
-        <h1 className="mt-1 font-display text-3xl text-[var(--ink)]">
+        <h1 className="mt-1 font-display text-2xl text-[var(--ink)] sm:text-3xl">
           {greetingForHour(now.getHours())}, {firstName}
         </h1>
       </div>
@@ -76,7 +76,7 @@ export function DashboardPage() {
       </div>
 
       {/* Section header */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--ink-70)]">
           Clients
           {totalClients > 0 && (
