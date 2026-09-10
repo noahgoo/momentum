@@ -1,9 +1,9 @@
 import { Image, StyleSheet, Text, View } from "react-native";
-import type { MotivationEntry } from "@momentum/shared";
+import type { ResolvedMotivation } from "@momentum/shared";
 import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 
 interface MotivationCardProps {
-  motivation: MotivationEntry | null;
+  motivation: ResolvedMotivation | null;
 }
 
 const DEFAULT_QUOTE = "“Slow progress is still progress.”";
@@ -13,15 +13,17 @@ const DEFAULT_QUOTE = "“Slow progress is still progress.”";
 export function MotivationCard({ motivation }: MotivationCardProps) {
   return (
     <View style={styles.card}>
-      {motivation?.image_url ? (
-        <Image source={{ uri: motivation.image_url }} style={styles.image} />
+      {motivation?.imageUrl ? (
+        <Image source={{ uri: motivation.imageUrl }} style={styles.image} />
       ) : (
         <View style={styles.imagePlaceholder}>
           <Text style={styles.imagePlaceholderGlyph}>★</Text>
         </View>
       )}
       <View style={styles.textColumn}>
-        <Text style={styles.label}>MOTIVATION · THIS WEEK</Text>
+        <Text style={styles.label}>
+          {motivation?.source === "override" ? "MOTIVATION · FOR YOU" : "MOTIVATION · THIS WEEK"}
+        </Text>
         <Text style={styles.quote}>{motivation?.quote ?? DEFAULT_QUOTE}</Text>
       </View>
     </View>

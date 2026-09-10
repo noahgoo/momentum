@@ -11,15 +11,15 @@ export function Sidebar() {
   const inboxCount = useInboxCount();
 
   return (
-    <aside className="flex h-dvh w-56 shrink-0 flex-col border-r border-[var(--ink-08)] bg-white">
+    <aside className="flex h-dvh w-64 shrink-0 flex-col border-r border-[var(--ink-08)] bg-white/95 backdrop-blur">
       <div className="border-b border-[var(--ink-08)] px-6 py-6">
-        <span className="font-display text-lg text-[var(--ink)]">Momentum</span>
+        <span className="font-display text-lg tracking-tight text-[var(--ink)]">Momentum</span>
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-[var(--ink-30)]">
           Coach Portal
         </p>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {NAV_ITEMS.map(({ Icon, ...item }) => {
           const isActive = activeSection?.label === item.label;
           const count = item.badge === "inbox" ? inboxCount : 0;
@@ -29,10 +29,10 @@ export function Sidebar() {
               key={item.label}
               to={item.to}
               aria-current={isActive ? "page" : undefined}
-              className={`flex items-center gap-3 border-l-2 py-2.5 pl-4 pr-3 text-sm transition-colors ${
+              className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? "border-[var(--ink)] font-medium text-[var(--ink)]"
-                  : "border-transparent text-[var(--ink-50)] hover:text-[var(--ink)]"
+                  ? "bg-[var(--cream)] text-[var(--ink)] shadow-sm ring-1 ring-[var(--ink-08)]"
+                  : "text-[var(--ink-50)] hover:bg-[var(--cream)] hover:text-[var(--ink)]"
               }`}
             >
               {/* Weight, not color, marks the active row — same as the badge
@@ -49,13 +49,13 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-[var(--ink-08)] px-6 py-4">
+      <div className="border-t border-[var(--ink-08)] px-3 py-4">
         {profile?.email && (
-          <p className="truncate pb-1.5 text-xs text-[var(--ink-30)]">{profile.email}</p>
+          <p className="truncate px-3 pb-1.5 text-xs text-[var(--ink-30)]">{profile.email}</p>
         )}
         <button
           onClick={() => void signOut()}
-          className="flex items-center gap-3 text-sm text-[var(--ink-50)] transition-colors hover:text-[var(--ink)]"
+          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-[var(--ink-50)] transition-colors hover:bg-[var(--cream)] hover:text-[var(--ink)]"
         >
           <LogOut size={16} strokeWidth={1.8} />
           Sign out

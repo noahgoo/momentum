@@ -232,14 +232,14 @@ export function ExerciseCreateModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-[var(--ink-08)] px-4 py-2 text-sm font-medium text-[var(--ink-70)] hover:bg-white"
+            className="admin-secondary px-4 py-2 text-sm"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={createExercise.isPending || !name.trim()}
-            className="rounded-lg bg-[var(--blue-deep)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+            className="admin-primary px-4 py-2 text-sm disabled:opacity-40"
           >
             {createExercise.isPending ? "Creating…" : submitLabel}
           </button>

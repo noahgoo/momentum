@@ -320,7 +320,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
             <button
               type="button"
               onClick={() => navigate(basePath)}
-              className="rounded-lg border border-[var(--ink-08)] px-4 py-2 text-sm font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
+              className="admin-secondary px-4 py-2 text-sm"
             >
               Cancel
             </button>
@@ -333,7 +333,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
               type="button"
               onClick={() => void handleSave()}
               disabled={!canSave}
-              className="rounded-lg bg-[var(--blue-deep)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+              className="admin-primary px-4 py-2 text-sm disabled:opacity-40"
             >
               {saveWorkout.isPending ? "Saving…" : `Save ${noun}`}
             </button>

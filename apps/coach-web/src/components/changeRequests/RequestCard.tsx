@@ -51,7 +51,7 @@ export function PendingRequestCard({
           type="button"
           onClick={onAccept}
           disabled={busy}
-          className="rounded-lg bg-[var(--blue-deep)] px-3.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+          className="admin-primary px-3.5 py-1.5 text-xs disabled:opacity-40"
         >
           {isAccepting ? "Accepting…" : "Accept"}
         </button>

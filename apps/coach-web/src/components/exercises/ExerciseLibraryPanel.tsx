@@ -116,7 +116,7 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
       <button
         type="button"
         onClick={() => setCreateModalOpen(true)}
-        className="mb-3 w-full rounded-lg bg-[var(--blue-deep)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+        className="mb-3 w-full admin-primary px-4 py-2.5 text-sm"
       >
         + New exercise
       </button>
@@ -174,7 +174,7 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
                   <button
                     type="button"
                     onClick={() => onAdd(ex)}
-                    className="rounded-lg bg-[var(--blue-deep)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+                    className="admin-primary px-3 py-1.5 text-xs"
                   >
                     Add
                   </button>

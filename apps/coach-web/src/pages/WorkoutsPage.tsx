@@ -49,7 +49,7 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
         <button
           type="button"
           onClick={() => navigate(`${basePath}/new`)}
-          className="rounded-lg bg-[var(--blue-deep)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          className="admin-primary px-4 py-2.5 text-sm"
         >
           New {noun}
         </button>
@@ -84,7 +84,7 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
                 <button
                   type="button"
                   onClick={() => navigate(`${basePath}/${workout.id}`)}
-                  className="flex-1 rounded-lg border border-[var(--ink-08)] px-3 py-1.5 text-xs font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
+                  className="flex-1 admin-secondary px-3 py-1.5 text-xs"
                 >
                   Edit
                 </button>
@@ -92,7 +92,7 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
                   type="button"
                   onClick={() => void duplicateWorkout.mutateAsync(workout.id)}
                   disabled={duplicateWorkout.isPending}
-                  className="rounded-lg border border-[var(--ink-08)] px-3 py-1.5 text-xs font-medium text-[var(--ink-70)] hover:bg-[var(--paper)] disabled:opacity-40"
+                  className="admin-secondary px-3 py-1.5 text-xs disabled:opacity-40"
                 >
                   Duplicate
                 </button>

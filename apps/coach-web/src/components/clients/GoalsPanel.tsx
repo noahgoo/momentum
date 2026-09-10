@@ -228,7 +228,7 @@ export function GoalsPanel({ clientId, coachId }: Props) {
         <button
           type="submit"
           disabled={createGoal.isPending || !newGoalText.trim()}
-          className="rounded-lg bg-[var(--blue-deep)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+          className="admin-primary px-4 py-2 text-sm disabled:opacity-40"
         >
           Add
         </button>

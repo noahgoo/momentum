@@ -22,7 +22,14 @@ export interface WorkoutLogWithSets extends WorkoutLog {
 export type ProgramStatus =
   | { kind: "none" }
   | { kind: "not_started"; program: Program; startDateStr: string }
-  | { kind: "active"; program: Program; currentWeek: number; totalWeeks: number };
+  | {
+      kind: "active";
+      program: Program;
+      currentWeek: number;
+      totalWeeks: number;
+      /** Elapsed share of the program, 0-100. Null when the program has no week count to divide by. */
+      progressPercent: number | null;
+    };
 
 export interface ClientDetail {
   profile: Profile;
@@ -56,7 +63,13 @@ function resolveProgramStatus(
 
   const daysDiff = Math.floor((today.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
   const currentWeek = Math.min(Math.floor(daysDiff / 7) + 1, Math.max(totalWeeks, 1));
-  return { kind: "active", program, currentWeek, totalWeeks };
+  // Elapsed time, not workouts completed — the header states where the client
+  // is in the plan, and a coach reading "33% complete" next to "Week 3 of 6"
+  // expects the two to agree. Capped at 100 so an overrun program doesn't
+  // report 120%.
+  const progressPercent =
+    totalWeeks > 0 ? Math.min(100, Math.round((daysDiff / (totalWeeks * 7)) * 100)) : null;
+  return { kind: "active", program, currentWeek, totalWeeks, progressPercent };
 }
 
 /**
@@ -164,6 +177,65 @@ export function useToggleClientDisabled(clientId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.clientDetail(clientId) });
       void queryClient.invalidateQueries({ queryKey: qk.clientSummaries() });
+    },
+  });
+}
+
+/** The three override columns a coach edits together on the client detail page. */
+export interface MotivationOverrideInput {
+  quote: string;
+  imageUrl: string;
+  until: string;
+}
+
+/**
+ * Saves this client's motivation override (profiles.motivation_override_*).
+ * Instance-tier write: scoped to one client id, so it can never change what
+ * another client sees — the coach-wide weekly card in `motivation_entries`
+ * is a separate row and is untouched here.
+ *
+ * Empty strings are normalized to null so "cleared" is a real null in the
+ * database rather than an empty string the mobile resolver would have to
+ * special-case. Invalidates `qk.clientDetail` (the form seeds from that
+ * payload's profile) — the client-side key is `qk.dashboard(clientId)` in
+ * apps/mobile, which realtime on `profiles` refreshes (R6).
+ */
+export function useSaveMotivationOverride(clientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ quote, imageUrl, until }: MotivationOverrideInput) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          motivation_override_quote: quote.trim() || null,
+          motivation_override_image_url: imageUrl.trim() || null,
+          motivation_override_until: until.trim() || null,
+        })
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.clientDetail(clientId) });
+    },
+  });
+}
+
+/**
+ * Sends this client a password-reset email, from the coach's header-card
+ * menu. Uses the same `resetPasswordForEmail` path as ForgotPasswordPage, so
+ * the link lands on /reset-password.
+ *
+ * No cache invalidation: sending mail changes nothing this app reads. Resend
+ * invite is deliberately NOT here — it needs an Edge Function to mint the
+ * signup link (see ClientsPage's InviteClientStub), which is still post-MVP.
+ */
+export function useSendPasswordReset() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
     },
   });
 }

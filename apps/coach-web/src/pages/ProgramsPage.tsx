@@ -37,7 +37,7 @@ export function ProgramsPage() {
         <button
           type="button"
           onClick={() => navigate("/library/programs/new")}
-          className="rounded-lg bg-[var(--blue-deep)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          className="admin-primary px-4 py-2.5 text-sm"
         >
           New program
         </button>
@@ -70,14 +70,14 @@ export function ProgramsPage() {
                 <button
                   type="button"
                   onClick={() => navigate(`/library/programs/${program.id}`)}
-                  className="flex-1 rounded-lg border border-[var(--ink-08)] px-3 py-1.5 text-xs font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
+                  className="flex-1 admin-secondary px-3 py-1.5 text-xs"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate(`/assign?program=${program.id}`)}
-                  className="rounded-lg border border-[var(--ink-08)] px-3 py-1.5 text-xs font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
+                  className="admin-secondary px-3 py-1.5 text-xs"
                 >
                   Assign
                 </button>
@@ -85,7 +85,7 @@ export function ProgramsPage() {
                   type="button"
                   onClick={() => void duplicateProgram.mutateAsync(program.id)}
                   disabled={duplicateProgram.isPending}
-                  className="rounded-lg border border-[var(--ink-08)] px-3 py-1.5 text-xs font-medium text-[var(--ink-70)] hover:bg-[var(--paper)] disabled:opacity-40"
+                  className="admin-secondary px-3 py-1.5 text-xs disabled:opacity-40"
                 >
                   Duplicate
                 </button>

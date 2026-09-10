@@ -16,6 +16,13 @@
   --ok: #7fa98b;
   --bad: #c97a6d;
   --warn: #c8924e;
+  --line-2: #c6bbae;
+  --surface: #ffffff;
+  --surface-soft: rgba(255, 255, 255, 0.72);
+  --ok-bg: rgba(127, 169, 139, 0.16);
+  --ok-line: rgba(127, 169, 139, 0.36);
+  --bad-bg: rgba(201, 122, 109, 0.16);
+  --bad-line: rgba(201, 122, 109, 0.34);
   --radius-card: 24px;
   --radius-control: 14px;
   /* Small and tight: a wider, darker shadow reads as grey haze once cards
@@ -48,8 +55,39 @@ body {
 }
 
 .admin-card {
-  background: #ffffff;
+  background: var(--surface);
   border: 1px solid var(--ink-08);
-  border-radius: var(--radius-card);
+  border-radius: 20px;
   box-shadow: var(--shadow-card);
+}
+
+/* Button recipes, ported from the old app so both projects read the same.
+   Black is the primary action colour; --blue-deep stays reserved for data
+   marks that carry meaning (heatmap density, unread dots, day selection),
+   which is why it is not a button colour here. */
+.admin-primary {
+  border-radius: var(--radius-control);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  transition: background 0.16s ease, opacity 0.16s ease;
+}
+
+.admin-primary:hover:not(:disabled) {
+  background: rgba(28, 28, 28, 0.86);
+}
+
+.admin-secondary {
+  border: 1px solid var(--ink-08);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-70);
+  font-weight: 600;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.admin-secondary:hover:not(:disabled) {
+  border-color: var(--line-2);
+  color: var(--ink);
+  background: var(--paper);
 }

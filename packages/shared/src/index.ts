@@ -6,4 +6,5 @@ export * from "./draft.js";
 export * from "./rpcErrors.js";
 export * from "./domain.js";
 export * from "./schemas.js";
+export * from "./motivation.js";
 export type { Database, Json } from "./db-types.js";

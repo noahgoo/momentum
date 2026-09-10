@@ -132,7 +132,7 @@ export function MotivationPage() {
             <button
               type="submit"
               disabled={!quote.trim() || upsertMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-[var(--blue)] px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50 hover:enabled:bg-[var(--blue-deep)]"
+              className="admin-primary flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-50"
             >
               {upsertMutation.isPending ? "Saving…" : "Save motivation"}
             </button>

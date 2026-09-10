@@ -4,8 +4,10 @@ import {
   mondayOfStr,
   type Friendship,
   type Goal,
+  resolveMotivation,
   type GoalLog,
   type MotivationEntry,
+  type ResolvedMotivation,
 } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
@@ -27,7 +29,8 @@ export interface DashboardMeasurementSummary {
 }
 
 export interface DashboardResult {
-  motivation: MotivationEntry | null;
+  /** Weekly coach entry, or this client's profile override when one is live. */
+  motivation: ResolvedMotivation | null;
   goals: Goal[];
   completedGoalIds: Set<string>;
   /** Yesterday's workout_log row, only the fields the feel prompt needs. */
@@ -60,9 +63,10 @@ export function useDashboard(
       const yesterdayStr = addDaysStr(todayStr, -1);
       const mondayStr = mondayOfStr(todayStr);
 
-      const [motivation, goals, todayGoalLogs, yesterdayLog, friends, photos, measurement] =
+      const [weeklyMotivation, override, goals, todayGoalLogs, yesterdayLog, friends, photos, measurement] =
         await Promise.all([
           fetchMotivation(coachId ?? null, mondayStr, todayStr),
+          fetchMotivationOverride(clientId),
           fetchActiveGoals(clientId),
           fetchGoalLogs(clientId, todayStr),
           fetchWorkoutLog(clientId, yesterdayStr),
@@ -72,7 +76,7 @@ export function useDashboard(
         ]);
 
       return {
-        motivation,
+        motivation: resolveMotivation(override, weeklyMotivation, todayStr),
         goals,
         completedGoalIds: new Set(todayGoalLogs.map((log) => log.goal_id)),
         showFeelPrompt: Boolean(yesterdayLog?.completed) && yesterdayLog?.next_day_feel == null,
@@ -110,6 +114,22 @@ async function fetchMotivation(
     .maybeSingle();
   if (latestError) throw latestError;
   return latest ?? null;
+}
+
+/**
+ * This client's motivation override columns. Own select (not a join off the
+ * weekly entry) because the override lives on the client's profile row and is
+ * readable under `profiles_select_own` regardless of whether a coach has
+ * posted a weekly entry at all.
+ */
+async function fetchMotivationOverride(clientId: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("motivation_override_quote, motivation_override_image_url, motivation_override_until")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
 }
 
 async function fetchActiveGoals(clientId: string): Promise<Goal[]> {

@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router";
 import { ClientHeaderCard } from "../components/clients/ClientHeaderCard";
 import { GoalsPanel } from "../components/clients/GoalsPanel";
 import { MeasurementsPanel } from "../components/clients/MeasurementsPanel";
+import { MotivationOverridePanel } from "../components/clients/MotivationOverridePanel";
 import { ProgressPhotosStrip } from "../components/clients/ProgressPhotosStrip";
 import { RecentWorkouts } from "../components/clients/RecentWorkouts";
 import { WorkoutHeatmap } from "../components/clients/WorkoutHeatmap";
@@ -74,6 +75,10 @@ export function ClientDetailPage() {
         onToggleDisabled={() => toggleDisabled.mutate(!profile.disabled)}
         togglePending={toggleDisabled.isPending}
       />
+
+      <SectionCard title="Dashboard motivation override">
+        <MotivationOverridePanel profile={profile} todayStr={clientTodayStr} />
+      </SectionCard>
 
       <SectionCard title="Workout history">
         <WorkoutHeatmap logs={logs} todayStr={clientTodayStr} />

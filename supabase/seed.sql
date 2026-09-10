@@ -481,18 +481,47 @@ begin
   -- ASSIGNMENTS
   -- ==========================================================================
 
-  insert into public.assignments (id, client_id, program_id, start_date, active)
-  values
-    (a_client1, client1, prog1_foundation, v_start1, true),
-    (a_client2, client2, prog1_simple, v_start2, true),
-    (a_client3, client3, prog1_foundation, v_start3, true),
-    (a_client8, client8, prog2_basic, current_date - 5, true)
-  on conflict (id) do nothing;
+  -- Assignments point at INSTANCE rows (programs.client_id set), never at the
+  -- library template — the tier model in docs/rules/data-model.md. Seeding a
+  -- template id here would recreate exactly the bug migration 0020 removed:
+  -- every client on a program sharing one set of rows, and a coach unable to
+  -- edit one client's schedule without editing everyone's.
+  --
+  -- copy_program_tree is called directly rather than assign_program because
+  -- assign_program gates on is_coach_of(), which reads auth.uid() — null when
+  -- this file runs as postgres. The function's own comment sanctions this
+  -- path ("or as postgres in tests"). Deactivation/activation ordering that
+  -- assign_program handles is not needed here: each client gets exactly one
+  -- assignment.
+  --
+  -- Still idempotent: the copy only happens when that assignment id is
+  -- absent, so a re-run neither duplicates instance trees nor orphans them.
+  if not exists (select 1 from public.assignments where id = a_client1) then
+    insert into public.assignments (id, client_id, program_id, start_date, active)
+    values (a_client1, client1, public.copy_program_tree(prog1_foundation, client1, null), v_start1, true);
+  end if;
 
-  -- client7 (disabled): old inactive assignment only.
-  insert into public.assignments (id, client_id, program_id, start_date, active)
-  values (a_client7_old, client7, prog1_simple, current_date - 60, false)
-  on conflict (id) do nothing;
+  if not exists (select 1 from public.assignments where id = a_client2) then
+    insert into public.assignments (id, client_id, program_id, start_date, active)
+    values (a_client2, client2, public.copy_program_tree(prog1_simple, client2, null), v_start2, true);
+  end if;
+
+  if not exists (select 1 from public.assignments where id = a_client3) then
+    insert into public.assignments (id, client_id, program_id, start_date, active)
+    values (a_client3, client3, public.copy_program_tree(prog1_foundation, client3, null), v_start3, true);
+  end if;
+
+  if not exists (select 1 from public.assignments where id = a_client8) then
+    insert into public.assignments (id, client_id, program_id, start_date, active)
+    values (a_client8, client8, public.copy_program_tree(prog2_basic, client8, null), current_date - 5, true);
+  end if;
+
+  -- client7 (disabled): old inactive assignment only. Also an instance, so a
+  -- past assignment resolves history against its own copy (data-model R5).
+  if not exists (select 1 from public.assignments where id = a_client7_old) then
+    insert into public.assignments (id, client_id, program_id, start_date, active)
+    values (a_client7_old, client7, public.copy_program_tree(prog1_simple, client7, null), current_date - 60, false);
+  end if;
 
   -- clients 4-6, 9-10 intentionally have no assignment.
 
@@ -540,8 +569,14 @@ begin
   -- realistic detail (full-body log with reps sets).
   select id into wl_c1_d1 from public.workout_logs where client_id = client1 order by date desc limit 1;
   if wl_c1_d1 is not null then
+    -- Match on name, not on w1_fullbody's id: the log points at client1's
+    -- INSTANCE copy of that workout, which has a fresh id. The deep copy
+    -- preserves the name, so that is the stable handle here.
     select workout_id into v_el from public.workout_logs where id = wl_c1_d1;
-    if v_el = w1_fullbody then
+    if exists (
+      select 1 from public.workouts
+      where id = v_el and name = 'Full Body Strength'
+    ) then
       insert into public.exercise_logs (id, workout_log_id, exercise_id, exercise_name, mode, sort_order)
       select gen_random_uuid(), wl_c1_d1, ex1_squat, 'Bodyweight Squat', 'reps', 1
       where not exists (select 1 from public.exercise_logs where workout_log_id = wl_c1_d1 and sort_order = 1)

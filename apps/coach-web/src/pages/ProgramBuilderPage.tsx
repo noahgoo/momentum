@@ -373,7 +373,7 @@ export function ProgramBuilderPage() {
             <button
               type="button"
               onClick={() => navigate("/library/programs")}
-              className="rounded-lg border border-[var(--ink-08)] px-4 py-2 text-sm font-medium text-[var(--ink-70)] hover:bg-[var(--paper)]"
+              className="admin-secondary px-4 py-2 text-sm"
             >
               Cancel
             </button>
@@ -381,7 +381,7 @@ export function ProgramBuilderPage() {
               type="button"
               onClick={() => void handleSave()}
               disabled={!canSave}
-              className="rounded-lg bg-[var(--blue-deep)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+              className="admin-primary px-4 py-2 text-sm disabled:opacity-40"
             >
               {saveProgram.isPending ? "Saving…" : "Save program"}
             </button>

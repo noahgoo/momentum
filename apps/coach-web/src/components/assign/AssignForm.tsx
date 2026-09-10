@@ -92,7 +92,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
         <button
           type="button"
           onClick={() => navigate(`/clients/${clientId}`)}
-          className="rounded-lg bg-[var(--blue-deep)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="admin-primary px-4 py-2 text-sm"
         >
           View client
         </button>
@@ -176,7 +176,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
             type="button"
             disabled={!canSubmit}
             onClick={handleSubmit}
-            className="rounded-lg bg-[var(--blue-deep)] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
+            className="admin-primary px-5 py-2.5 text-sm disabled:opacity-40"
           >
             {assignProgram.isPending ? "Assigning…" : "Assign program"}
           </button>

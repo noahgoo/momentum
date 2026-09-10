@@ -692,6 +692,9 @@ export type Database = {
           id: string
           invited_by: string | null
           last_reminder_date: string | null
+          motivation_override_image_url: string | null
+          motivation_override_quote: string | null
+          motivation_override_until: string | null
           notification_time: string | null
           notifications_enabled: boolean
           role: Database["public"]["Enums"]["user_role"]
@@ -709,6 +712,9 @@ export type Database = {
           id: string
           invited_by?: string | null
           last_reminder_date?: string | null
+          motivation_override_image_url?: string | null
+          motivation_override_quote?: string | null
+          motivation_override_until?: string | null
           notification_time?: string | null
           notifications_enabled?: boolean
           role: Database["public"]["Enums"]["user_role"]
@@ -726,6 +732,9 @@ export type Database = {
           id?: string
           invited_by?: string | null
           last_reminder_date?: string | null
+          motivation_override_image_url?: string | null
+          motivation_override_quote?: string | null
+          motivation_override_until?: string | null
           notification_time?: string | null
           notifications_enabled?: boolean
           role?: Database["public"]["Enums"]["user_role"]

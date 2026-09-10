@@ -142,7 +142,7 @@ export function ExercisesPage() {
         <button
           type="button"
           onClick={() => setCreateModalOpen(true)}
-          className="rounded-lg bg-[var(--blue-deep)] px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
+          className="admin-primary px-4 py-2.5 text-sm"
         >
           + New exercise
         </button>
