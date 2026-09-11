@@ -96,55 +96,57 @@ export function RecentWorkouts({ logs, workoutsById }: Props) {
                   return (
                     <div key={ex.id}>
                       <div className="mb-1 text-xs font-semibold text-[var(--ink-70)]">{ex.exercise_name}</div>
-                      <table className="w-full max-w-sm text-xs text-[var(--ink-70)]">
-                        <thead>
-                          <tr className="text-left text-[10px] tracking-wide text-[var(--ink-30)] uppercase">
-                            <th className="py-0.5 pr-3 font-medium">Set</th>
-                            <th className="py-0.5 pr-3 font-medium">
-                              {mode === "distance" ? "Distance" : "Target"}
-                            </th>
-                            <th className="py-0.5 pr-3 font-medium">
-                              {mode === "distance" ? "Time" : "Actual"}
-                            </th>
-                            <th className="py-0.5 pr-3 font-medium">
-                              {mode === "time" ? "Time" : mode === "distance" ? "Pace" : "Reps"}
-                            </th>
-                            <th className="py-0.5 font-medium" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sets.map((set) => (
-                            <tr key={set.id}>
-                              <td className="py-0.5 pr-3">{set.set_number}</td>
-                              <td className="py-0.5 pr-3">
-                                {mode === "distance"
-                                  ? formatLogMiles(set.actual_miles)
-                                  : formatTargetWeight(parseSetConfig(set.prescribed))}
-                              </td>
-                              <td className="py-0.5 pr-3">
-                                {mode === "distance"
-                                  ? formatLogDuration(set.actual_seconds)
-                                  : set.weight != null
-                                    ? `${set.weight}${set.weight_unit === "kg" ? " kg" : ""}`
-                                    : "—"}
-                              </td>
-                              <td className="py-0.5 pr-3">
-                                {mode === "time"
-                                  ? formatLogDuration(set.target_seconds)
-                                  : mode === "distance"
-                                    ? (() => {
-                                        const pace = computePace(set.actual_miles, set.actual_seconds);
-                                        return pace != null ? `${formatPace(pace)}/mi` : "—";
-                                      })()
-                                    : (set.reps ?? "—")}
-                              </td>
-                              <td className={`py-0.5 ${set.completed ? "text-[var(--ok)]" : "text-[var(--ink-15)]"}`}>
-                                {set.completed ? "✓" : "✗"}
-                              </td>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[19rem] text-xs text-[var(--ink-70)] sm:max-w-sm sm:min-w-0">
+                          <thead>
+                            <tr className="text-left text-[10px] tracking-wide text-[var(--ink-30)] uppercase">
+                              <th className="py-0.5 pr-3 font-medium">Set</th>
+                              <th className="py-0.5 pr-3 font-medium">
+                                {mode === "distance" ? "Distance" : "Target"}
+                              </th>
+                              <th className="py-0.5 pr-3 font-medium">
+                                {mode === "distance" ? "Time" : "Actual"}
+                              </th>
+                              <th className="py-0.5 pr-3 font-medium">
+                                {mode === "time" ? "Time" : mode === "distance" ? "Pace" : "Reps"}
+                              </th>
+                              <th className="py-0.5 font-medium" />
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {sets.map((set) => (
+                              <tr key={set.id}>
+                                <td className="py-0.5 pr-3">{set.set_number}</td>
+                                <td className="py-0.5 pr-3">
+                                  {mode === "distance"
+                                    ? formatLogMiles(set.actual_miles)
+                                    : formatTargetWeight(parseSetConfig(set.prescribed))}
+                                </td>
+                                <td className="py-0.5 pr-3">
+                                  {mode === "distance"
+                                    ? formatLogDuration(set.actual_seconds)
+                                    : set.weight != null
+                                      ? `${set.weight}${set.weight_unit === "kg" ? " kg" : ""}`
+                                      : "—"}
+                                </td>
+                                <td className="py-0.5 pr-3">
+                                  {mode === "time"
+                                    ? formatLogDuration(set.target_seconds)
+                                    : mode === "distance"
+                                      ? (() => {
+                                          const pace = computePace(set.actual_miles, set.actual_seconds);
+                                          return pace != null ? `${formatPace(pace)}/mi` : "—";
+                                        })()
+                                      : (set.reps ?? "—")}
+                                </td>
+                                <td className={`py-0.5 ${set.completed ? "text-[var(--ok)]" : "text-[var(--ink-15)]"}`}>
+                                  {set.completed ? "✓" : "✗"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   );
                 })}

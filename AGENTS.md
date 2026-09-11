@@ -42,6 +42,7 @@ touching:
 | a form, the query client, `staleTime`, offline behavior, a screen's load path | [`docs/rules/offline-perf.md`](docs/rules/offline-perf.md) |
 | notifications, `notification_outbox`, push tokens, `workout_logs` from more than one hook | [`docs/rules/notifications.md`](docs/rules/notifications.md) |
 | a file listed in [`docs/rules/violations.md`](docs/rules/violations.md) | that row's rule, before editing around it |
+| any coach-web page, component, or layout | [`apps/coach-web/harness/README.md`](apps/coach-web/harness/README.md) — and run `pnpm -F coach-web test:ui` |
 
 If more than one row matches, read all of them. If none obviously matches but
 you are writing data code, read `data-model.md`.
@@ -110,6 +111,37 @@ For notifications and shared rows:
 
 A checklist item you cannot answer is a signal to open the rule file for it,
 not to guess.
+
+---
+
+## Verifying coach-web changes
+
+**A coach-web UI change is not verified until it has been rendered.** Typecheck,
+lint and build all pass on a portal that is visibly broken — a page overflowing
+past the right edge of a phone, or a hook that throws on mount and blanks the
+screen. Both of those have shipped to a branch here.
+
+`apps/coach-web/harness/` boots the app with stubbed auth and Supabase and a
+seeded query cache, so it renders with no credentials and no network:
+
+```bash
+pnpm -F coach-web harness     # browsable app at localhost:5199
+pnpm -F coach-web test:ui     # the checks in harness/ui/, at 1440px and 390px
+```
+
+Run `test:ui` before handing back any change to a page, a component, the
+layout shell, or a form's state. It is the only check in this app that runs the
+real components. Requires a Chromium once per machine
+(`npx playwright install chromium`); see `apps/coach-web/harness/README.md` for
+pre-provisioned browsers and for what the harness deliberately cannot cover.
+
+Add a check when you change behaviour it would not already catch: a new
+interaction, a new width-dependent layout, anything about persistence. A new
+route needs nothing — `AppRoutes` is shared, so the layout checks pick it up.
+
+`apps/mobile` has no equivalent. Its changes are verified by `pnpm -F mobile
+test` plus Expo on a device, and a UI claim about it that has not been run on
+one should say so.
 
 ---
 

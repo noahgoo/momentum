@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -6,12 +6,16 @@ import { ChevronLeft } from "lucide-react-native";
 import { bodyFatFromEntry, type BodyMeasurement, type BodyMeasurementCreate } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
 import { useClientDate } from "../../../lib/useClientDate";
+import { measurementDraftKey, useDraft } from "../../../lib/useDraft";
 import { useProfile } from "../../../lib/queries/useProfile";
 import { useBodyMeasurements } from "../../../lib/queries/useBodyMeasurements";
-import { useCreateBodyMeasurement } from "../../../lib/queries/useCreateBodyMeasurement";
+import {
+  DuplicateMeasurementError,
+  useCreateBodyMeasurement,
+} from "../../../lib/queries/useCreateBodyMeasurement";
 import { useDeleteBodyMeasurement } from "../../../lib/queries/useDeleteBodyMeasurement";
 import { BodyFatHeroCard } from "../../../components/progress/BodyFatHeroCard";
-import { MeasurementForm } from "../../../components/progress/MeasurementForm";
+import { MeasurementForm, type MeasurementValues } from "../../../components/progress/MeasurementForm";
 import { WeightSparkline } from "../../../components/progress/WeightSparkline";
 import { colors, fonts, radii, spacing, shadows } from "../../../theme/tokens";
 
@@ -61,8 +65,24 @@ export default function ProgressMeasurementsScreen() {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [dismissedRestore, setDismissedRestore] = useState(false);
+
+  // Seven fields of numbers the client measured off their own body — not
+  // something they can reconstruct if the app is reclaimed mid-entry (S1).
+  // No server copy exists for an unsaved entry, so there is nothing to be
+  // staler than.
+  const [values, setValues] = useState<MeasurementValues>({});
+  const draft = useDraft<MeasurementValues>(uid ? measurementDraftKey(uid, today) : null, null);
+
+  const appliedDraft = useRef(false);
+  useEffect(() => {
+    if (!draft.hydrated || appliedDraft.current || !draft.restored) return;
+    appliedDraft.current = true;
+    setValues(draft.restored);
+  }, [draft.hydrated, draft.restored]);
 
   const latest = entries[0] ?? null;
+  const alreadyLoggedToday = entries.some((e) => e.date === today);
 
   const sparklinePoints = entries
     .filter((e) => e.weight_lbs != null)
@@ -70,13 +90,32 @@ export default function ProgressMeasurementsScreen() {
     .reverse()
     .map((e) => ({ date: e.date, weightLbs: e.weight_lbs as number }));
 
+  function handleChange(next: MeasurementValues) {
+    setValues(next);
+    draft.save(next);
+  }
+
   function handleSave(entry: BodyMeasurementCreate) {
     if (!uid || createMutation.isPending) return;
     setFormError(null);
     createMutation.mutate(
       { clientId: uid, entry: { ...entry, date: today } },
       {
+        // Clear only once the write is confirmed. The form used to empty itself
+        // on submit, which threw the numbers away on every failed save.
+        onSuccess: () => {
+          setValues({});
+          draft.clear();
+          setDismissedRestore(true);
+        },
         onError: (err) => {
+          // A duplicate is not a transient failure and must not read as one:
+          // the entry did not save, and the form and draft stay put so the
+          // numbers are not lost.
+          if (err instanceof DuplicateMeasurementError) {
+            setFormError(err.message);
+            return;
+          }
           console.error("Failed to save measurement:", err);
           setFormError("Couldn't save. Try again.");
         },
@@ -126,11 +165,19 @@ export default function ProgressMeasurementsScreen() {
         </View>
 
         <View style={styles.section}>
+          {draft.didRestore && !dismissedRestore && (
+            <Pressable onPress={() => setDismissedRestore(true)} style={styles.restoreBanner}>
+              <Text style={styles.restoreText}>Restored your unsaved progress</Text>
+            </Pressable>
+          )}
           <MeasurementForm
             date={today}
             saving={createMutation.isPending}
             error={formError}
+            values={values}
+            onChange={handleChange}
             onSubmit={handleSave}
+            alreadyLogged={alreadyLoggedToday}
           />
         </View>
 
@@ -212,6 +259,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.ink50,
     marginTop: 4,
+  },
+  restoreBanner: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radii.control,
+    backgroundColor: colors.cream,
+  },
+  restoreText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.ink70,
   },
   section: {
     marginTop: spacing.xl,

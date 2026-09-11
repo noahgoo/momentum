@@ -135,7 +135,7 @@ export function ExercisesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--ink-50)]">
           {isLoading ? "Loading…" : `${exercises.length} exercise${exercises.length === 1 ? "" : "s"}`}
         </p>
@@ -258,7 +258,7 @@ export function ExercisesPage() {
                     onClick={() => openEdit(ex)}
                     aria-label={`Edit ${ex.name}`}
                     aria-expanded={isOpen}
-                    className="rounded-lg p-1.5 text-[var(--ink-30)] hover:bg-white hover:text-[var(--ink)]"
+                    className="flex h-10 w-10 flex-none items-center justify-center rounded-lg text-[var(--ink-30)] hover:bg-white hover:text-[var(--ink)] lg:h-auto lg:w-auto lg:p-1.5"
                   >
                     {isOpen ? "▴" : "▾"}
                   </button>

@@ -37,6 +37,29 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # The UI checks run the real coach-web components against a stubbed
+      # backend (apps/coach-web/harness). They are the only thing here that
+      # renders anything — typecheck, test and lint all pass on a portal that
+      # is visibly broken, which is how a page overflowing off a phone and a
+      # hook that blanked both builders both reached a branch.
+      #
+      # Chromium only: the phone project runs Chromium with an iPhone viewport
+      # rather than WebKit, so there is no second browser to fetch.
+      - name: Install Chromium
+        run: pnpm -F coach-web exec playwright install --with-deps chromium
+
+      - name: UI checks
+        run: pnpm -F coach-web test:ui
+
+      - name: Upload UI failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/coach-web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   db:
     runs-on: ubuntu-latest
     steps:

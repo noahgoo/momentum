@@ -15,6 +15,16 @@ import { useThreads, type ThreadWithClient } from "../queries/useThreads";
  * a realtime thread list on the left, the selected thread's chat on the
  * right. Route is wired in App.tsx already; this file owns only the body.
  *
+ * Below `lg` there is no room for two panes, so it becomes list-then-thread:
+ * the list fills the screen until a thread is picked, then the chat does, with
+ * a back arrow in the chat header. Which pane is showing (`mobilePane`) is
+ * tracked separately from which thread is open (`selectedClientId`), and Back
+ * only changes the former. That keeps MessageThread mounted across a
+ * back-and-forth — it holds the composer draft in local state, so deselecting
+ * the thread instead would silently discard a half-typed message
+ * (offline-perf S1). At `lg` and up both panes are always visible and
+ * `mobilePane` has no effect.
+ *
  * `?client=<id>` preselection (from ClientHeaderCard's Message button, see
  * ClientDetailPage) may name a client with no thread row yet — the coach
  * INSERT policy allows creating one lazily on first send (assumption from
@@ -29,6 +39,10 @@ export function MessagesPage() {
 
   const { data: threads = [], isPending: threadsPending } = useThreads();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(preselectClientId);
+  /** Which pane the phone layout is showing. Ignored at `lg` and up. */
+  const [mobilePane, setMobilePane] = useState<"list" | "thread">(
+    preselectClientId ? "thread" : "list"
+  );
 
   // Only honor the query param once, on mount / when it changes — selecting
   // a different thread by hand shouldn't be overridden by a stale param.
@@ -37,6 +51,7 @@ export function MessagesPage() {
     if (preselectClientId && !consumedPreselect.current) {
       consumedPreselect.current = true;
       setSelectedClientId(preselectClientId);
+      setMobilePane("thread");
     }
   }, [preselectClientId]);
 
@@ -76,6 +91,7 @@ export function MessagesPage() {
 
   function handleSelect(thread: ThreadWithClient) {
     setSelectedClientId(thread.client_id);
+    setMobilePane("thread");
     setSendError(false);
     // Clear the query param once a selection has been made by hand so a
     // later back/forward nav doesn't re-force the original preselect.
@@ -109,8 +125,15 @@ export function MessagesPage() {
   }
 
   return (
-    <div className="admin-card flex h-[calc(100dvh-11rem)] max-h-full overflow-hidden">
-      <div className="flex w-80 shrink-0 flex-col border-r border-[var(--ink-08)] bg-[var(--paper)]/60">
+    // `main` is a column flex container, so flex-1 + min-h-0 fills whatever is
+    // left below the chrome at either breakpoint — no subtracting the header,
+    // section nav and padding by hand.
+    <div className="admin-card flex min-h-0 flex-1 overflow-hidden">
+      <div
+        className={`w-full shrink-0 flex-col border-r border-[var(--ink-08)] bg-[var(--paper)]/60 lg:flex lg:w-80 ${
+          mobilePane === "list" ? "flex" : "hidden"
+        }`}
+      >
         <div className="shrink-0 border-b border-[var(--ink-08)] px-5 py-4">
           <h2 className="font-display text-lg text-[var(--ink)]">Conversations</h2>
           <p className="mt-1 text-[11px] tracking-wide text-[var(--ink-50)]">
@@ -126,7 +149,11 @@ export function MessagesPage() {
         )}
       </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div
+        className={`min-w-0 flex-1 flex-col overflow-hidden lg:flex ${
+          mobilePane === "thread" ? "flex" : "hidden"
+        }`}
+      >
         {!selectedClientId ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[var(--ink-08)] bg-[var(--cream)] font-display text-2xl text-[var(--ink-50)]">
@@ -140,6 +167,7 @@ export function MessagesPage() {
         ) : (
           <MessageThread
             clientName={selectedClientName ?? "Client"}
+            onBack={() => setMobilePane("list")}
             messages={messages}
             isPending={isPending}
             coachId={coachId ?? ""}

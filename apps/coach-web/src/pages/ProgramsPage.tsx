@@ -30,7 +30,7 @@ export function ProgramsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--ink-50)]">
           {isLoading ? "Loading…" : `${programs.length} program${programs.length === 1 ? "" : "s"}`}
         </p>

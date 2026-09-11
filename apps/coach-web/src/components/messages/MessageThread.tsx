@@ -1,3 +1,4 @@
+import { ChevronLeft } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Message } from "@momentum/shared";
 import { dayKey, formatDaySeparator, formatTime } from "./timeFormat";
@@ -13,6 +14,8 @@ interface MessageThreadProps {
   onSend: (text: string) => void;
   sending: boolean;
   sendError: boolean;
+  /** Deselects the thread on the mobile list-then-thread layout. Unused at `lg` and up. */
+  onBack?: () => void;
 }
 
 /**
@@ -36,6 +39,7 @@ export function MessageThread({
   onSend,
   sending,
   sendError,
+  onBack,
 }: MessageThreadProps) {
   const [text, setText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -72,14 +76,24 @@ export function MessageThread({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-[var(--ink-08)] px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--blue)] font-display text-sm text-[var(--ink)]">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--ink-08)] px-4 lg:gap-3 lg:px-6">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to conversations"
+            className="-ml-2 flex h-10 w-10 flex-none items-center justify-center rounded-xl text-[var(--ink-50)] transition-colors hover:bg-[var(--cream)] hover:text-[var(--ink)] lg:hidden"
+          >
+            <ChevronLeft size={20} strokeWidth={1.8} />
+          </button>
+        )}
+        <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--blue)] font-display text-sm text-[var(--ink)]">
           {(clientName[0] ?? "?").toUpperCase()}
         </div>
-        <span className="font-display text-lg text-[var(--ink)]">{clientName}</span>
+        <span className="truncate font-display text-lg text-[var(--ink)]">{clientName}</span>
       </div>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4 lg:px-6">
         <div className="flex min-h-full flex-col justify-end">
           {hasMoreEarlier && (
             <div className="mb-3 flex justify-center">
@@ -157,12 +171,12 @@ export function MessageThread({
       </div>
 
       {sendError && (
-        <div className="shrink-0 border-t border-[var(--ink-08)] bg-white px-6 py-2 text-xs text-[var(--bad)]">
+        <div className="shrink-0 border-t border-[var(--ink-08)] bg-white px-4 py-2 text-xs text-[var(--bad)] lg:px-6">
           Message didn&apos;t send. Try again.
         </div>
       )}
 
-      <div className="flex shrink-0 items-end gap-3 border-t border-[var(--ink-08)] bg-white px-6 py-3">
+      <div className="flex shrink-0 items-end gap-3 border-t border-[var(--ink-08)] bg-white px-4 py-3 lg:px-6">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

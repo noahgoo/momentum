@@ -53,8 +53,8 @@ export function PhaseEditor({ phase, workouts, onChange }: PhaseEditorProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="sm:col-span-2">
           <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Phase name</label>
           <input
             value={phase.name}

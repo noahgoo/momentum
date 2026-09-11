@@ -2,16 +2,27 @@ import { LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, sectionForPath } from "../lib/navigation";
+import { hasDrafts } from "../lib/useDraft";
 import { useInboxCount } from "../queries/useInboxCount";
 
-export function Sidebar() {
+export interface SidebarProps {
+  /**
+   * Layout classes for the `<aside>`. The sidebar itself is position-neutral so
+   * the same component can be the permanent desktop rail (fixed width, right
+   * border, `lg:flex`) and the contents of the mobile nav drawer, rather than
+   * the nav rows being forked into two files that drift apart.
+   */
+  className?: string;
+}
+
+export function Sidebar({ className = "" }: SidebarProps) {
   const { profile, signOut } = useAuth();
   const { pathname } = useLocation();
   const activeSection = sectionForPath(pathname);
   const inboxCount = useInboxCount();
 
   return (
-    <aside className="flex h-dvh w-64 shrink-0 flex-col border-r border-[var(--ink-08)] bg-white/95 backdrop-blur">
+    <aside className={`flex flex-col bg-white/95 backdrop-blur ${className}`}>
       <div className="border-b border-[var(--ink-08)] px-6 py-6">
         <span className="font-display text-lg tracking-tight text-[var(--ink)]">Momentum</span>
         <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-[var(--ink-30)]">
@@ -54,7 +65,21 @@ export function Sidebar() {
           <p className="truncate px-3 pb-1.5 text-xs text-[var(--ink-30)]">{profile.email}</p>
         )}
         <button
-          onClick={() => void signOut()}
+          onClick={() => {
+            // Signing out discards this device's drafts, and the unsaved-changes
+            // guard cannot warn about it — that watches anchor clicks, and this
+            // is a button.
+            if (
+              profile &&
+              hasDrafts(profile.id) &&
+              !window.confirm(
+                "You have unsaved work saved on this device. Signing out discards it."
+              )
+            ) {
+              return;
+            }
+            void signOut();
+          }}
           className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-[var(--ink-50)] transition-colors hover:bg-[var(--cream)] hover:text-[var(--ink)]"
         >
           <LogOut size={16} strokeWidth={1.8} />
