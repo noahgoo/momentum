@@ -40,6 +40,16 @@ interface WorkoutDraft {
   exercises: BuilderExercise[];
 }
 
+/**
+ * Enough of a check that a corrupt or outdated draft is dropped rather than
+ * spread into state — `exercises` in particular is rendered with `.map` and
+ * reaches the save RPC unvalidated.
+ */
+function isWorkoutDraft(value: unknown): boolean {
+  const d = value as Partial<WorkoutDraft>;
+  return typeof d.name === "string" && Array.isArray(d.exercises);
+}
+
 function newClientId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -104,9 +114,17 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
 
   // `type` is in the key because the warmup builder is this same component on
   // a different route — without it a warmup draft restores into a workout.
+  // In edit mode the key is withheld until `detail` arrives. `useDraft` reads
+  // storage once, when the key first becomes non-null, and reading it before
+  // the server copy is known means `serverUpdatedAt` is null and
+  // `shouldRestoreDraft` waves every draft through — including one another
+  // device has already superseded, which Save would then write back over the
+  // newer row. In new-entity mode there is no server copy, so null is the right
+  // answer immediately.
   const draft = useDraft<WorkoutDraft>(
-    draftKey(profile?.id, type, workoutId),
-    detail?.updatedAt ?? null
+    !isEditing || detail ? draftKey(profile?.id, type, workoutId) : null,
+    detail?.updatedAt ?? null,
+    isWorkoutDraft
   );
 
   // Hydrate form state once the workout detail AND the exercise library have
@@ -436,8 +454,13 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
         </div>
       </MobileSheet>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:px-6 lg:pb-3 lg:pl-[calc(16rem+1.5rem)]">
+      {/* Stops at the sidebar rather than spanning the viewport. `inset-x-0`
+          laid this bar over the sidebar's bottom rows, which is where Sign out
+          lives — visually covered, and intercepting the click. Ending the bar
+          at the content column also retires the `pl-[calc(16rem+1.5rem)]` hack
+          that was compensating for the overlap. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur lg:left-64">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:px-6 lg:pb-3">
           <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--ink-50)]">
             <span>{exercises.length} exercises</span>
             <span>·</span>

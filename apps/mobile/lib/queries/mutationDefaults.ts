@@ -20,8 +20,8 @@ import {
  * Only writes that are safe to replay belong here. Every one of these is
  * idempotent server-side (R2/C4): saving a log replaces its children rather
  * than appending, the warmup toggle sets an absolute value rather than
- * flipping one, and a measurement insert that collides with the row it already
- * wrote treats the duplicate as success.
+ * flipping one, and a replayed measurement insert that collides with the row it
+ * already wrote treats the duplicate as success.
  *
  * Deliberately absent: assign_program and accept_change_request. Both depend
  * on current server state — replaying an assign made an hour ago could
@@ -63,8 +63,11 @@ export function registerMutationDefaults(queryClient: QueryClient) {
   });
 
   queryClient.setMutationDefaults(["createBodyMeasurement"], {
+    // Only the replay may treat a duplicate as done — it is re-sending a write
+    // that already landed. The interactive save must not; see the note on
+    // insertBodyMeasurement.
     mutationFn: async (input: unknown) =>
-      insertBodyMeasurement(input as CreateBodyMeasurementInput),
+      insertBodyMeasurement(input as CreateBodyMeasurementInput, { onDuplicate: "succeed" }),
   });
 
   queryClient.setMutationDefaults(["toggleGoalLog"], {

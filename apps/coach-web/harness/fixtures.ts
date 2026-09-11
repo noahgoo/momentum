@@ -23,6 +23,8 @@ export const CLIENT_IDS = ["client-0", "client-1", "client-2", "client-3"] as co
 export const EDITABLE_WORKOUT_ID = "w-1";
 /** `updated_at` on that workout; the staleness checks plant drafts either side of it. */
 export const EDITABLE_WORKOUT_UPDATED_AT = "2026-09-01T10:00:00Z";
+/** How long after mount the workout detail lands. See the note in `seed`. */
+export const DETAIL_DELIVERY_MS = 120;
 
 const clientSummaries = [
   {
@@ -210,7 +212,18 @@ export function seed(qc: QueryClient) {
     qk.workoutExerciseCounts(workouts.map((w) => w.id)),
     Object.fromEntries(workouts.map((w) => [w.id, 3]))
   );
-  qc.setQueryData(qk.workoutDetail(EDITABLE_WORKOUT_ID), workoutDetail);
+  // Deliberately NOT seeded synchronously. A builder reached by navigation has
+  // no cached detail on its first render — `useWorkoutDetail` has no
+  // `initialData` — and anything that reads `detail?.updatedAt` during that
+  // render sees `undefined`. Handing it over before the first paint hid a real
+  // bug: the draft staleness check read `null` in production and restored every
+  // draft, while the harness test passed. Deliver it the way the app does.
+  // A 0ms timeout is not enough: React's initial render is itself scheduled, so
+  // the callback can land before the first paint and hand `detail` over after
+  // all. This has to be unambiguously later than the first render.
+  setTimeout(() => {
+    qc.setQueryData(qk.workoutDetail(EDITABLE_WORKOUT_ID), workoutDetail);
+  }, DETAIL_DELIVERY_MS);
 
   qc.setQueryData(qk.programs(), programs);
 

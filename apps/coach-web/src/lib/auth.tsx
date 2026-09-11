@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Navigate, useLocation } from "react-router";
 import { supabase } from "./supabase";
+import { clearDrafts } from "./useDraft";
 import { syncTimezone } from "./timezone";
 
 interface AuthState {
@@ -113,6 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       async signOut() {
         handledUserId.current = null;
+        // Drafts are the only coach-web data that outlives a session — the
+        // query cache is not persisted — so sign-out is the one place that has
+        // to remove them. Leaving a half-written program readable on a shared
+        // machine is not something signing out should permit. The prompt lives
+        // in Sidebar, which owns the button; clearing lives here so every path
+        // gets it, including the role rejection above (which has no profile,
+        // and so no drafts).
+        if (profile) clearDrafts(profile.id);
         await supabase.auth.signOut();
       },
     }),

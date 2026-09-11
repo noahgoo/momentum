@@ -28,6 +28,15 @@ export interface MobileSheetProps {
 export function MobileSheet({ open, onClose, side, label, children }: MobileSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Read through a ref, and keep `onClose` out of the effect's deps. A caller
+  // passing an inline arrow (the builder's library sheet did) would otherwise
+  // restart this effect on every parent render — restoring focus to the opener
+  // and then back to the panel, which yanks the caret out of the search field
+  // mid-word. Correctness here should not depend on every caller remembering
+  // to memoize.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
 
@@ -39,7 +48,7 @@ export function MobileSheet({ open, onClose, side, label, children }: MobileShee
         // A dialog opened from inside this sheet (the builder's create-exercise
         // modal) owns Escape while it is up; closing the sheet out from under
         // it would discard whatever was typed there.
-        if (!panelRef.current?.querySelector('[role="dialog"]')) onClose();
+        if (!panelRef.current?.querySelector('[role="dialog"]')) onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -69,7 +78,7 @@ export function MobileSheet({ open, onClose, side, label, children }: MobileShee
       // only restore focus if it is still in the document.
       if (opener?.isConnected) opener.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

@@ -43,6 +43,12 @@ Two details that look odd and are not:
   change or a reshaped hook then fails `pnpm typecheck` instead of quietly
   rendering a blank list that someone has to debug. That has already cost two
   debugging sessions.
+- **The workout detail lands *after* the first render**, deliberately. Handing
+  every query over before the first paint is the one way this harness can lie:
+  production reaches a builder with a cold cache, and a check that only ever
+  sees a warm one passed a draft-staleness bug straight through. When a screen
+  behaves differently on the render before its data arrives, seed it the way the
+  app gets it.
 
 ## What it has caught
 
@@ -50,6 +56,9 @@ Two details that look odd and are not:
   `BrowserRouter`, so the call threw on mount and took both builder pages down.
 - `mx-auto` on a page root suppresses cross-axis stretch inside a flex column,
   so three pages sized to their content and overflowed sideways.
+- The builders' fixed save bar spanned the viewport and covered the bottom of
+  the sidebar, so **Sign out was unclickable** on any builder page. An overlap,
+  not an overflow, so the layout checks could not see it — a click did.
 
 It also makes negative claims checkable. Desktop geometry was confirmed
 byte-identical across a refactor by measuring it, which no amount of reading
@@ -66,6 +75,13 @@ the diff would have established.
 - **Width-dependent behaviour** belongs in a helper, not an `if` in a test —
   see `addFirstExercise`, where the desktop rail and the mobile sheet are two
   routes to the same thing.
+- **Watch every new check fail first.** Four of the checks in `regressions.spec.ts`
+  passed against the bug they were written for on the first attempt: one seeded
+  its data too early, one re-spread an identical array that React Query's
+  structural sharing turned into a no-op, and one drove touch coordinates that
+  landed on the wrong element. A green check that has never been red is a claim,
+  not a test. `window.__harnessQueryClient` is exposed for exactly this — forcing
+  a re-render is the only way to exercise a bug that lives in a dependency array.
 
 ## Browsers
 

@@ -20,6 +20,10 @@ const queryClient = new QueryClient({
 
 seed(queryClient);
 
+// Exposed for the UI checks: forcing a re-render of a specific page is the only
+// way to exercise a bug that lives in an effect's dependency array.
+(window as unknown as { __harnessQueryClient: QueryClient }).__harnessQueryClient = queryClient;
+
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>

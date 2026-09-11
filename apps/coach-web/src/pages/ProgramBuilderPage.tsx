@@ -35,6 +35,21 @@ interface ProgramDraft {
   flatWeekSchedule: WeekSchedule;
 }
 
+/**
+ * Enough of a check that a corrupt or outdated draft is dropped rather than
+ * spread into state — the arrays here are rendered with `.map` and reach the
+ * save RPC unvalidated.
+ */
+function isProgramDraft(value: unknown): boolean {
+  const d = value as Partial<ProgramDraft>;
+  return (
+    typeof d.name === "string" &&
+    Array.isArray(d.phases) &&
+    Array.isArray(d.flatActiveDays) &&
+    typeof d.flatWeeks === "number"
+  );
+}
+
 function newClientId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -88,9 +103,17 @@ export function ProgramBuilderPage() {
   /** Set by any edit after hydration; what the nav guard and the draft writer key off. */
   const [dirty, setDirty] = useState(false);
 
+  // In edit mode the key is withheld until `detail` arrives. `useDraft` reads
+  // storage once, when the key first becomes non-null, and reading it before
+  // the server copy is known means `serverUpdatedAt` is null and
+  // `shouldRestoreDraft` waves every draft through — including one another
+  // device has already superseded, which Save would then write back over the
+  // newer row. In new-entity mode there is no server copy, so null is the right
+  // answer immediately.
   const draft = useDraft<ProgramDraft>(
-    draftKey(profile?.id, "program", programId),
-    detail?.updatedAt ?? null
+    !isEditing || detail ? draftKey(profile?.id, "program", programId) : null,
+    detail?.updatedAt ?? null,
+    isProgramDraft
   );
 
   useEffect(() => {
@@ -488,8 +511,13 @@ export function ProgramBuilderPage() {
         <SchedulePreview program={previewProgram} workouts={workouts} />
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:px-6 lg:pb-3 lg:pl-[calc(16rem+1.5rem)]">
+      {/* Stops at the sidebar rather than spanning the viewport. `inset-x-0`
+          laid this bar over the sidebar's bottom rows, which is where Sign out
+          lives — visually covered, and intercepting the click. Ending the bar
+          at the content column also retires the `pl-[calc(16rem+1.5rem)]` hack
+          that was compensating for the overlap. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur lg:left-64">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:px-6 lg:pb-3">
           <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--ink-50)]">
             <span>{totalWeeks} weeks</span>
             <span>·</span>

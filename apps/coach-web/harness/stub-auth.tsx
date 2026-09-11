@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Profile } from "@momentum/shared";
+import { clearDrafts } from "../src/lib/useDraft";
 
 /**
  * Replaces src/lib/auth.tsx. The real one asks Supabase for a session, which
@@ -24,7 +25,15 @@ export function useAuth() {
     profile,
     rejectedReason: null,
     signIn: async () => ({ error: null }),
-    signOut: async () => {},
+    // Mirrors the real signOut in src/lib/auth.tsx, which clears this coach's
+    // drafts before ending the session. It calls the same `clearDrafts`, so the
+    // checks exercise the real function and the real Sidebar prompt — but the
+    // one-line call inside auth.tsx is the app's own wiring and is by
+    // definition outside anything the harness can cover, since auth is exactly
+    // what it replaces.
+    signOut: async () => {
+      clearDrafts(HARNESS_COACH_ID);
+    },
   };
 }
 

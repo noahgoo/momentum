@@ -44,20 +44,38 @@ export interface DraftState<T> {
 }
 
 /**
+ * Storage is not trusted input. A draft can be corrupt, half-written, left over
+ * from an older shape of the form, or — given local access or an XSS — planted.
+ * It is spread straight into builder state and its contents reach the save RPC,
+ * so a shape check here is the difference between a no-op and a crash, or
+ * between a no-op and a coach saving edits they never made.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
  * Pure: this runs during render, so it must not touch storage beyond reading.
- * A draft found to be stale is pruned by an effect below instead.
+ * A draft found to be stale is pruned by an effect instead.
  */
 function read<T>(
   key: string | null,
-  serverUpdatedAt: string | null | undefined
+  serverUpdatedAt: string | null | undefined,
+  isValid: ((value: unknown) => boolean) | undefined
 ): { value: T | null; stale: boolean } {
   if (!key) return { value: null, stale: false };
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return { value: null, stale: false };
-    const parsed = JSON.parse(raw) as StoredDraft<T>;
-    if (shouldRestoreDraft(parsed.savedAt, serverUpdatedAt)) {
-      return { value: parsed.drafts, stale: false };
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!isPlainObject(parsed)) return { value: null, stale: true };
+    if (!isPlainObject(parsed.drafts)) return { value: null, stale: true };
+    if (isValid && !isValid(parsed.drafts)) return { value: null, stale: true };
+
+    const savedAt = typeof parsed.savedAt === "number" ? parsed.savedAt : undefined;
+    if (shouldRestoreDraft(savedAt, serverUpdatedAt)) {
+      return { value: parsed.drafts as T, stale: false };
     }
     return { value: null, stale: true };
   } catch {
@@ -74,12 +92,21 @@ function read<T>(
  * @param serverUpdatedAt When the server's copy was last written; null when
  *            there is no server copy yet, in which case any draft restores.
  */
-export function useDraft<T>(key: string | null, serverUpdatedAt?: string | null): DraftState<T> {
+export function useDraft<T>(
+  key: string | null,
+  serverUpdatedAt?: string | null,
+  /** Shape check for the stored value. A draft that fails it is dropped, not applied. */
+  isValid?: (value: unknown) => boolean
+): DraftState<T> {
   // Read once per key, during render. Re-reading on every server refetch would
   // re-restore a draft the coach has already moved past.
-  const [initial, setInitial] = useState(() => ({ key, ...read<T>(key, serverUpdatedAt) }));
+  //
+  // Callers must not hand over a key until `serverUpdatedAt` is known: this
+  // runs on the first render the key is non-null, and a null `serverUpdatedAt`
+  // makes `shouldRestoreDraft` wave every draft through.
+  const [initial, setInitial] = useState(() => ({ key, ...read<T>(key, serverUpdatedAt, isValid) }));
   if (initial.key !== key) {
-    setInitial({ key, ...read<T>(key, serverUpdatedAt) });
+    setInitial({ key, ...read<T>(key, serverUpdatedAt, isValid) });
   }
 
   // Drop a superseded draft, out of the render path.
@@ -147,11 +174,49 @@ export function useDraft<T>(key: string | null, serverUpdatedAt?: string | null)
   };
 }
 
+const DRAFT_PREFIX = "momentum.draft:";
+
+/** Every stored draft key belonging to one coach. */
+function keysFor(coachId: string): string[] {
+  const prefix = `${DRAFT_PREFIX}${coachId}:`;
+  const out: string[] = [];
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (k?.startsWith(prefix)) out.push(k);
+    }
+  } catch {
+    // Storage blocked. Nothing to report, and nothing to clear.
+  }
+  return out;
+}
+
+/** Whether this coach has unsaved work stored on this device. */
+export function hasDrafts(coachId: string): boolean {
+  return keysFor(coachId).length > 0;
+}
+
+/**
+ * Drop every draft belonging to one coach. Called on sign-out: these are the
+ * only coach-web data that outlives a session, and leaving a colleague's
+ * half-written program readable on a shared machine is not something sign-out
+ * should permit.
+ */
+export function clearDrafts(coachId: string): void {
+  for (const k of keysFor(coachId)) {
+    try {
+      window.localStorage.removeItem(k);
+    } catch {
+      // Nothing further to try.
+    }
+  }
+}
+
 /**
  * Namespaced draft key. The coach id comes first because a shared browser must
- * never offer one coach's unsaved program to another; `kind` separates the
- * workout and warmup builders, which are the same component behind different
- * routes.
+ * never offer one coach's unsaved program to another, and because sign-out
+ * clears by that prefix; `kind` separates the workout and warmup builders,
+ * which are the same component behind different routes.
  */
 export function draftKey(
   coachId: string | undefined,
@@ -159,5 +224,5 @@ export function draftKey(
   id: string | undefined
 ): string | null {
   if (!coachId) return null;
-  return `momentum.draft:${coachId}:${kind}:${id ?? "new"}`;
+  return `${DRAFT_PREFIX}${coachId}:${kind}:${id ?? "new"}`;
 }

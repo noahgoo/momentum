@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "../lib/auth";
 import { NAV_ITEMS, sectionForPath } from "../lib/navigation";
+import { hasDrafts } from "../lib/useDraft";
 import { useInboxCount } from "../queries/useInboxCount";
 
 export interface SidebarProps {
@@ -64,7 +65,21 @@ export function Sidebar({ className = "" }: SidebarProps) {
           <p className="truncate px-3 pb-1.5 text-xs text-[var(--ink-30)]">{profile.email}</p>
         )}
         <button
-          onClick={() => void signOut()}
+          onClick={() => {
+            // Signing out discards this device's drafts, and the unsaved-changes
+            // guard cannot warn about it — that watches anchor clicks, and this
+            // is a button.
+            if (
+              profile &&
+              hasDrafts(profile.id) &&
+              !window.confirm(
+                "You have unsaved work saved on this device. Signing out discards it."
+              )
+            ) {
+              return;
+            }
+            void signOut();
+          }}
           className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-[var(--ink-50)] transition-colors hover:bg-[var(--cream)] hover:text-[var(--ink)]"
         >
           <LogOut size={16} strokeWidth={1.8} />

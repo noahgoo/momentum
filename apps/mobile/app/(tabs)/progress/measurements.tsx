@@ -9,7 +9,10 @@ import { useClientDate } from "../../../lib/useClientDate";
 import { measurementDraftKey, useDraft } from "../../../lib/useDraft";
 import { useProfile } from "../../../lib/queries/useProfile";
 import { useBodyMeasurements } from "../../../lib/queries/useBodyMeasurements";
-import { useCreateBodyMeasurement } from "../../../lib/queries/useCreateBodyMeasurement";
+import {
+  DuplicateMeasurementError,
+  useCreateBodyMeasurement,
+} from "../../../lib/queries/useCreateBodyMeasurement";
 import { useDeleteBodyMeasurement } from "../../../lib/queries/useDeleteBodyMeasurement";
 import { BodyFatHeroCard } from "../../../components/progress/BodyFatHeroCard";
 import { MeasurementForm, type MeasurementValues } from "../../../components/progress/MeasurementForm";
@@ -106,6 +109,13 @@ export default function ProgressMeasurementsScreen() {
           setDismissedRestore(true);
         },
         onError: (err) => {
+          // A duplicate is not a transient failure and must not read as one:
+          // the entry did not save, and the form and draft stay put so the
+          // numbers are not lost.
+          if (err instanceof DuplicateMeasurementError) {
+            setFormError(err.message);
+            return;
+          }
           console.error("Failed to save measurement:", err);
           setFormError("Couldn't save. Try again.");
         },

@@ -8,19 +8,38 @@ export interface CreateBodyMeasurementInput {
   entry: BodyMeasurementCreate;
 }
 
+/** Raised when today already has an entry. `body_measurements` is one row per client per day. */
+export class DuplicateMeasurementError extends Error {
+  constructor() {
+    super("You've already logged measurements today.");
+    this.name = "DuplicateMeasurementError";
+  }
+}
+
 /**
  * The insert itself, shared with the replay default registered in
  * mutationDefaults.ts — a queued mutation is persisted as key plus variables,
  * so the function has to exist independently of this hook.
  *
- * `body_measurements` is `unique (client_id, date)`, so a replayed insert of a
- * measurement that already landed raises 23505. That is the end state the
- * write wanted, so it counts as success rather than an error the client has to
- * see (C4). A same-day re-log is prevented in the UI instead: the measurements
- * screen knows whether today already has an entry and disables submit, so this
- * path only swallows genuine duplicates.
+ * `body_measurements` is `unique (client_id, date)`, so an insert for a date
+ * that already has a row raises 23505. What that means depends entirely on who
+ * is asking, which is why the caller has to say:
+ *
+ * - **A replay** (`onDuplicate: "succeed"`) is re-sending a write that already
+ *   landed. The row it wanted exists, so this is success (C4).
+ * - **A person pressing Save** (`onDuplicate: "throw"`, the default) is sending
+ *   *different* numbers. Calling that success would report a save that never
+ *   happened and let the caller clear the form and the draft — silently
+ *   destroying what they just measured, which is exactly the failure S1 exists
+ *   to prevent.
+ *
+ * Defaulting to "throw" matters: a future caller that forgets this argument
+ * gets the safe behaviour rather than the data-destroying one.
  */
-export async function insertBodyMeasurement({ clientId, entry }: CreateBodyMeasurementInput) {
+export async function insertBodyMeasurement(
+  { clientId, entry }: CreateBodyMeasurementInput,
+  { onDuplicate }: { onDuplicate: "succeed" | "throw" } = { onDuplicate: "throw" }
+) {
   const parsed = bodyMeasurementCreateSchema.parse(entry);
   const { error } = await supabase.from("body_measurements").insert({
     client_id: clientId,
@@ -33,7 +52,12 @@ export async function insertBodyMeasurement({ clientId, entry }: CreateBodyMeasu
     arm_in: parsed.armIn ?? null,
     thigh_in: parsed.thighIn ?? null,
   });
-  if (error && error.code !== "23505") throw error;
+  if (!error) return;
+  if (error.code === "23505") {
+    if (onDuplicate === "succeed") return;
+    throw new DuplicateMeasurementError();
+  }
+  throw error;
 }
 
 /**
@@ -51,7 +75,11 @@ export function useCreateBodyMeasurement() {
 
   return useMutation({
     mutationKey: ["createBodyMeasurement"],
-    mutationFn: insertBodyMeasurement,
+    // Wrapped rather than passed directly: React Query hands the mutationFn a
+    // context object as its second argument, which would otherwise land in the
+    // options slot and decide the duplicate behaviour by accident.
+    mutationFn: (input: CreateBodyMeasurementInput) =>
+      insertBodyMeasurement(input, { onDuplicate: "throw" }),
 
     onSettled: (_data, _error, { clientId }) => {
       void queryClient.invalidateQueries({ queryKey: qk.bodyMeasurements(clientId) });

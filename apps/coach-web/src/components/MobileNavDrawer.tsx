@@ -8,14 +8,18 @@ import { Sidebar } from "./Sidebar";
  * same inbox badge — only the container differs.
  */
 export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { pathname } = useLocation();
+  // `key`, not `pathname`. Every row in here is a link, so without this the
+  // drawer stays open on top of the page it just navigated to — and keying on
+  // the path misses the case where you tap the row for the page you are already
+  // on, which is a real navigation with an unchanged path. React Router pushes
+  // a new history entry with a fresh key either way.
+  const { key } = useLocation();
 
-  // Close on navigation. Every row in here is a link, so without this the
-  // drawer stays open on top of the page it just navigated to. `onClose` must
-  // be referentially stable (the caller memoizes it) or this fires on every render.
+  // `onClose` must be referentially stable (the caller memoizes it) or this
+  // fires on every render.
   useEffect(() => {
     onClose();
-  }, [pathname, onClose]);
+  }, [key, onClose]);
 
   return (
     <MobileSheet open={open} onClose={onClose} side="left" label="Navigation">
