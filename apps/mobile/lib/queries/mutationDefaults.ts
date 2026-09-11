@@ -2,6 +2,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "../supabase";
 import type { SaveWorkoutLogInput } from "./useSaveWorkoutLog";
 import { buildSaveWorkoutLogArgs } from "./useSaveWorkoutLog";
+import {
+  insertBodyMeasurement,
+  type CreateBodyMeasurementInput,
+} from "./useCreateBodyMeasurement";
 
 /**
  * Registers mutationFns by key so paused mutations can be replayed after an
@@ -15,8 +19,9 @@ import { buildSaveWorkoutLogArgs } from "./useSaveWorkoutLog";
  *
  * Only writes that are safe to replay belong here. Every one of these is
  * idempotent server-side (R2/C4): saving a log replaces its children rather
- * than appending, and the warmup toggle sets an absolute value rather than
- * flipping one.
+ * than appending, the warmup toggle sets an absolute value rather than
+ * flipping one, and a measurement insert that collides with the row it already
+ * wrote treats the duplicate as success.
  *
  * Deliberately absent: assign_program and accept_change_request. Both depend
  * on current server state — replaying an assign made an hour ago could
@@ -55,6 +60,11 @@ export function registerMutationDefaults(queryClient: QueryClient) {
       if (error) throw new Error(error.message);
       return data;
     },
+  });
+
+  queryClient.setMutationDefaults(["createBodyMeasurement"], {
+    mutationFn: async (input: unknown) =>
+      insertBodyMeasurement(input as CreateBodyMeasurementInput),
   });
 
   queryClient.setMutationDefaults(["toggleGoalLog"], {

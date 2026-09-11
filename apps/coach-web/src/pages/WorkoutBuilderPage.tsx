@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import type { Exercise, SetConfig, WorkoutType } from "@momentum/shared";
 import { workoutCreateSchema } from "@momentum/shared";
 import { useAuth } from "../lib/auth";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import { SortableList } from "../components/builder/SortableList";
+import { RestoreBanner } from "../components/builder/RestoreBanner";
 import { ExerciseRow } from "../components/builder/ExerciseRow";
 import { defaultSetConfig } from "../components/builder/defaultSetConfig";
 import { ExerciseLibraryPanel } from "../components/exercises/ExerciseLibraryPanel";
@@ -21,6 +24,20 @@ import { parseDurationMinutes, formatDurationMinutes, parseEquipmentTags } from 
 export interface WorkoutBuilderPageProps {
   /** "warmup" builds/edits a warmup instead of a workout (hides the warmup-selector field). */
   type?: WorkoutType;
+}
+
+/**
+ * What is persisted locally between visits. Deliberately the raw form state,
+ * strings included — a draft has to survive values that are mid-typing and
+ * would not survive parsing ("1:" on the way to "1:30").
+ */
+interface WorkoutDraft {
+  name: string;
+  description: string;
+  durationStr: string;
+  equipmentStr: string;
+  warmupId: string;
+  exercises: BuilderExercise[];
 }
 
 function newClientId(): string {
@@ -81,6 +98,16 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
   /** Mobile-only: the exercise library as a bottom sheet. Ignored at `lg` and up. */
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [hydrated, setHydrated] = useState(!isEditing);
+  const [dismissedRestore, setDismissedRestore] = useState(false);
+  /** Set by any edit after hydration; what the nav guard and the draft writer key off. */
+  const [dirty, setDirty] = useState(false);
+
+  // `type` is in the key because the warmup builder is this same component on
+  // a different route — without it a warmup draft restores into a workout.
+  const draft = useDraft<WorkoutDraft>(
+    draftKey(profile?.id, type, workoutId),
+    detail?.updatedAt ?? null
+  );
 
   // Hydrate form state once the workout detail AND the exercise library have
   // loaded (edit mode only) — the library is needed to resolve each row's
@@ -108,7 +135,66 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
     setHydrated(true);
   }, [isEditing, detail, hydrated, libraryExercises]);
 
+  // Apply a restored draft *after* the server hydration above, or it would be
+  // overwritten the moment the detail query resolves. In new-workout mode
+  // `hydrated` is true from the start, so this runs immediately.
+  const appliedDraft = useRef(false);
+  useEffect(() => {
+    if (!hydrated || appliedDraft.current || !draft.restored) return;
+    appliedDraft.current = true;
+    const d = draft.restored;
+    setName(d.name);
+    setDescription(d.description);
+    setDurationStr(d.durationStr);
+    setEquipmentStr(d.equipmentStr);
+    setWarmupId(d.warmupId);
+    setExercises(d.exercises);
+    setDirty(true);
+  }, [hydrated, draft.restored]);
+
+  // Persist on change, but only once hydrated — otherwise the empty initial
+  // state is written over a real draft before it has been applied.
+  // Depends on `draft.save` rather than `draft`: the object is new every
+  // render, and re-running this each time would restart the write debounce
+  // indefinitely under any unrelated re-render. `save` is stable per key.
+  const saveDraft = draft.save;
+  useEffect(() => {
+    if (!hydrated || !dirty) return;
+    saveDraft({ name, description, durationStr, equipmentStr, warmupId, exercises });
+  }, [hydrated, dirty, name, description, durationStr, equipmentStr, warmupId, exercises, saveDraft]);
+
+  const confirmLeave = useUnsavedChangesGuard(
+    dirty,
+    "This workout has unsaved changes. They're saved on this device and will be restored when you come back. Leave anyway?"
+  );
+
+  /** Wraps a setter so every edit marks the form dirty in one place. */
+  function edit<T>(setter: (value: T) => void): (value: T) => void {
+    return (value) => {
+      setDirty(true);
+      setter(value);
+    };
+  }
+
+  function discardDraft() {
+    draft.clear();
+    setDirty(false);
+    setDismissedRestore(true);
+    // Re-run server hydration; in new-workout mode there is nothing to reload,
+    // so clear back to an empty form.
+    if (isEditing) setHydrated(false);
+    else {
+      setName("");
+      setDescription("");
+      setDurationStr("");
+      setEquipmentStr("");
+      setWarmupId("");
+      setExercises([]);
+    }
+  }
+
   function addExercise(ex: Exercise) {
+    setDirty(true);
     setExercises((prev) => [...prev, exerciseToBuilderRow(ex)]);
     // No-op on desktop, where the library is a permanent rail.
     setLibraryOpen(false);
@@ -167,11 +253,19 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
         expectedUpdatedAt: detail?.updatedAt ?? null,
       });
     } catch (error) {
+      // Deliberately does not clear the draft: a failed save is exactly when
+      // the local copy is the only one that exists.
       setSaveError(describeSaveWorkoutError(error));
       return;
     }
 
     setSaveError(null);
+    // The save landed, so the draft has served its purpose. In new-workout mode
+    // this must happen before the navigate below, which changes the key from
+    // ":new" to the saved id and would otherwise strand the draft to be offered
+    // again on the next new workout.
+    draft.clear();
+    setDirty(false);
     navigate(`${basePath}/${savedId}`, { replace: true });
   }
 
@@ -184,7 +278,9 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
       <div className="mb-6">
         <button
           type="button"
-          onClick={() => navigate(basePath)}
+          onClick={() => {
+                if (confirmLeave()) navigate(basePath);
+              }}
           className="text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
         >
           &larr; Back to {noun}s
@@ -194,6 +290,10 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
         </h1>
       </div>
 
+      {draft.didRestore && !dismissedRestore && (
+        <RestoreBanner onDiscard={discardDraft} onDismiss={() => setDismissedRestore(true)} />
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
           <div className="admin-card space-y-4 p-5">
@@ -201,7 +301,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
               <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Name</label>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => edit(setName)(e.target.value)}
                 placeholder={`e.g. Upper body strength`}
                 className={`w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)] ${
                   submitted && !name.trim() ? "border-[var(--bad)]" : "border-[var(--ink-08)]"
@@ -213,7 +313,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
               <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Description</label>
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => edit(setDescription)(e.target.value)}
                 rows={2}
                 placeholder="Optional"
                 className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
@@ -227,7 +327,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
                 </label>
                 <input
                   value={durationStr}
-                  onChange={(e) => setDurationStr(e.target.value)}
+                  onChange={(e) => edit(setDurationStr)(e.target.value)}
                   placeholder="45"
                   className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
                 />
@@ -238,7 +338,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
                   <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Warmup</label>
                   <select
                     value={warmupId}
-                    onChange={(e) => setWarmupId(e.target.value)}
+                    onChange={(e) => edit(setWarmupId)(e.target.value)}
                     className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
                   >
                     <option value="">None</option>
@@ -260,7 +360,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
               </label>
               <input
                 value={equipmentStr}
-                onChange={(e) => setEquipmentStr(e.target.value)}
+                onChange={(e) => edit(setEquipmentStr)(e.target.value)}
                 placeholder="dumbbells, bench, mat"
                 className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
               />
@@ -289,23 +389,30 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
               <SortableList
                 items={exercises}
                 getId={(ex) => ex.id}
-                onReorder={setExercises}
+                onReorder={edit(setExercises)}
                 className="space-y-3"
                 renderItem={(ex, index, dragHandleProps) => (
                   <ExerciseRow
                     item={ex}
                     index={index}
                     dragHandleProps={dragHandleProps}
-                    onChange={(next) => setExercises((prev) => prev.map((e) => (e.id === next.id ? next : e)))}
-                    onDuplicate={() =>
+                    onChange={(next) => {
+                      setDirty(true);
+                      setExercises((prev) => prev.map((e) => (e.id === next.id ? next : e)));
+                    }}
+                    onDuplicate={() => {
+                      setDirty(true);
                       setExercises((prev) => {
                         const i = prev.findIndex((e) => e.id === ex.id);
                         if (i === -1) return prev;
                         const copy: BuilderExercise = { ...ex, id: newClientId() };
                         return [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)];
-                      })
-                    }
-                    onRemove={() => setExercises((prev) => prev.filter((e) => e.id !== ex.id))}
+                      });
+                    }}
+                    onRemove={() => {
+                      setDirty(true);
+                      setExercises((prev) => prev.filter((e) => e.id !== ex.id));
+                    }}
                   />
                 )}
               />
@@ -347,7 +454,9 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate(basePath)}
+              onClick={() => {
+                if (confirmLeave()) navigate(basePath);
+              }}
               className="admin-secondary px-4 py-2 text-sm"
             >
               Cancel

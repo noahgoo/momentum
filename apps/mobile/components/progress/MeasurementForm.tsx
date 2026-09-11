@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { BodyMeasurementCreate } from "@momentum/shared";
 import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
@@ -22,11 +21,22 @@ const FIELDS: FieldSpec[] = [
   { key: "thighIn", label: "Thigh", unit: "in" },
 ];
 
+export type MeasurementValues = Record<string, string>;
+
 interface MeasurementFormProps {
   date: string;
   saving: boolean;
   error: string | null;
+  /**
+   * Held by the screen rather than here, so the entry can be persisted as a
+   * draft and cleared only once the server confirms the write — clearing it on
+   * submit lost the client's numbers whenever the save failed (S1).
+   */
+  values: MeasurementValues;
+  onChange: (values: MeasurementValues) => void;
   onSubmit: (entry: BodyMeasurementCreate) => void;
+  /** Today already has an entry. One row per client per day, so this blocks submit. */
+  alreadyLogged: boolean;
 }
 
 /**
@@ -35,13 +45,20 @@ interface MeasurementFormProps {
  * editable here — measurements are immutable once saved (constraint #10),
  * so there's no "edit a past date" flow, only "log today".
  */
-export function MeasurementForm({ date, saving, error, onSubmit }: MeasurementFormProps) {
-  const [values, setValues] = useState<Record<string, string>>({});
-
+export function MeasurementForm({
+  date,
+  saving,
+  error,
+  values,
+  onChange,
+  onSubmit,
+  alreadyLogged,
+}: MeasurementFormProps) {
   const hasAnyValue = FIELDS.some((f) => values[f.key]?.trim());
+  const canSubmit = hasAnyValue && !saving && !alreadyLogged;
 
   function handleSubmit() {
-    if (!hasAnyValue || saving) return;
+    if (!canSubmit) return;
     const entry: BodyMeasurementCreate = { date };
     for (const field of FIELDS) {
       const raw = values[field.key]?.trim();
@@ -51,7 +68,6 @@ export function MeasurementForm({ date, saving, error, onSubmit }: MeasurementFo
       }
     }
     onSubmit(entry);
-    setValues({});
   }
 
   return (
@@ -66,7 +82,7 @@ export function MeasurementForm({ date, saving, error, onSubmit }: MeasurementFo
             </Text>
             <TextInput
               value={values[field.key] ?? ""}
-              onChangeText={(text) => setValues((v) => ({ ...v, [field.key]: text }))}
+              onChangeText={(text) => onChange({ ...values, [field.key]: text })}
               placeholder="—"
               placeholderTextColor={colors.ink30}
               keyboardType="decimal-pad"
@@ -76,14 +92,19 @@ export function MeasurementForm({ date, saving, error, onSubmit }: MeasurementFo
         ))}
       </View>
 
+      {alreadyLogged && (
+        <Text style={styles.notice}>
+          You&apos;ve already logged measurements today. Delete today&apos;s entry below to re-log.
+        </Text>
+      )}
       {error && <Text style={styles.error}>{error}</Text>}
 
       <Pressable
         onPress={handleSubmit}
-        disabled={!hasAnyValue || saving}
-        style={[styles.submitButton, (!hasAnyValue || saving) && styles.submitButtonDisabled]}
+        disabled={!canSubmit}
+        style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
       >
-        <Text style={[styles.submitLabel, (!hasAnyValue || saving) && styles.submitLabelDisabled]}>
+        <Text style={[styles.submitLabel, !canSubmit && styles.submitLabelDisabled]}>
           {saving ? "Saving…" : "Save entry"}
         </Text>
       </Pressable>
@@ -111,6 +132,12 @@ const styles = StyleSheet.create({
   },
   fieldWrap: {
     width: "47%",
+  },
+  notice: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.ink50,
+    marginTop: spacing.md,
   },
   fieldLabel: {
     fontFamily: fonts.body,

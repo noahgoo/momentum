@@ -21,7 +21,13 @@ describe("offline mutation replay", () => {
   const defaults = readFileSync(join(dir, "mutationDefaults.ts"), "utf8");
   const registered = keysIn(defaults, /setMutationDefaults\(\["([^"]+)"\]/g);
 
-  const hookFiles = ["useSaveWorkoutLog", "useWarmupToggle", "useSendMessage", "useToggleGoalLog"];
+  const hookFiles = [
+    "useSaveWorkoutLog",
+    "useWarmupToggle",
+    "useSendMessage",
+    "useToggleGoalLog",
+    "useCreateBodyMeasurement",
+  ];
   const used = hookFiles
     .flatMap((f) => keysIn(readFileSync(join(dir, `${f}.ts`), "utf8"), /mutationKey: \["([^"]+)"\]/g))
     .sort();
@@ -38,6 +44,12 @@ describe("offline mutation replay", () => {
   });
 
   it("keys every hook whose write must survive going offline", () => {
-    expect(used).toEqual(["saveWorkoutLog", "sendMessage", "setWarmupCompleted", "toggleGoalLog"]);
+    expect(used).toEqual([
+      "createBodyMeasurement",
+      "saveWorkoutLog",
+      "sendMessage",
+      "setWarmupCompleted",
+      "toggleGoalLog",
+    ]);
   });
 });

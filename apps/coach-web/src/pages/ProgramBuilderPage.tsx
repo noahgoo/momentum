@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import type { DayOfWeek, ProgramPreview, WeekSchedule } from "@momentum/shared";
 import { programCreateSchema } from "@momentum/shared";
 import { useAuth } from "../lib/auth";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
+import { RestoreBanner } from "../components/builder/RestoreBanner";
 import { useWorkouts } from "../queries/useWorkouts";
 import {
   describeSaveProgramError,
@@ -14,6 +17,23 @@ import { PhaseListPanel } from "../components/programs/PhaseListPanel";
 import { PhaseEditor } from "../components/programs/PhaseEditor";
 import { WeekScheduleEditor } from "../components/programs/WeekScheduleEditor";
 import { SchedulePreview } from "../components/programs/SchedulePreview";
+
+/**
+ * What is persisted locally between visits — the whole builder state, since a
+ * program's value is mostly in the schedule rather than the two text fields.
+ * `selectedPhaseId` rides along so a restored draft reopens on the phase the
+ * coach was editing.
+ */
+interface ProgramDraft {
+  name: string;
+  description: string;
+  phased: boolean;
+  phases: BuilderPhase[];
+  selectedPhaseId: string | null;
+  flatWeeks: number;
+  flatActiveDays: DayOfWeek[];
+  flatWeekSchedule: WeekSchedule;
+}
 
 function newClientId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -64,6 +84,14 @@ export function ProgramBuilderPage() {
   const [submitted, setSubmitted] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(!isEditing);
+  const [dismissedRestore, setDismissedRestore] = useState(false);
+  /** Set by any edit after hydration; what the nav guard and the draft writer key off. */
+  const [dirty, setDirty] = useState(false);
+
+  const draft = useDraft<ProgramDraft>(
+    draftKey(profile?.id, "program", programId),
+    detail?.updatedAt ?? null
+  );
 
   useEffect(() => {
     if (!isEditing || !detail || hydrated) return;
@@ -77,6 +105,79 @@ export function ProgramBuilderPage() {
     setFlatWeekSchedule(detail.flatWeekSchedule);
     setHydrated(true);
   }, [isEditing, detail, hydrated]);
+
+  // Apply a restored draft *after* the server hydration above, or it would be
+  // overwritten the moment the detail query resolves. In new-program mode
+  // `hydrated` is true from the start, so this runs immediately.
+  const appliedDraft = useRef(false);
+  useEffect(() => {
+    if (!hydrated || appliedDraft.current || !draft.restored) return;
+    appliedDraft.current = true;
+    const d = draft.restored;
+    setName(d.name);
+    setDescription(d.description);
+    setPhased(d.phased);
+    setPhases(d.phases);
+    setSelectedPhaseId(d.selectedPhaseId);
+    setFlatWeeks(d.flatWeeks);
+    setFlatActiveDays(d.flatActiveDays);
+    setFlatWeekSchedule(d.flatWeekSchedule);
+    setDirty(true);
+  }, [hydrated, draft.restored]);
+
+  // Persist on change, but only once hydrated — otherwise the empty initial
+  // state is written over a real draft before it has been applied. Depends on
+  // `draft.save` rather than `draft`, which is a new object every render.
+  const saveDraft = draft.save;
+  useEffect(() => {
+    if (!hydrated || !dirty) return;
+    saveDraft({
+      name,
+      description,
+      phased,
+      phases,
+      selectedPhaseId,
+      flatWeeks,
+      flatActiveDays,
+      flatWeekSchedule,
+    });
+  }, [
+    hydrated,
+    dirty,
+    name,
+    description,
+    phased,
+    phases,
+    selectedPhaseId,
+    flatWeeks,
+    flatActiveDays,
+    flatWeekSchedule,
+    saveDraft,
+  ]);
+
+  const confirmLeave = useUnsavedChangesGuard(
+    dirty,
+    "This program has unsaved changes. They're saved on this device and will be restored when you come back. Leave anyway?"
+  );
+
+  function discardDraft() {
+    draft.clear();
+    setDirty(false);
+    setDismissedRestore(true);
+    // Re-run server hydration; in new-program mode there is nothing to reload,
+    // so clear back to an empty form.
+    if (isEditing) setHydrated(false);
+    else {
+      setName("");
+      setDescription("");
+      setPhased(false);
+      setPhases([]);
+      setSelectedPhaseId(null);
+      setFlatWeeks(4);
+      setFlatActiveDays([]);
+      setFlatWeekSchedule({});
+    }
+  }
 
   const selectedPhase = phases.find((p) => p.id === selectedPhaseId) ?? null;
 
@@ -94,6 +195,8 @@ export function ProgramBuilderPage() {
       );
       if (!ok) return;
     }
+
+    setDirty(true);
 
     if (next) {
       // Converting flat -> phased: clear flat state, start with one phase.
@@ -113,12 +216,14 @@ export function ProgramBuilderPage() {
   }
 
   function addPhase() {
+    setDirty(true);
     const p = newPhase(phases.length + 1);
     setPhases((prev) => [...prev, p]);
     setSelectedPhaseId(p.id);
   }
 
   function removePhase(id: string) {
+    setDirty(true);
     setPhases((prev) => {
       const next = prev.filter((p) => p.id !== id);
       if (selectedPhaseId === id) {
@@ -129,10 +234,12 @@ export function ProgramBuilderPage() {
   }
 
   function updatePhase(updated: BuilderPhase) {
+    setDirty(true);
     setPhases((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   }
 
   function toggleFlatDay(day: DayOfWeek) {
+    setDirty(true);
     const next = flatActiveDays.includes(day)
       ? flatActiveDays.filter((d) => d !== day)
       : [...flatActiveDays, day];
@@ -147,6 +254,7 @@ export function ProgramBuilderPage() {
   }
 
   function setFlatWorkout(week: number, day: DayOfWeek, workoutId: string) {
+    setDirty(true);
     setFlatWeekSchedule((prev) => ({
       ...prev,
       [String(week)]: { ...prev[String(week)], [day]: workoutId },
@@ -154,6 +262,7 @@ export function ProgramBuilderPage() {
   }
 
   function setFlatWeeksCount(raw: string) {
+    setDirty(true);
     const count = raw === "" ? 0 : Math.max(1, Math.min(52, Number(raw) || 0));
     setFlatWeeks(count);
     setFlatWeekSchedule((prev) => Object.fromEntries(Object.entries(prev).filter(([week]) => Number(week) <= count)));
@@ -231,11 +340,17 @@ export function ProgramBuilderPage() {
         expectedUpdatedAt: detail?.updatedAt ?? null,
       });
     } catch (error) {
+      // Deliberately does not clear the draft: a failed save is exactly when
+      // the local copy is the only one that exists.
       setSaveError(describeSaveProgramError(error));
       return;
     }
 
     setSaveError(null);
+    // Before the navigate below, which changes the key from ":new" to the saved
+    // id and would otherwise strand the draft to be offered again next time.
+    draft.clear();
+    setDirty(false);
     navigate(`/library/programs/${savedId}`, { replace: true });
   }
 
@@ -248,7 +363,9 @@ export function ProgramBuilderPage() {
       <div className="mb-6">
         <button
           type="button"
-          onClick={() => navigate("/library/programs")}
+          onClick={() => {
+                if (confirmLeave()) navigate("/library/programs");
+              }}
           className="text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
         >
           &larr; Back to programs
@@ -258,13 +375,20 @@ export function ProgramBuilderPage() {
         </h1>
       </div>
 
+      {draft.didRestore && !dismissedRestore && (
+        <RestoreBanner onDiscard={discardDraft} onDismiss={() => setDismissedRestore(true)} />
+      )}
+
       <div className="space-y-6">
         <div className="admin-card space-y-4 p-5">
           <div>
             <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Name</label>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setDirty(true);
+                setName(e.target.value);
+              }}
               placeholder="e.g. Foundation"
               className={`w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)] ${
                 submitted && !name.trim() ? "border-[var(--bad)]" : "border-[var(--ink-08)]"
@@ -276,7 +400,10 @@ export function ProgramBuilderPage() {
             <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Description</label>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDirty(true);
+                setDescription(e.target.value);
+              }}
               rows={2}
               placeholder="Optional"
               className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
@@ -317,7 +444,10 @@ export function ProgramBuilderPage() {
               <PhaseListPanel
                 phases={phases}
                 selectedId={selectedPhaseId}
-                onReorder={setPhases}
+                onReorder={(next) => {
+                  setDirty(true);
+                  setPhases(next);
+                }}
                 onSelect={setSelectedPhaseId}
                 onAdd={addPhase}
                 onRemove={removePhase}
@@ -372,7 +502,9 @@ export function ProgramBuilderPage() {
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate("/library/programs")}
+              onClick={() => {
+                if (confirmLeave()) navigate("/library/programs");
+              }}
               className="admin-secondary px-4 py-2 text-sm"
             >
               Cancel
