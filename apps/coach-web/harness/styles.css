@@ -1,0 +1,5 @@
+/* The app's real stylesheet, plus an explicit source root. Tailwind v4 detects
+   content from the Vite root, which here is harness/, so without the @source
+   every utility class used in ../src would be dropped from the build. */
+@import "../src/index.css";
+@source "../src";

@@ -18,7 +18,17 @@ pnpm -F coach-web build       # typecheck + production build
 pnpm -F coach-web typecheck   # tsc -b --noEmit
 pnpm -F coach-web lint        # eslint
 pnpm -F coach-web preview     # preview a production build
+pnpm -F coach-web harness     # run the app with stubbed auth + fixture data
+pnpm -F coach-web test:ui     # UI checks against that harness
 ```
+
+## Verifying UI changes
+
+There is no unit-test runner here. `harness/` boots the real components with
+stubbed auth and Supabase so a change can be rendered and checked without
+credentials — see [`harness/README.md`](harness/README.md). Run
+`pnpm -F coach-web test:ui` before handing back a change to any page,
+component, or form.
 
 ## Seeded coach login (dev/staging)
 
