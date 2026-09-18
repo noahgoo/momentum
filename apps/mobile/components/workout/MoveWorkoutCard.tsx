@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Clock3 } from "lucide-react-native";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
 import type { ChangeRequest } from "@momentum/shared";
@@ -7,6 +7,7 @@ import {
   useCreateChangeRequest,
   DuplicatePendingRequestError,
 } from "../../lib/queries/useChangeRequest";
+import { DatePickerField } from "./DatePickerField";
 
 interface MoveWorkoutCardProps {
   clientId: string;
@@ -24,10 +25,11 @@ interface MoveWorkoutCardProps {
  * brief explicitly calls out "NO cancel (no delete policy) — show waiting
  * state" once a request is pending.
  *
- * RN has no native <input type="date"> — this uses a plain YYYY-MM-DD text
- * field (validated by the shared zod schema on submit) rather than pulling
- * in a date-picker dependency for one field; a follow-up slice can swap in
- * a native picker component without touching the mutation/hook layer.
+ * The date used to be a free-text "YYYY-MM-DD" field, which made the client
+ * know the format, type it exactly, and work out which dates their program
+ * allowed. It is a calendar now (DatePickerField), clamped to the assignment
+ * window, and the mutation layer is untouched — it still receives the same
+ * string.
  */
 export function MoveWorkoutCard({
   clientId,
@@ -52,6 +54,19 @@ export function MoveWorkoutCard({
           <Text style={styles.pendingSubtitle}>Waiting on your coach to approve.</Text>
         </View>
       </View>
+    );
+  }
+
+  // On the last day of a program the window is [today, today] and the only
+  // date in it is the one the workout already sits on. The old text field just
+  // left "Send request" disabled with nothing to explain why.
+  const hasAlternativeDate = minDate < maxDate || (minDate !== fromDate && minDate <= maxDate);
+
+  if (!hasAlternativeDate) {
+    return (
+      <Text style={styles.noRoomText}>
+        There is no later date left in your program to move this to.
+      </Text>
     );
   }
 
@@ -86,20 +101,20 @@ export function MoveWorkoutCard({
   }
 
   const submitting = createChangeRequest.isPending;
-  const withinRange = toDate.length === 10 && toDate >= minDate && toDate <= maxDate;
+  const withinRange =
+    toDate.length === 10 && toDate >= minDate && toDate <= maxDate && toDate !== fromDate;
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Move this workout</Text>
       <Text style={styles.subtitle}>Pick a new date — your coach will need to approve it.</Text>
-      <TextInput
+      <DatePickerField
         value={toDate}
-        onChangeText={setToDate}
-        placeholder={`YYYY-MM-DD (${minDate} – ${maxDate})`}
-        placeholderTextColor={colors.ink30}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.dateInput}
+        minDate={minDate}
+        maxDate={maxDate}
+        excludeDate={fromDate}
+        placeholder="Choose a date"
+        onChange={setToDate}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
       <View style={styles.buttonRow}>
@@ -142,17 +157,6 @@ const styles = StyleSheet.create({
     color: colors.ink50,
     marginTop: 2,
   },
-  dateInput: {
-    marginTop: spacing.md,
-    height: 42,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: colors.ink,
-  },
   errorText: {
     fontFamily: fonts.body,
     fontSize: 12,
@@ -194,6 +198,14 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  noRoomText: {
+    marginTop: spacing.lg,
+    textAlign: "center",
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.ink50,
   },
   linkButton: {
     marginTop: spacing.lg,
