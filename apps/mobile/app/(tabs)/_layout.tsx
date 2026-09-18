@@ -1,9 +1,10 @@
 import { View, StyleSheet, type ColorValue } from "react-native";
 import { Tabs } from "expo-router";
 import { Home, Dumbbell, Target, TrendingUp, MessageCircle } from "lucide-react-native";
-import { colors, fonts } from "../../theme/tokens";
+import { colors } from "../../theme/tokens";
 import { useAuth } from "../../lib/auth";
 import { useHasUnreadMessages } from "../../lib/queries/useUnreadMessages";
+import { PillTabBar } from "../../components/PillTabBar";
 
 /** Small red dot overlaid on the Messages tab icon when there's an unread message. */
 function MessagesIcon({ color, size }: { color: ColorValue; size: number }) {
@@ -21,18 +22,13 @@ function MessagesIcon({ color, size }: { color: ColorValue; size: number }) {
 export default function TabsLayout() {
   return (
     <Tabs
+      tabBar={(props) => <PillTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.blueDeep,
-        tabBarInactiveTintColor: colors.ink30,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.line,
-        },
-        tabBarLabelStyle: {
-          fontFamily: fonts.bodyMedium,
-          fontSize: 11,
-        },
+        // No bottom padding here on purpose: the scene runs the full height so
+        // content passes UNDER the bar and the blur has the page to sample.
+        // Each screen's ScrollView leaves the room instead (useTabBarSpace).
+        sceneStyle: { backgroundColor: colors.cream },
       }}
     >
       <Tabs.Screen

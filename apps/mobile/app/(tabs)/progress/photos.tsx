@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { ChevronLeft } from "lucide-react-native";
 import { useAuth } from "../../../lib/auth";
+import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useProgressPhotos, type ProgressPhotoWithUrls } from "../../../lib/queries/useProgressPhotos";
 import { useUploadProgressPhotos } from "../../../lib/queries/useUploadProgressPhotos";
 import { useDeleteProgressPhoto } from "../../../lib/queries/useDeleteProgressPhoto";
@@ -14,6 +15,7 @@ import { colors, fonts, spacing } from "../../../theme/tokens";
 
 /** Progress photos: 3-col grid + lightbox, ported from mindful-miya's /progress/photos. */
 export default function ProgressPhotosScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const uid = session?.user.id;
 
@@ -78,7 +80,7 @@ export default function ProgressPhotosScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         <Pressable style={styles.backRow} onPress={goBack}>
           <ChevronLeft color={colors.ink50} size={16} />
           <Text style={styles.backText}>Progress</Text>
@@ -141,7 +143,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingBottom: spacing.xxl * 2,
   },
   backRow: {
     flexDirection: "row",

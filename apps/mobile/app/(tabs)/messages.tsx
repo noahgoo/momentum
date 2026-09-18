@@ -13,6 +13,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import type { Message } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
+import { useTabBarSpace } from "../../components/PillTabBar";
 import { useMyCoach } from "../../lib/queries/useMyCoach";
 import { useThread } from "../../lib/queries/useThread";
 import { useMessages } from "../../lib/queries/useMessages";
@@ -58,6 +59,7 @@ type Row = { kind: "message"; message: Message; grouped: boolean } | { kind: "se
  * `useMarkMessagesRead` batches read-receipts on screen focus.
  */
 export default function Messages() {
+  const tabBarSpace = useTabBarSpace();
   const { session, profile } = useAuth();
   const uid = session?.user.id;
   const coachId = profile?.invited_by ?? null;
@@ -195,7 +197,10 @@ export default function Messages() {
         </View>
       )}
 
-      <View style={styles.inputBar}>
+      {/* Margin, not padding: padding would stretch the composer's cream
+          background down behind the floating bar, so the blur would sample a
+          flat panel instead of the thread. */}
+      <View style={[styles.inputBar, { marginBottom: tabBarSpace }]}>
         <TextInput
           value={text}
           onChangeText={setText}

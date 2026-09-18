@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import { parseSetConfig, type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
+import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useWorkoutHistory } from "../../../lib/queries/useWorkoutHistory";
 import { DIFFICULTY_LABELS } from "../../../components/workout/DifficultyPicker";
 import { computePace, formatDuration, formatMiles, formatPace, formatTargetReps, formatTargetWeight } from "../../../components/workout/format";
@@ -33,6 +34,7 @@ function formatLogDate(dateStr: string): string {
  * Ported from mindful-miya's src/app/workout/history/page.tsx.
  */
 export default function WorkoutHistoryScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { data, isPending } = useWorkoutHistory(uid);
@@ -53,7 +55,7 @@ export default function WorkoutHistoryScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         <TouchableOpacity onPress={goBack} style={styles.backRow}>
           <ChevronLeft color={colors.ink50} size={16} />
           <Text style={styles.backText}>Program</Text>
@@ -193,7 +195,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingBottom: spacing.xxl * 2,
   },
   backRow: {
     flexDirection: "row",

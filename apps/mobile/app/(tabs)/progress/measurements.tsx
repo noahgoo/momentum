@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
 import { bodyFatFromEntry, type BodyMeasurement, type BodyMeasurementCreate } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
+import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useClientDate } from "../../../lib/useClientDate";
 import { measurementDraftKey, useDraft } from "../../../lib/useDraft";
 import { useProfile } from "../../../lib/queries/useProfile";
@@ -54,6 +55,7 @@ function entryOtherSitesLine(entry: BodyMeasurement): string {
  * immutable (constraint #10) — no edit, only delete + re-add.
  */
 export default function ProgressMeasurementsScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { today } = useClientDate();
@@ -154,7 +156,7 @@ export default function ProgressMeasurementsScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         <Pressable style={styles.backRow} onPress={goBack}>
           <ChevronLeft color={colors.ink50} size={16} />
           <Text style={styles.backText}>Progress</Text>
@@ -236,7 +238,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingBottom: spacing.xxl * 2,
   },
   backRow: {
     flexDirection: "row",

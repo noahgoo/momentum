@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../lib/auth";
+import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutWeek } from "../../../lib/queries/useWorkoutWeek";
 import { ProgressRing } from "../../../components/workout/ProgressRing";
@@ -16,6 +17,7 @@ import { colors, fonts, spacing } from "../../../theme/tokens";
  * program's start weekday rather than a fixed Monday start).
  */
 export default function WorkoutWeekScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { today: todayStr } = useClientDate();
@@ -48,7 +50,7 @@ export default function WorkoutWeekScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         <View style={styles.headerRow}>
           <ProgressRing percent={data.percentElapsed} />
           <View style={styles.headerText}>
@@ -141,7 +143,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingBottom: spacing.xxl * 2,
   },
   emptyState: {
     flex: 1,

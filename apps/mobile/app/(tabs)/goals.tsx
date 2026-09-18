@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { dateStr, type Goal } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
+import { useTabBarSpace } from "../../components/PillTabBar";
 import { useClientDate } from "../../lib/useClientDate";
 import { useGoals } from "../../lib/queries/useGoals";
 import { useGoalLogsRange } from "../../lib/queries/useGoalLogsRange";
@@ -54,6 +55,7 @@ function headerDateLabel(): string {
 }
 
 export default function GoalsScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { session, profile } = useAuth();
   const uid = session?.user.id;
 
@@ -140,7 +142,10 @@ export default function GoalsScreen() {
       {/* keyboardShouldPersistTaps: with the inline add-goal input focused,
           the default ("never") makes the first tap on a goal row only dismiss
           the keyboard — the row never toggles. */}
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Header */}
         <View style={styles.headerRow}>
           <View>

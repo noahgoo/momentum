@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { User } from "lucide-react-native";
 import { colors, fonts, italicOverhang, shadows } from "../../theme/tokens";
 
 interface GreetingHeaderProps {
@@ -16,12 +17,6 @@ function todayLabel(): string {
   return new Date()
     .toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
     .toUpperCase();
-}
-
-/** First letter of the display name, or a neutral glyph before it loads. */
-function initial(firstName: string): string {
-  const letter = firstName.trim().charAt(0);
-  return letter ? letter.toUpperCase() : "·";
 }
 
 /**
@@ -56,7 +51,7 @@ export function GreetingHeader({ firstName }: GreetingHeaderProps) {
         accessibilityLabel="Profile and settings"
         style={({ pressed }) => [styles.avatar, shadows.cardSubtle, pressed && styles.avatarPressed]}
       >
-        <Text style={styles.avatarInitial}>{initial(firstName)}</Text>
+        <User color={colors.ink70} size={24} strokeWidth={1.75} />
       </Pressable>
     </View>
   );
@@ -102,9 +97,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
@@ -112,10 +107,5 @@ const styles = StyleSheet.create({
   },
   avatarPressed: {
     backgroundColor: colors.creamDeep,
-  },
-  avatarInitial: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 15,
-    color: colors.ink,
   },
 });

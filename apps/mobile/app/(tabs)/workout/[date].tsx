@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { OfflineBanner } from "../../../components/OfflineBanner";
+import { useTabBarSpace } from "../../../components/PillTabBar";
 import { ChevronLeft, Check } from "lucide-react-native";
 import { type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
@@ -29,6 +30,7 @@ function formatHeader(value: string): string {
 }
 
 export default function WorkoutDayScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { date: dateParam } = useLocalSearchParams<{ date: string }>();
   const { session, profile } = useAuth();
   const uid = session?.user.id;
@@ -89,7 +91,7 @@ export default function WorkoutDayScreen() {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
         <OfflineBanner />
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
           {BackHeader}
           <Text style={styles.eyebrow}>{formatHeader(dateParam)}</Text>
           <View style={[styles.card, shadows.cardSubtle, styles.restDayCard]}>
@@ -104,7 +106,7 @@ export default function WorkoutDayScreen() {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
         <OfflineBanner />
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
           {BackHeader}
           <View style={styles.doneHero}>
             <Check color={colors.cream} size={28} strokeWidth={2.5} />
@@ -124,7 +126,7 @@ export default function WorkoutDayScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         {BackHeader}
 
         <View style={[styles.headerCard]}>
@@ -219,7 +221,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingBottom: spacing.xxl * 2,
   },
   loadingState: {
     flex: 1,

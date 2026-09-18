@@ -36,6 +36,14 @@ export const colors = {
 
   surface: "#FFFFFF",
   surfaceSoft: "rgba(255,255,255,0.72)",
+
+  /**
+   * Wash laid over the nav bar's blur. Sits a step below both the cream page
+   * and the white cards so the bar reads as its own surface rather than more
+   * of the same — the whole reason it was hard to see. Raise the alpha to
+   * darken it further; this is the knob to turn by eye.
+   */
+  navWash: "rgba(214,206,196,0.55)",
 } as const;
 
 export const radii = {

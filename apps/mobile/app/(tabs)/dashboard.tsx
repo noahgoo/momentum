@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type Goal } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
+import { useTabBarSpace } from "../../components/PillTabBar";
 import { useProfile } from "../../lib/queries/useProfile";
 import { useClientDate } from "../../lib/useClientDate";
 import { useTodayWorkout } from "../../lib/queries/useTodayWorkout";
@@ -30,6 +31,7 @@ import { colors, fonts, spacing } from "../../theme/tokens";
  *   yesterday's-feel eligibility, friends summary, photos/measurements.
  */
 export default function Dashboard() {
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { today: todayStr } = useClientDate();
@@ -55,7 +57,7 @@ export default function Dashboard() {
   if (isPending) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
           <DashboardSkeleton />
         </ScrollView>
       </SafeAreaView>
@@ -94,7 +96,7 @@ export default function Dashboard() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         <GreetingHeader firstName={firstName} />
 
         <MotivationCard motivation={dashboard.motivation} />

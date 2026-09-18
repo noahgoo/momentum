@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronRight, Camera, Ruler } from "lucide-react-native";
 import { useAuth } from "../../../lib/auth";
+import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useStreak } from "../../../lib/queries/useStreak";
 import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../../theme/tokens";
 
@@ -13,13 +14,14 @@ import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../..
  * sub-screen-via-stack convention (see workout/_layout.tsx).
  */
 export default function ProgressHomeScreen() {
+  const tabBarSpace = useTabBarSpace();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { data: streak, isPending } = useStreak(uid);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
         <Text style={styles.eyebrow}>PROGRESS</Text>
         <Text style={styles.title}>Your Journey</Text>
 
@@ -72,7 +74,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
-    paddingBottom: spacing.xxl * 2,
   },
   eyebrow: {
     fontFamily: fonts.bodySemiBold,
