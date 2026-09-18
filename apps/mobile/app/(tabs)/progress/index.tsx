@@ -1,9 +1,10 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronRight, Camera, Ruler } from "lucide-react-native";
 import { useAuth } from "../../../lib/auth";
 import { useTabBarSpace } from "../../../components/PillTabBar";
+import { usePullToRefresh } from "../../../lib/usePullToRefresh";
 import { useStreak } from "../../../lib/queries/useStreak";
 import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../../theme/tokens";
 
@@ -15,13 +16,19 @@ import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../..
  */
 export default function ProgressHomeScreen() {
   const tabBarSpace = useTabBarSpace();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { data: streak, isPending } = useStreak(uid);
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blueDeep} />
+        }
+      >
         <Text style={styles.eyebrow}>PROGRESS</Text>
         <Text style={styles.title}>Your Journey</Text>
 

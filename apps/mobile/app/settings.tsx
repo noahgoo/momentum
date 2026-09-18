@@ -1,8 +1,9 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useAuth } from "../lib/auth";
+import { usePullToRefresh } from "../lib/usePullToRefresh";
 import { useProfile } from "../lib/queries/useProfile";
 import { useChangeRequestHistory } from "../lib/queries/useChangeRequestHistory";
 import { ProfileCard } from "../components/settings/ProfileCard";
@@ -15,6 +16,7 @@ import { colors, fonts, spacing } from "../theme/tokens";
 
 export default function Settings() {
   const { session, signOut } = useAuth();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const uid = session?.user.id;
 
   // Read through the query hook (not auth-context `profile`) so every card's
@@ -36,6 +38,9 @@ export default function Settings() {
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blueDeep} />
+        }
       >
         <Pressable style={styles.backRow} onPress={goBack} hitSlop={8} accessibilityRole="button">
           <ChevronLeft color={colors.ink50} size={16} />

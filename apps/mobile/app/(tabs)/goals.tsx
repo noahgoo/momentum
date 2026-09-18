@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { dateStr, type Goal } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
 import { useTabBarSpace } from "../../components/PillTabBar";
+import { usePullToRefresh } from "../../lib/usePullToRefresh";
 import { useClientDate } from "../../lib/useClientDate";
 import { useGoals } from "../../lib/queries/useGoals";
 import { useGoalLogsRange } from "../../lib/queries/useGoalLogsRange";
@@ -56,6 +58,7 @@ function headerDateLabel(): string {
 
 export default function GoalsScreen() {
   const tabBarSpace = useTabBarSpace();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { session, profile } = useAuth();
   const uid = session?.user.id;
 
@@ -145,6 +148,9 @@ export default function GoalsScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blueDeep} />
+        }
       >
         {/* Header */}
         <View style={styles.headerRow}>

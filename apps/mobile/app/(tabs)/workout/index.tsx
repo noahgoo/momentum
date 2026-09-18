@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, RefreshControl, ScrollView, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../lib/auth";
 import { useTabBarSpace } from "../../../components/PillTabBar";
+import { usePullToRefresh } from "../../../lib/usePullToRefresh";
 import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutWeek } from "../../../lib/queries/useWorkoutWeek";
 import { ProgressRing } from "../../../components/workout/ProgressRing";
@@ -18,6 +19,7 @@ import { colors, fonts, spacing } from "../../../theme/tokens";
  */
 export default function WorkoutWeekScreen() {
   const tabBarSpace = useTabBarSpace();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { session } = useAuth();
   const uid = session?.user.id;
   const { today: todayStr } = useClientDate();
@@ -50,7 +52,12 @@ export default function WorkoutWeekScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.blueDeep} />
+        }
+      >
         <View style={styles.headerRow}>
           <ProgressRing percent={data.percentElapsed} />
           <View style={styles.headerText}>
