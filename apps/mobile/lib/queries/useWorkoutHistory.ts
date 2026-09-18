@@ -7,7 +7,9 @@ import type { WorkoutLogWithChildren } from "./useWorkoutDay";
 
 export interface WorkoutHistoryResult {
   logs: WorkoutLogWithChildren[];
-  workoutsById: Map<string, Workout>;
+  /** Plain object, not a Map — see useDashboard.completedGoalIds: a Map does
+   * not survive the persister's JSON round trip either. */
+  workoutsById: Record<string, Workout>;
 }
 
 /**
@@ -47,7 +49,7 @@ export function useWorkoutHistory(uid: string | undefined) {
 
       return {
         logs: (logs ?? []) as WorkoutLogWithChildren[],
-        workoutsById: new Map((workouts ?? []).map((w) => [w.id, w])),
+        workoutsById: Object.fromEntries((workouts ?? []).map((w) => [w.id, w])),
       };
     },
   });

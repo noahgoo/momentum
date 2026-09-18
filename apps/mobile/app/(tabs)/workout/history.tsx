@@ -79,7 +79,7 @@ export default function WorkoutHistoryScreen() {
 
         <View style={styles.list}>
           {visible.map((log) => {
-            const workout = log.workout_id ? data?.workoutsById.get(log.workout_id) : undefined;
+            const workout = log.workout_id ? data?.workoutsById[log.workout_id] : undefined;
             const open = openId === log.id;
             return (
               <View key={log.id} style={[styles.entryCard, shadows.cardSubtle]}>

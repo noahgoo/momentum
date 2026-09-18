@@ -32,7 +32,14 @@ export interface DashboardResult {
   /** Weekly coach entry, or this client's profile override when one is live. */
   motivation: ResolvedMotivation | null;
   goals: Goal[];
-  completedGoalIds: Set<string>;
+  /**
+   * Goal ids completed today. A plain array, NOT a Set: this result is written
+   * to AsyncStorage by the cache persister, and JSON.stringify turns a Set
+   * into `{}` — so after a restart every `.has` on it threw "undefined is not
+   * a function". Anything stored in query data has to survive a JSON round
+   * trip.
+   */
+  completedGoalIds: string[];
   /** Yesterday's workout_log row, only the fields the feel prompt needs. */
   showFeelPrompt: boolean;
   friends: DashboardFriendSummary;
@@ -78,7 +85,7 @@ export function useDashboard(
       return {
         motivation: resolveMotivation(override, weeklyMotivation, todayStr),
         goals,
-        completedGoalIds: new Set(todayGoalLogs.map((log) => log.goal_id)),
+        completedGoalIds: todayGoalLogs.map((log) => log.goal_id),
         showFeelPrompt: Boolean(yesterdayLog?.completed) && yesterdayLog?.next_day_feel == null,
         friends,
         photos,

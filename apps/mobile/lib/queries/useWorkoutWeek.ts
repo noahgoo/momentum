@@ -5,7 +5,11 @@ import { qk } from "./keys";
 import { deriveDayState, type DayState } from "../../components/workout/dayState";
 
 export interface WorkoutWeekDay {
-  date: Date;
+  /**
+   * No Date object here. This result is persisted to AsyncStorage, and a Date
+   * survives JSON.stringify only as a string — so after a restart any method
+   * call on it threw. `dateStr` is the stored form; render from that.
+   */
   dateStr: string;
   workout: Workout | null;
   state: DayState;
@@ -141,7 +145,6 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
         const inRange = ds >= startDateStr && ds <= endDateStr;
 
         return {
-          date,
           dateStr: ds,
           workout,
           state: deriveDayState({

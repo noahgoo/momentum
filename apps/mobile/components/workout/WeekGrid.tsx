@@ -62,7 +62,12 @@ function cellBorderColor(state: DayState): string {
   }
 }
 
-function dateLabel(date: Date): string {
+/**
+ * Midday, not midnight: parsing "2026-09-18" as UTC midnight renders as the
+ * previous day anywhere west of Greenwich. Matches goals.tsx.
+ */
+function dateLabel(dateStr: string): string {
+  const date = new Date(`${dateStr}T12:00:00`);
   const dayAbbrev = date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
   const monthDay = date.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
   return `${dayAbbrev} · ${monthDay}`;
@@ -79,7 +84,7 @@ export function WeekGrid({ days }: WeekGridProps) {
       {days.map((day) => {
         const { state } = day;
         const dark = state === "today" || state === "future";
-        const label = dateLabel(day.date);
+        const label = dateLabel(day.dateStr);
 
         if (state === "outOfRange") {
           return (

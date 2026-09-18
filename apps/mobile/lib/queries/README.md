@@ -22,6 +22,30 @@ and `useToggleGoalLog.ts` first — they're the exemplars.
   already constructed with it in `lib/supabase.ts`) — every `.from(...)`
   call is typed automatically. Don't cast query results with `as`.
 
+## What a query may return
+
+Everything a `queryFn` returns is written to AsyncStorage by the cache
+persister (`lib/queryClient.ts`), which serializes with `JSON.stringify`. So a
+query result must survive a JSON round trip:
+
+- **No `Set`.** Use `string[]` and `.includes()`. `JSON.stringify(new Set())`
+  is `{}`.
+- **No `Map`.** Use a plain object and `Object.fromEntries(...)`.
+- **No `Date`.** Store the `YYYY-MM-DD` string and parse at the point of
+  display (`new Date(\`${dateStr}T12:00:00\`)` — midday, so the label does not
+  slip a day west of Greenwich).
+- Build the rich structure in the component if you need one; keep the cached
+  value plain.
+
+Getting this wrong is invisible until a cold start, and the crash surfaces in a
+component rather than in the hook that caused it. All three mistakes above
+shipped at once and took down the dashboard with
+`completedGoalIds.has is not a function`. `persistedShape.test.ts` pins it.
+
+When a persisted shape does change incompatibly, bump `PERSIST_BUSTER` in
+`lib/queryClient.ts` in the same commit — caches already on devices are
+rehydrated into the new code otherwise.
+
 ## Optimistic mutations
 
 Shape (see `useToggleGoalLog.ts`):

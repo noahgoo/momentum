@@ -16,7 +16,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { AuthProvider } from "../lib/auth";
 import { supabase } from "../lib/supabase";
-import { persister, queryClient } from "../lib/queryClient";
+import { PERSIST_BUSTER, persister, queryClient } from "../lib/queryClient";
 import { TimezoneSyncGate } from "../components/TimezoneSyncGate";
 
 void SplashScreen.preventAutoHideAsync();
@@ -66,7 +66,7 @@ export default function RootLayout() {
   return (
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={{ persister }}
+      persistOptions={{ persister, buster: PERSIST_BUSTER }}
       // Fires once the persisted cache has been restored. Writes made offline
       // are paused mutations until something resumes them; without this a
       // client's logged workout would sit in storage indefinitely.

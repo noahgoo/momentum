@@ -78,7 +78,7 @@ export default function Dashboard() {
 
   function handleToggleGoal(goal: Goal) {
     if (!uid) return;
-    const isLogged = dashboard!.completedGoalIds.has(goal.id);
+    const isLogged = dashboard!.completedGoalIds.includes(goal.id);
     toggleGoalLog.mutate({
       goal: { id: goal.id, text: goal.text },
       clientId: uid,

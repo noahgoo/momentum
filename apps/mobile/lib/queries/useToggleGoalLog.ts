@@ -102,9 +102,11 @@ export function useToggleGoalLog() {
       // visually dead for the whole round trip.
       queryClient.setQueryData<DashboardResult>(dashboardKey, (current) => {
         if (!current) return current;
-        const completedGoalIds = new Set(current.completedGoalIds);
-        if (isLogged) completedGoalIds.delete(goal.id);
-        else completedGoalIds.add(goal.id);
+        const completedGoalIds = isLogged
+          ? current.completedGoalIds.filter((id) => id !== goal.id)
+          : current.completedGoalIds.includes(goal.id)
+            ? current.completedGoalIds
+            : [...current.completedGoalIds, goal.id];
         return { ...current, completedGoalIds };
       });
 

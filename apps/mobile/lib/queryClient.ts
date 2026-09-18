@@ -49,6 +49,19 @@ registerMutationDefaults(queryClient);
  * The cache is written to AsyncStorage so a cold start with no signal paints
  * the last-known workout instead of a spinner (violation S-2).
  */
+/**
+ * Bump when a persisted query's SHAPE changes incompatibly. A stored cache
+ * whose buster differs is discarded instead of rehydrated.
+ *
+ * v2: dashboard/history/week results held a Set, a Map and Date objects.
+ * JSON.stringify writes those as `{}`, `{}` and a string, so a cold start
+ * restored them without their methods and the dashboard crashed on
+ * `completedGoalIds.has`. The shapes are plain JSON now, but caches written
+ * by the old build are still on devices and would crash the fixed code the
+ * same way — this is what drops them.
+ */
+export const PERSIST_BUSTER = "v2-json-safe-query-data";
+
 export const persister = createAsyncStoragePersister({
   storage: AsyncStorage,
   key: "momentum.queryCache",

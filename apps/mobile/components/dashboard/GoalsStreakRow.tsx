@@ -5,7 +5,7 @@ import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../th
 
 interface GoalsStreakRowProps {
   goals: Goal[];
-  completedGoalIds: Set<string>;
+  completedGoalIds: string[];
   onToggleGoal: (goal: Goal) => void;
   streak: number;
 }
@@ -17,7 +17,7 @@ export function GoalsStreakRow({
   onToggleGoal,
   streak,
 }: GoalsStreakRowProps) {
-  const completedCount = goals.filter((goal) => completedGoalIds.has(goal.id)).length;
+  const completedCount = goals.filter((goal) => completedGoalIds.includes(goal.id)).length;
 
   return (
     <View style={styles.row}>
@@ -36,7 +36,7 @@ export function GoalsStreakRow({
         ) : (
           <View style={styles.goalsList}>
             {goals.map((goal) => {
-              const done = completedGoalIds.has(goal.id);
+              const done = completedGoalIds.includes(goal.id);
               return (
                 <TouchableOpacity
                   key={goal.id}
