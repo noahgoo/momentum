@@ -28,6 +28,7 @@ export function FindFriendsSection({ friendships }: FindFriendsSectionProps) {
   const { data: siblings = [], isLoading } = useCoachSiblings(uid);
   const sendRequest = useSendFriendRequest();
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const connectedIds = new Set(
     friendships.map((f) => (f.client_id === uid ? f.friend_id : f.client_id))
@@ -37,15 +38,30 @@ export function FindFriendsSection({ friendships }: FindFriendsSectionProps) {
   function handleAdd(friendId: string) {
     if (!uid) return;
     setPendingId(friendId);
+    setError(null);
     sendRequest.mutate(
       { friendId, clientId: uid },
-      { onSettled: () => setPendingId(null) }
+      {
+        // Without this the spinner just stopped and nothing else happened —
+        // the failure was invisible, which is how a policy that refused EVERY
+        // request went unnoticed (0029).
+        onError: (err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setError(
+            message.includes("friends_must_share_coach")
+              ? "You can only add clients who share your coach."
+              : "Couldn't send that request. Check your connection and try again."
+          );
+        },
+        onSettled: () => setPendingId(null),
+      }
     );
   }
 
   return (
     <View style={styles.card}>
       <Text style={styles.label}>FIND FRIENDS</Text>
+      {error && <Text style={styles.error}>{error}</Text>}
       {isLoading ? (
         <ActivityIndicator size="small" color={colors.ink30} style={styles.loading} />
       ) : available.length === 0 ? (
@@ -83,6 +99,13 @@ export function FindFriendsSection({ friendships }: FindFriendsSectionProps) {
 }
 
 const styles = StyleSheet.create({
+  error: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.bad,
+    marginTop: spacing.sm,
+    lineHeight: 16,
+  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,
