@@ -68,10 +68,18 @@ export default function ProgressPhotosScreen() {
     );
   }
 
+  // Pop rather than push: pushing the parent route again animates
+  // FORWARD on what reads as a back gesture, and grows the stack every
+  // time. canGoBack guards a cold start straight onto this route.
+  function goBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/progress");
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable style={styles.backRow} onPress={() => router.push("/(tabs)/progress")}>
+        <Pressable style={styles.backRow} onPress={goBack}>
           <ChevronLeft color={colors.ink50} size={16} />
           <Text style={styles.backText}>Progress</Text>
         </Pressable>
