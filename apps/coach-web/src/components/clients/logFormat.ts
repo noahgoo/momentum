@@ -11,6 +11,15 @@ import type { SetConfig, WorkoutDifficulty } from "@momentum/shared";
  * panel's only consumer.
  */
 
+/**
+ * Display string for prescribed target reps, e.g. "10" or "10 /side".
+ * `??` not `||`: a prescribed 0 is real and must not become an em dash (P5).
+ */
+export function formatTargetReps(cfg: SetConfig | undefined): string {
+  if (cfg?.reps == null) return "—";
+  return cfg.perSide ? `${cfg.reps} /side` : `${cfg.reps}`;
+}
+
 /** Display string for a coach-prescribed target weight, e.g. "135" or "60 kg". */
 export function formatTargetWeight(cfg: SetConfig | undefined): string {
   if (cfg?.weight == null) return "—";

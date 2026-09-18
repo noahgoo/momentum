@@ -344,9 +344,12 @@ begin
     60
   where not exists (select 1 from public.workout_exercises where workout_id = w1_fullbody and sort_order = 2);
 
+  -- per_side: "10 reps on EACH side". Stored per set, authored per exercise.
+  -- weight_delta: target is the client's last logged weight for the SAME set
+  -- number, +5 lbs — blank until they have logged one (see 0027).
   insert into public.workout_exercises (workout_id, exercise_id, sort_order, mode, set_configs, rest_seconds)
   select w1_fullbody, ex1_row, 3, 'reps',
-    '[{"reps":10,"weight":20,"weight_unit":"lbs"},{"reps":10,"weight":20,"weight_unit":"lbs"},{"reps":10,"weight":20,"weight_unit":"lbs"}]'::jsonb,
+    '[{"reps":10,"weight":20,"weight_unit":"lbs","per_side":true},{"reps":10,"weight":20,"weight_unit":"lbs","per_side":true},{"reps":10,"weight_delta":5,"weight_unit":"lbs"}]'::jsonb,
     60
   where not exists (select 1 from public.workout_exercises where workout_id = w1_fullbody and sort_order = 3);
 

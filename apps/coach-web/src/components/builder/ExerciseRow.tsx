@@ -16,14 +16,46 @@ const MODE_LABELS: Record<ExerciseMode, string> = {
 const MODES: ExerciseMode[] = ["reps", "time", "distance"];
 const WEIGHT_UNITS: WeightUnit[] = ["lbs", "kg"];
 
-/** Renders one set's row summary text, e.g. "3 x 10", "3 x 0:45", "3 x 1 mi". */
+/** Increments a coach can set for a "from last weight" target. */
+const WEIGHT_DELTAS = [0, 2.5, 5, 10, 15, 20, -5, -10];
+
+function formatDelta(delta: number, unit: WeightUnit): string {
+  if (delta === 0) return `Hold last ${unit}`;
+  return `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${unit}`;
+}
+
+/**
+ * Drops a key entirely rather than setting it to undefined. `serializeSetConfig`
+ * gates on `!== undefined`, so an explicit undefined would be omitted from the
+ * jsonb anyway — but leaving it on the in-memory config makes `weightDelta in
+ * cfg` and Object.keys disagree with what is stored, and the SQL shape check
+ * rejects a literal null. Removing it keeps the two representations identical.
+ */
+function omit<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K> {
+  const next = { ...obj };
+  delete next[key];
+  return next;
+}
+
+/** Renders one set's row summary text, e.g. "3 x 10 /side · last +5 lbs". */
 function prescriptionSummary(mode: ExerciseMode, configs: SetConfig[]): string {
   if (configs.length === 0) return "—";
   const format = (cfg: SetConfig) =>
     mode === "time" ? formatDuration(cfg.seconds) : mode === "distance" ? formatMiles(cfg.miles) : String(cfg.reps ?? "-");
   const first = format(configs[0]!);
   const uniform = configs.every((cfg) => format(cfg) === first);
-  return uniform ? `${configs.length} x ${first}` : `${configs.length} sets (mixed)`;
+  const base = uniform ? `${configs.length} x ${first}` : `${configs.length} sets (mixed)`;
+
+  const perSide = mode === "reps" && configs.some((cfg) => cfg.perSide);
+  const delta = configs[0]?.weightDelta;
+  const unit = configs[0]?.weightUnit ?? "lbs";
+
+  return [
+    perSide ? `${base} /side` : base,
+    delta !== undefined ? `last ${formatDelta(delta, unit)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export interface ExerciseRowProps {
@@ -47,6 +79,9 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
   const [expanded, setExpanded] = useState(false);
   const configs = item.setConfigs;
   const unit: WeightUnit = configs[0]?.weightUnit ?? "lbs";
+  const perSide = configs.some((cfg) => cfg.perSide);
+  const weightDelta = configs[0]?.weightDelta;
+  const usesIncrement = weightDelta !== undefined;
 
   function updateSet(setIdx: number, patch: Partial<SetConfig>) {
     onChange({
@@ -80,6 +115,33 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
     onChange({
       ...item,
       setConfigs: configs.map((cfg) => ({ ...cfg, weightUnit: nextUnit })),
+    });
+  }
+
+  // Per-exercise in the UI, per-set in storage — the same shape as the weight
+  // unit above. No real exercise is unilateral for only set 2.
+  function changePerSide(next: boolean) {
+    onChange({
+      ...item,
+      setConfigs: configs.map((cfg) => (next ? { ...cfg, perSide: true } : omit(cfg, "perSide"))),
+    });
+  }
+
+  /**
+   * Toggling the increment on/off only ever touches `weightDelta`. The fixed
+   * `weight` is deliberately left alone: the delta takes precedence while it
+   * is set, so the coach's original number survives any amount of flipping —
+   * including across a save — and comes back untouched when they turn it off.
+   */
+  function changeWeightDelta(next: number | undefined) {
+    onChange({
+      ...item,
+      setConfigs: configs.map((cfg) =>
+        next === undefined
+          ? omit(cfg, "weightDelta")
+          // P6: a delta is a weight too, so its unit must travel with it.
+          : { ...cfg, weightDelta: next, weightUnit: cfg.weightUnit ?? unit },
+      ),
     });
   }
 
@@ -199,6 +261,75 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
             </div>
           )}
 
+          {item.mode === "reps" && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--ink-50)]">Each side</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={perSide}
+                aria-label="Reps are per side"
+                onClick={() => changePerSide(!perSide)}
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  perSide ? "bg-[var(--ink)]" : "bg-[var(--ink-08)]"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    perSide ? "translate-x-[22px]" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+
+          {item.mode !== "distance" && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-[var(--ink-50)]">
+                Target from last weight
+              </span>
+              <div className="flex items-center gap-2">
+                {usesIncrement && (
+                  <select
+                    value={String(weightDelta)}
+                    onChange={(e) => changeWeightDelta(Number(e.target.value))}
+                    aria-label="Increment from last weight"
+                    className="rounded-lg border border-[var(--ink-08)] bg-white px-2 py-1 text-xs outline-none focus:border-[var(--blue-deep)]"
+                  >
+                    {WEIGHT_DELTAS.map((d) => (
+                      <option key={d} value={String(d)}>
+                        {formatDelta(d, unit)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={usesIncrement}
+                  aria-label="Target from last weight"
+                  onClick={() => changeWeightDelta(usesIncrement ? undefined : 5)}
+                  className={`relative h-6 w-11 flex-none rounded-full transition-colors ${
+                    usesIncrement ? "bg-[var(--ink)]" : "bg-[var(--ink-08)]"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      usesIncrement ? "translate-x-[22px]" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {usesIncrement && (
+            <p className="text-[11px] leading-snug text-[var(--ink-50)]">
+              Each set targets the client&apos;s last logged weight for that set,{" "}
+              {formatDelta(weightDelta!, unit).toLowerCase()}. Blank until they have logged one.
+            </p>
+          )}
+
           <div>
             <div className="mb-1.5 grid grid-cols-[32px_1fr_1fr_24px] gap-2">
               <div className="text-center text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">SET</div>
@@ -245,6 +376,13 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                     placeholder="8:30"
                     className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-2 py-1.5 text-sm outline-none focus:border-[var(--blue-deep)]"
                   />
+                ) : usesIncrement ? (
+                  // A per-set absolute weight means nothing while the target is
+                  // relative — an editable field here would invite the coach to
+                  // type a number that is silently ignored.
+                  <span className="truncate rounded-lg border border-dashed border-[var(--ink-08)] bg-[var(--paper)] px-2 py-1.5 text-sm text-[var(--ink-50)]">
+                    Last {formatDelta(cfg.weightDelta ?? 0, unit)}
+                  </span>
                 ) : (
                   <NumericInput
                     value={cfg.weight}

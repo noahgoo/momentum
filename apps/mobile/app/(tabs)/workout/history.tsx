@@ -7,7 +7,7 @@ import { parseSetConfig, type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
 import { useWorkoutHistory } from "../../../lib/queries/useWorkoutHistory";
 import { DIFFICULTY_LABELS } from "../../../components/workout/DifficultyPicker";
-import { computePace, formatDuration, formatMiles, formatPace, formatTargetWeight } from "../../../components/workout/format";
+import { computePace, formatDuration, formatMiles, formatPace, formatTargetReps, formatTargetWeight } from "../../../components/workout/format";
 import { colors, fonts, radii, spacing, shadows } from "../../../theme/tokens";
 
 const COLLAPSED_COUNT = 15;
@@ -43,10 +43,18 @@ export default function WorkoutHistoryScreen() {
   const logs = data?.logs ?? [];
   const visible = showAll ? logs : logs.slice(0, COLLAPSED_COUNT);
 
+  // Pop rather than push: pushing the parent route again animates
+  // FORWARD on what reads as a back gesture, and grows the stack every
+  // time. canGoBack guards a cold start straight onto this route.
+  function goBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/workout");
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity onPress={() => router.push("/(tabs)/workout")} style={styles.backRow}>
+        <TouchableOpacity onPress={goBack} style={styles.backRow}>
           <ChevronLeft color={colors.ink50} size={16} />
           <Text style={styles.backText}>Program</Text>
         </TouchableOpacity>
@@ -144,7 +152,14 @@ export default function WorkoutHistoryScreen() {
                                     ? pace != null
                                       ? `${formatPace(pace)}/mi`
                                       : "—"
-                                    : (set.reps ?? "—")}
+                                    : // "/side" qualifies what the rep count
+                                      // MEANS, so it belongs on the logged
+                                      // number too — taken from the snapshot,
+                                      // never the live workout.
+                                      formatTargetReps({
+                                        reps: set.reps ?? undefined,
+                                        perSide: targetCfg.perSide,
+                                      })}
                               </Text>
                               <Text style={{ color: set.completed ? colors.ok : colors.ink30, fontSize: 12 }}>
                                 {set.completed ? "✓" : "✗"}

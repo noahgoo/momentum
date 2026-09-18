@@ -23,8 +23,17 @@ export function convertSetConfigs(
     const base = defaultSetConfig(toMode, cfg.weightUnit);
     if (toMode === "distance") return base;
     if (fromMode === "distance") return base;
-    // reps <-> time: carry weight/weightUnit forward, reset the prescription value.
-    return { ...base, weight: cfg.weight, weightUnit: cfg.weightUnit ?? base.weightUnit };
+    // reps <-> time: carry weight/weightUnit forward, reset the prescription
+    // value. weightDelta travels with the weight it modifies; perSide does NOT
+    // — "10 reps each side" has no meaning as a duration, and leaving it set
+    // would print "/side" next to a stopwatch.
+    return {
+      ...base,
+      weight: cfg.weight,
+      weightUnit: cfg.weightUnit ?? base.weightUnit,
+      ...(cfg.weightDelta !== undefined ? { weightDelta: cfg.weightDelta } : {}),
+      ...(toMode === "reps" && cfg.perSide ? { perSide: true } : {}),
+    };
   });
 }
 

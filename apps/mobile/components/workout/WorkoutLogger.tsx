@@ -6,7 +6,12 @@ import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
 import type { WorkoutExerciseWithName, ExerciseLogWithSets } from "../../lib/queries/useWorkoutDay";
 import { useSaveWorkoutLog, type ExerciseLogInput, type SetLogInput } from "../../lib/queries/useSaveWorkoutLog";
 import { useWorkoutDraft } from "../../lib/useWorkoutDraft";
-import { computePace, formatDuration, formatMiles, formatPace, formatTargetWeight, parseDuration } from "./format";
+import { computePace, formatDuration, formatMiles, formatPace, formatTargetReps, formatTargetWeight, parseDuration } from "./format";
+import {
+  lastWeightsForExercise,
+  resolvedSetConfig,
+  type LastSetWeights,
+} from "./resolveTargetWeight";
 
 /** How long after checking a set off to push it to the server. */
 const AUTOSAVE_DEBOUNCE_MS = 2000;
@@ -20,6 +25,8 @@ interface WorkoutLoggerProps {
   /** workout_logs.updated_at — decides whether a stored draft is still newer. */
   logUpdatedAt?: string | null;
   previousLog: ExerciseLogWithSets[] | undefined;
+  /** Per-exercise last logged weights, for resolving "+N from last" targets. */
+  lastSetWeights: LastSetWeights;
   onComplete?: () => void;
 }
 
@@ -48,17 +55,22 @@ interface ExerciseDraft {
 
 function buildInitialDrafts(
   exercises: WorkoutExerciseWithName[],
-  existingLog: ExerciseLogWithSets[] | undefined
+  existingLog: ExerciseLogWithSets[] | undefined,
+  lastSetWeights: LastSetWeights
 ): ExerciseDraft[] {
   return exercises.map((ex, exIdx) => {
     const configs = Array.isArray(ex.set_configs) ? ex.set_configs : [];
     const existing = existingLog?.find((e) => e.exercise_id === ex.exercise_id);
     const existingSets = existing?.set_logs ?? [];
+    const lastForExercise = lastWeightsForExercise(lastSetWeights, ex.exercise_id);
 
     const setCount = Math.max(configs.length, existingSets.length, 1);
 
     const sets: SetDraft[] = Array.from({ length: setCount }, (_, i) => {
-      const cfg = parseSetConfig(configs[i]);
+      // Resolve "+N from last" into the concrete number the client is being
+      // asked for, so the snapshot below records a fact rather than a rule
+      // (P1). Prior weights are keyed by set NUMBER, not array index (P3).
+      const cfg = resolvedSetConfig(parseSetConfig(configs[i]), lastForExercise?.[String(i + 1)]);
       const existingSet = existingSets.find((s) => s.set_number === i + 1);
       return {
         setNumber: i + 1,
@@ -107,9 +119,12 @@ export function WorkoutLogger({
   existingLog,
   logUpdatedAt,
   previousLog,
+  lastSetWeights,
   onComplete,
 }: WorkoutLoggerProps) {
-  const [drafts, setDrafts] = useState<ExerciseDraft[]>(() => buildInitialDrafts(exercises, existingLog));
+  const [drafts, setDrafts] = useState<ExerciseDraft[]>(() =>
+    buildInitialDrafts(exercises, existingLog, lastSetWeights)
+  );
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [dismissedRestore, setDismissedRestore] = useState(false);
   const saveWorkoutLog = useSaveWorkoutLog();
@@ -256,6 +271,9 @@ export function WorkoutLogger({
           const allDone = ex.sets.every((s) => s.completed);
           const videoUrl = workoutEx?.exercises?.video_url ?? null;
           const configs = Array.isArray(workoutEx?.set_configs) ? workoutEx.set_configs : [];
+          // Per-side is authored per exercise, so one badge in the header
+          // carries it; the REPS column is too narrow for the whole message.
+          const perSide = ex.sets.some((s) => s.prescribed?.perSide);
 
           return (
             <View
@@ -278,6 +296,11 @@ export function WorkoutLogger({
                     {allDone && <Check color="#fff" size={13} strokeWidth={3} />}
                   </TouchableOpacity>
                   <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
+                  {perSide && (
+                    <View style={styles.perSideBadge}>
+                      <Text style={styles.perSideBadgeText}>EACH SIDE</Text>
+                    </View>
+                  )}
                 </View>
                 {videoUrl && (
                   <TouchableOpacity
@@ -301,8 +324,14 @@ export function WorkoutLogger({
               )}
 
               {ex.sets.map((set, setIdx) => {
-                const prevSet = prevSets[setIdx];
-                const targetCfg = parseSetConfig(configs[setIdx]);
+                // By set_number, never by array position: a coach inserting or
+                // deleting a set would otherwise silently reassign every
+                // prior weight in this column (P3).
+                const prevSet = prevSets.find((p) => p.set_number === setIdx + 1);
+                // The draft's own snapshot, already resolved in
+                // buildInitialDrafts — NOT a fresh parse of the live config,
+                // which would show "+5" as a blank instead of a number.
+                const targetCfg: SetConfig = set.prescribed ?? parseSetConfig(configs[setIdx]);
 
                 const checkbox = (
                   <TouchableOpacity
@@ -373,7 +402,11 @@ export function WorkoutLogger({
                   <View key={setIdx} style={styles.setRow}>
                     {checkbox}
                     <Text style={styles.setTargetText}>
-                      {mode === "time" ? formatDuration(set.targetSeconds) : (set.reps ?? targetCfg.reps ?? "—")}
+                      {mode === "time"
+                        ? formatDuration(set.targetSeconds)
+                        : set.reps != null
+                          ? `${set.reps}`
+                          : formatTargetReps(targetCfg)}
                     </Text>
                     <Text style={styles.setTargetText}>{formatTargetWeight(targetCfg)}</Text>
                     <Text style={styles.setLastText}>{prevSet?.weight != null ? `${prevSet.weight}` : "—"}</Text>
@@ -519,6 +552,18 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
+  },
+  perSideBadge: {
+    borderRadius: 999,
+    backgroundColor: colors.creamDeep,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  perSideBadgeText: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: colors.ink70,
   },
   exerciseName: {
     fontFamily: fonts.display,

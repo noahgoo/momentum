@@ -2,16 +2,7 @@ import { useState } from "react";
 import type { Workout } from "@momentum/shared";
 import { type WorkoutLogWithSets } from "../../queries/useClientDetail";
 import { parseSetConfig } from "@momentum/shared";
-import {
-  computePace,
-  DIFFICULTY_LABELS,
-  DIFFICULTY_STYLES,
-  formatLogDate,
-  formatLogDuration,
-  formatLogMiles,
-  formatPace,
-  formatTargetWeight,
-} from "./logFormat";
+import { DIFFICULTY_LABELS, DIFFICULTY_STYLES, computePace, formatLogDate, formatLogDuration, formatLogMiles, formatPace, formatTargetReps, formatTargetWeight } from "./logFormat";
 
 interface Props {
   logs: WorkoutLogWithSets[];
@@ -137,7 +128,10 @@ export function RecentWorkouts({ logs, workoutsById }: Props) {
                                           const pace = computePace(set.actual_miles, set.actual_seconds);
                                           return pace != null ? `${formatPace(pace)}/mi` : "—";
                                         })()
-                                      : (set.reps ?? "—")}
+                                      : formatTargetReps({
+                                          reps: set.reps ?? undefined,
+                                          perSide: parseSetConfig(set.prescribed).perSide,
+                                        })}
                                 </td>
                                 <td className={`py-0.5 ${set.completed ? "text-[var(--ok)]" : "text-[var(--ink-15)]"}`}>
                                   {set.completed ? "✓" : "✗"}

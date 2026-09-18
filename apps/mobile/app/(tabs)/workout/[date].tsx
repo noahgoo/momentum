@@ -48,6 +48,14 @@ export default function WorkoutDayScreen() {
     setViewingCompletedLog(false);
   }, [dateParam]);
 
+  // Pop rather than push: pushing the parent route again animates FORWARD on
+  // what reads as a back gesture, and grows the stack every time. canGoBack
+  // guards a cold start straight onto this route (a notification deep link).
+  function goBack() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/workout");
+  }
+
   if (isPending || !uid || !dateParam || !data) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
@@ -72,7 +80,7 @@ export default function WorkoutDayScreen() {
 
   const BackHeader = (
     <View style={styles.backRow}>
-      <TouchableOpacity onPress={() => router.push("/(tabs)/workout")} style={styles.backButton}>
+      <TouchableOpacity onPress={goBack} style={styles.backButton}>
         <ChevronLeft color={colors.ink} size={20} />
       </TouchableOpacity>
       <Text style={styles.backLabel}>Program</Text>
@@ -184,6 +192,7 @@ export default function WorkoutDayScreen() {
               existingLog={log?.exercise_logs}
               logUpdatedAt={log?.updated_at}
               previousLog={data.previousLog?.exercise_logs}
+              lastSetWeights={data.lastSetWeights}
               onComplete={() => setViewingCompletedLog(false)}
             />
           </View>

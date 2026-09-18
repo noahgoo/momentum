@@ -103,7 +103,15 @@ export type ClientSummary = Tables["client_summaries"]["Row"];
 /**
  * A single set's configuration, camelCase in TS. Mirrors the jsonb shape
  * documented on workout_exercises.set_configs:
- * {reps, weight, weight_unit, seconds, miles, pace_seconds}.
+ * {reps, weight, weight_unit, seconds, miles, pace_seconds, per_side,
+ * weight_delta}.
+ *
+ * Adding a field here is a FIVE-part change — this interface, RawSetConfig,
+ * parseSetConfig, serializeSetConfig, and setConfigSchema in schemas.ts. Miss
+ * the serializer and the field silently never persists; miss the parser and it
+ * silently never loads. `is_valid_set_config()` in SQL is the backstop: it
+ * rejects any key it does not recognize, so a rename that misses a spot fails
+ * loudly at write time instead of dropping data.
  */
 export interface SetConfig {
   reps?: number;
@@ -112,6 +120,21 @@ export interface SetConfig {
   seconds?: number;
   miles?: number;
   paceSeconds?: number;
+  /**
+   * "Do this many reps on EACH side" (lunges, single-arm rows). Reps mode only
+   * — dropped when a coach converts the exercise to time or distance.
+   */
+  perSide?: boolean;
+  /**
+   * Signed increment off the client's last logged weight for this exercise and
+   * set number, e.g. 5 for "+5 lb from last". Its PRESENCE is what selects the
+   * mode, and it TAKES PRECEDENCE over `weight` when both are set — a coach
+   * toggling the increment off gets their fixed weight back untouched. Blank
+   * (not zero, not the fixed weight) when the client has no prior. Resolved by
+   * the mobile logger, never stored resolved on a template. Negative is legal:
+   * a deload is a real prescription.
+   */
+  weightDelta?: number;
 }
 
 /** Raw (snake_case) jsonb shape as stored in Postgres. */
@@ -122,6 +145,8 @@ interface RawSetConfig {
   seconds?: unknown;
   miles?: unknown;
   pace_seconds?: unknown;
+  per_side?: unknown;
+  weight_delta?: unknown;
 }
 
 function isFiniteNumber(v: unknown): v is number {
@@ -147,6 +172,10 @@ export function parseSetConfig(raw: unknown): SetConfig {
   if (isFiniteNumber(r.seconds)) out.seconds = r.seconds;
   if (isFiniteNumber(r.miles)) out.miles = r.miles;
   if (isFiniteNumber(r.pace_seconds)) out.paceSeconds = r.pace_seconds;
+  if (typeof r.per_side === "boolean") out.perSide = r.per_side;
+  // isFiniteNumber, not a truthiness check: a 0 delta ("hold last week's
+  // weight") and a negative one (a deload) are both real prescriptions.
+  if (isFiniteNumber(r.weight_delta)) out.weightDelta = r.weight_delta;
   return out;
 }
 
@@ -165,6 +194,8 @@ export function serializeSetConfig(config: SetConfig): Json {
   if (config.seconds !== undefined) out.seconds = config.seconds;
   if (config.miles !== undefined) out.miles = config.miles;
   if (config.paceSeconds !== undefined) out.pace_seconds = config.paceSeconds;
+  if (config.perSide !== undefined) out.per_side = config.perSide;
+  if (config.weightDelta !== undefined) out.weight_delta = config.weightDelta;
   return out;
 }
 

@@ -109,6 +109,8 @@ const SAVE_WORKOUT_ERRORS = {
   stale_write:
     "This workout changed while you were editing it. Reload to see the current version before saving.",
   not_found_or_forbidden: "This workout no longer exists.",
+  invalid_set_config:
+    "One of these exercises has a target this app can't store. A weight needs its unit (lbs or kg) — check the sets and try again.",
 };
 
 export function describeSaveWorkoutError(error: unknown): string {

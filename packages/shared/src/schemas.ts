@@ -111,6 +111,11 @@ export const setConfigSchema = z.object({
   seconds: z.number().positive().finite().optional(),
   miles: z.number().positive().finite().optional(),
   paceSeconds: z.number().positive().finite().optional(),
+  perSide: z.boolean().optional(),
+  // Signed, unlike `weight`: "-5 from last" is a deload, a real prescription.
+  // The resolved target it produces is clamped at 0 so it still satisfies
+  // `weight`'s nonnegative rule above.
+  weightDelta: z.number().finite().optional(),
 });
 
 export type SetConfigInput = z.infer<typeof setConfigSchema>;

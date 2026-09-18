@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Workout, WorkoutExercise, WorkoutLog, ExerciseLog, SetLog } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
+import type { LastSetWeights } from "../../components/workout/resolveTargetWeight";
 
 export type ExerciseLogWithSets = ExerciseLog & { set_logs: SetLog[] };
 export type WorkoutLogWithChildren = WorkoutLog & { exercise_logs: ExerciseLogWithSets[] };
@@ -26,6 +27,17 @@ export interface WorkoutDayResult {
   log: WorkoutLogWithChildren | null;
   /** The client's most recent completed log before this date, in any workout. */
   previousLog: WorkoutLogWithChildren | null;
+  /**
+   * Per-exercise last logged weights, for resolving `weightDelta` targets:
+   * `{exercise_id: {set_number: {weight, weight_unit}}}`.
+   *
+   * Distinct from `previousLog`, which is one SESSION and so misses any
+   * exercise that session did not contain — on a split routine that is most
+   * of them. Only sets the client actually typed a weight into appear here
+   * (P2): progressing someone off a bare check-off is the failure P2 exists
+   * to prevent.
+   */
+  lastSetWeights: LastSetWeights;
   /** Whether `date` falls within the assignment's active window. */
   inRange: boolean;
   /** Program window bounds, for MoveWorkoutCard's date-picker clamp. */
@@ -41,6 +53,7 @@ interface WorkoutDayPayload {
   warmup_exercises: WorkoutExerciseWithName[];
   log: WorkoutLogWithChildren | null;
   previous_log: WorkoutLogWithChildren | null;
+  last_set_weights: LastSetWeights | null;
   in_range: boolean;
   program_start_date: string | null;
   program_end_date: string | null;
@@ -73,6 +86,7 @@ export function useWorkoutDay(uid: string | undefined, date: string | undefined)
         warmupExercises: payload.warmup_exercises ?? [],
         log: payload.log,
         previousLog: payload.previous_log,
+        lastSetWeights: payload.last_set_weights ?? {},
         inRange: payload.in_range,
         // Fall back to the requested date when the client has no assignment:
         // the date picker still needs a bound to clamp against.

@@ -7,6 +7,17 @@ import type { SetConfig } from "@momentum/shared";
  * slices need.
  */
 
+/**
+ * Display string for prescribed target reps, e.g. "10" or "10 /side".
+ *
+ * `??` not `||`: a prescription of 0 reps is a real instruction (a skipped or
+ * deliberately-empty set) and must not collapse into an em dash (P5).
+ */
+export function formatTargetReps(cfg: SetConfig | undefined): string {
+  if (cfg?.reps == null) return "—";
+  return cfg.perSide ? `${cfg.reps} /side` : `${cfg.reps}`;
+}
+
 /** Display string for a coach-prescribed target weight, e.g. "135" or "60 kg". */
 export function formatTargetWeight(cfg: SetConfig | undefined): string {
   if (cfg?.weight == null) return "—";
@@ -89,5 +100,5 @@ export function formatPrescription(mode: "reps" | "time" | "distance", cfg: SetC
   if (!cfg) return "—";
   if (mode === "time") return formatDuration(cfg.seconds);
   if (mode === "distance") return formatMiles(cfg.miles);
-  return cfg.reps != null ? `${cfg.reps}` : "—";
+  return formatTargetReps(cfg);
 }
