@@ -79,12 +79,10 @@ export default function WorkoutDayScreen() {
   }
 
   const BackHeader = (
-    <View style={styles.backRow}>
-      <TouchableOpacity onPress={goBack} style={styles.backButton}>
-        <ChevronLeft color={colors.ink} size={20} />
-      </TouchableOpacity>
-      <Text style={styles.backLabel}>Program</Text>
-    </View>
+    <TouchableOpacity onPress={goBack} style={styles.backRow} hitSlop={8}>
+      <ChevronLeft color={colors.ink50} size={16} />
+      <Text style={styles.backText}>Program</Text>
+    </TouchableOpacity>
   );
 
   if (!workout) {
@@ -229,23 +227,13 @@ const styles = StyleSheet.create({
   backRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
     marginBottom: spacing.lg,
   },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: colors.ink08,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backLabel: {
+  backText: {
     fontFamily: fonts.body,
     fontSize: 13,
-    color: colors.ink70,
+    color: colors.ink50,
   },
   eyebrow: {
     fontFamily: fonts.bodySemiBold,
