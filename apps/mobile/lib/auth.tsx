@@ -107,6 +107,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(null);
       setProfile(null);
       setError(null);
+      // No screen re-checks `session` to redirect on its own (only `/`
+      // does), so without this the caller's screen just sits there with a
+      // cleared session instead of moving to login.
+      router.replace("/login");
     },
     []
   );
