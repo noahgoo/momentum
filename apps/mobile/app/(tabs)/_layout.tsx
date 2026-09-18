@@ -1,6 +1,6 @@
 import { View, StyleSheet, type ColorValue } from "react-native";
 import { Tabs } from "expo-router";
-import { Home, Dumbbell, Target, TrendingUp, MessageCircle, Users } from "lucide-react-native";
+import { Home, Dumbbell, Target, TrendingUp, MessageCircle } from "lucide-react-native";
 import { colors, fonts } from "../../theme/tokens";
 import { useAuth } from "../../lib/auth";
 import { useHasUnreadMessages } from "../../lib/queries/useUnreadMessages";
@@ -68,13 +68,6 @@ export default function TabsLayout() {
         options={{
           title: "Messages",
           tabBarIcon: ({ color, size }) => <MessagesIcon color={color} size={size} />,
-        }}
-      />
-      <Tabs.Screen
-        name="friends"
-        options={{
-          title: "Friends",
-          tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
         }}
       />
     </Tabs>

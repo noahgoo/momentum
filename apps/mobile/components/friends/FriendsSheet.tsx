@@ -1,24 +1,33 @@
-import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
 import { useAuth } from "../../lib/auth";
 import { useClientDate } from "../../lib/useClientDate";
 import { useFriendships } from "../../lib/queries/useFriendships";
 import { useAcceptFriendRequest } from "../../lib/queries/useAcceptFriendRequest";
 import { useRemoveFriendship } from "../../lib/queries/useRemoveFriendship";
-import { FriendRow } from "../../components/friends/FriendRow";
-import { RequestRow } from "../../components/friends/RequestRow";
-import { FindFriendsSection } from "../../components/friends/FindFriendsSection";
+import { FriendRow } from "./FriendRow";
+import { RequestRow } from "./RequestRow";
+import { FindFriendsSection } from "./FindFriendsSection";
 import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 
+interface FriendsSheetProps {
+  onClose: () => void;
+}
+
 /**
- * Friends tab (plan 8.6). No realtime subscription (explicit non-goal) —
- * refetches on focus instead, via expo-router's `useFocusEffect`, so
- * accepting/declining from elsewhere (there isn't anywhere else yet, but a
- * push deep-link could land here later) is picked up on return to the tab.
+ * The whole friends surface — requests, your friends, sent, find friends.
+ *
+ * Was the `(tabs)/friends` route until the tab bar was cut to five icons; it
+ * is now presented as a modal from the dashboard's FriendsCard, which is the
+ * only way in. Body is unchanged apart from the refetch and the close button.
+ *
+ * Still no realtime subscription (explicit non-goal). The route version
+ * refetched via expo-router's `useFocusEffect`, which never fires for a modal,
+ * so the refetch moved to mount — the caller renders this only while open, so
+ * mount and open are the same moment.
  */
-export default function FriendsScreen() {
+export function FriendsSheet({ onClose }: FriendsSheetProps) {
   const { session } = useAuth();
   const uid = session?.user.id;
   const { today } = useClientDate();
@@ -29,11 +38,9 @@ export default function FriendsScreen() {
 
   const [busyPairId, setBusyPairId] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      void refetch();
-    }, [refetch])
-  );
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
 
   const accepted = friendships.filter((f) => f.status === "accepted");
   const incoming = friendships.filter((f) => f.status === "pending" && f.requested_by !== uid);
@@ -42,19 +49,13 @@ export default function FriendsScreen() {
   function handleAccept(pairId: string) {
     if (!uid) return;
     setBusyPairId(pairId);
-    acceptRequest.mutate(
-      { pairId, clientId: uid },
-      { onSettled: () => setBusyPairId(null) }
-    );
+    acceptRequest.mutate({ pairId, clientId: uid }, { onSettled: () => setBusyPairId(null) });
   }
 
   function handleDecline(pairId: string) {
     if (!uid) return;
     setBusyPairId(pairId);
-    removeFriendship.mutate(
-      { pairId, clientId: uid },
-      { onSettled: () => setBusyPairId(null) }
-    );
+    removeFriendship.mutate({ pairId, clientId: uid }, { onSettled: () => setBusyPairId(null) });
   }
 
   function handleUnfriend(pairId: string) {
@@ -62,11 +63,23 @@ export default function FriendsScreen() {
     removeFriendship.mutate({ pairId, clientId: uid });
   }
 
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.headerTextCol}>
+        <Text style={styles.headerTitle}>Friends</Text>
+        <Text style={styles.headerSubtitle}>TRAIN TOGETHER, STREAK TOGETHER</Text>
+      </View>
+      <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" style={styles.closeButton}>
+        <Text style={styles.closeLabel}>Done</Text>
+      </Pressable>
+    </View>
+  );
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.screen} edges={["top"]}>
         <View style={styles.loadingContent}>
-          <View style={[styles.skeletonBlock, { width: 120, height: 32 }]} />
+          {header}
           <View style={[styles.skeletonBlock, { width: 200, height: 14, marginTop: 10 }]} />
         </View>
       </SafeAreaView>
@@ -76,10 +89,7 @@ export default function FriendsScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Friends</Text>
-          <Text style={styles.headerSubtitle}>TRAIN TOGETHER, STREAK TOGETHER</Text>
-        </View>
+        {header}
 
         {incoming.length > 0 && (
           <View style={styles.card}>
@@ -171,6 +181,14 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingBottom: spacing.xs,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  headerTextCol: {
+    flex: 1,
+    minWidth: 0,
   },
   headerTitle: {
     fontFamily: fonts.displayRegular,
@@ -184,6 +202,18 @@ const styles = StyleSheet.create({
     color: colors.ink50,
     letterSpacing: 1.4,
     marginTop: spacing.sm,
+  },
+  closeButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.control,
+    backgroundColor: colors.creamDeep,
+    marginTop: spacing.sm,
+  },
+  closeLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 12,
+    color: colors.ink,
   },
   card: {
     backgroundColor: colors.surface,

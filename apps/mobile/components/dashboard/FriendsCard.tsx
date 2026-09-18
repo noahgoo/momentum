@@ -1,8 +1,9 @@
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Users } from "lucide-react-native";
 import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 import type { DashboardFriendSummary } from "../../lib/queries/useDashboard";
+import { FriendsSheet } from "../friends/FriendsSheet";
 
 interface FriendsCardProps {
   friends: DashboardFriendSummary;
@@ -10,16 +11,21 @@ interface FriendsCardProps {
 
 /**
  * Count-of-accepted-friendships + first friend's shared streak, with a
- * pending-request badge dot. NON-GOAL: no friends list/accept/decline UI
- * here (8.6's job) — this card only links to the friends tab.
+ * pending-request badge dot.
+ *
+ * This card is now the ONLY way into the friends surface: the `(tabs)/friends`
+ * route was removed to cut the tab bar to five icons, so tapping opens
+ * FriendsSheet as a modal instead of navigating. The sheet is rendered only
+ * while open so it mounts (and refetches) fresh each time.
  */
 export function FriendsCard({ friends }: FriendsCardProps) {
-  const router = useRouter();
+  const [open, setOpen] = useState(false);
 
   return (
+    <>
     <TouchableOpacity
       style={styles.card}
-      onPress={() => router.push("/(tabs)/friends")}
+      onPress={() => setOpen(true)}
       accessibilityRole="button"
     >
       <View style={styles.iconWrap}>
@@ -37,6 +43,16 @@ export function FriendsCard({ friends }: FriendsCardProps) {
       </View>
       <Text style={styles.chevron}>→</Text>
     </TouchableOpacity>
+
+    <Modal
+      visible={open}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setOpen(false)}
+    >
+      {open && <FriendsSheet onClose={() => setOpen(false)} />}
+    </Modal>
+    </>
   );
 }
 
