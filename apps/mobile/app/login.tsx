@@ -15,7 +15,7 @@ import { supabase } from "../lib/supabase";
 import { colors, fonts, radii, shadows, spacing } from "../theme/tokens";
 
 export default function Login() {
-  const { session, profile, loading: authLoading } = useAuth();
+  const { session, profile, loading: authLoading, error: authError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -82,7 +82,9 @@ export default function Login() {
           />
         </View>
 
-        {formError ? <Text style={styles.error}>{formError}</Text> : null}
+        {formError || authError ? (
+          <Text style={styles.error}>{formError ?? authError}</Text>
+        ) : null}
 
         <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
