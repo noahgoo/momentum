@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -47,6 +48,30 @@ function dayLabel(iso: string): string {
 type Row = { kind: "message"; message: Message; grouped: boolean } | { kind: "separator"; label: string };
 
 /**
+ * The input bar's marginBottom reserves room for the floating pill tab bar
+ * (useTabBarSpace). That space is meaningless once the keyboard is up — the
+ * keyboard covers the tab bar, and KeyboardAvoidingView already pads for the
+ * keyboard itself — so stacking both pushed the input bar way above the
+ * keyboard. Drop the reserved space for as long as the keyboard is visible.
+ */
+function useKeyboardVisible(): boolean {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  return visible;
+}
+
+/**
  * Ports mindful-miya/src/app/messages/page.tsx to RN (slice 8.5). Header
  * ("Coach" + coach display_name via `useMyCoach`), scrollable bubble list
  * (inverted FlatList — newest at the bottom, list itself renders
@@ -60,6 +85,7 @@ type Row = { kind: "message"; message: Message; grouped: boolean } | { kind: "se
  */
 export default function Messages() {
   const tabBarSpace = useTabBarSpace();
+  const keyboardVisible = useKeyboardVisible();
   const { session, profile } = useAuth();
   const uid = session?.user.id;
   const coachId = profile?.invited_by ?? null;
@@ -146,7 +172,6 @@ export default function Messages() {
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <MessagesHeader coachName={coach?.display_name ?? null} />
 
@@ -200,7 +225,7 @@ export default function Messages() {
       {/* Margin, not padding: padding would stretch the composer's cream
           background down behind the floating bar, so the blur would sample a
           flat panel instead of the thread. */}
-      <View style={[styles.inputBar, { marginBottom: tabBarSpace }]}>
+      <View style={[styles.inputBar, { marginBottom: keyboardVisible ? 0 : tabBarSpace }]}>
         <TextInput
           value={text}
           onChangeText={setText}
