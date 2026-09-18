@@ -44,10 +44,15 @@ export function TodayWorkoutCard({ workout, exerciseCount, logged }: TodayWorkou
           </TouchableOpacity>
         </>
       ) : (
-        <View style={styles.restBlock}>
+        <TouchableOpacity
+          style={styles.restBlock}
+          onPress={() => router.push("/(tabs)/messages")}
+          accessibilityRole="button"
+          accessibilityLabel="Check in with your coach"
+        >
           <Text style={styles.restTitle}>Rest day</Text>
           <Text style={styles.restSubtitle}>Check in with your coach →</Text>
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );
