@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Linking, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import type { Profile } from "@momentum/shared";
 import { colors, fonts, radii, spacing } from "../../theme/tokens";
@@ -7,38 +7,26 @@ import { useUpdateProfileSettings } from "../../lib/queries/useUpdateProfileSett
 import { getPermissionStatus } from "../../lib/pushToken";
 import { SavedLabel } from "./SavedLabel";
 import { SettingsCard } from "./SettingsCard";
+import { TimeSelect } from "./TimeSelect";
+import { formatStoredTime, nearestSlotValue } from "./timeSlots";
 
 const DEFAULT_TIME = "08:00";
 const SAVED_FLASH_MS = 2000;
-const MINUTE_OPTIONS = [0, 15, 30, 45];
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-function parseTime(value: string | null): { hour: number; minute: number } {
-  const match = /^(\d{2}):(\d{2})$/.exec(value ?? "");
-  if (!match) return { hour: 8, minute: 0 };
-  return { hour: Number(match[1]), minute: Number(match[2]) };
-}
-
-function formatTime(hour: number, minute: number): string {
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function formatHourLabel(hour: number): string {
-  const period = hour < 12 ? "AM" : "PM";
-  const h12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${h12} ${period}`;
-}
 
 interface NotificationsCardProps {
   profile: Profile;
 }
 
 /**
- * notifications_enabled switch (immediate save, no blur needed — a switch
- * has no intermediate "editing" state) + notification_time hour/minute
- * chip selects (autosave per selection). Simple selects rather than a wheel
- * picker per the slice brief ("simple hour/minute selects or wheel") — no
- * picker dependency is installed in this app yet.
+ * notifications_enabled switch (immediate save, no blur needed — a switch has
+ * no intermediate "editing" state) + a reminder time select that autosaves on
+ * pick.
+ *
+ * The time was previously assembled from two chip rows — 24 hours in a
+ * horizontal scroller plus four minute chips — which made the client build a
+ * time out of two half-answers and pushed most of the hours off the edge of
+ * the card. One field now opens a list of the quarter-hour slots the scheduler
+ * actually visits (C1a), so no reachable choice is silently rounded.
  */
 export function NotificationsCard({ profile }: NotificationsCardProps) {
   const updateSettings = useUpdateProfileSettings();
@@ -59,10 +47,7 @@ export function NotificationsCard({ profile }: NotificationsCardProps) {
     }, [])
   );
 
-  const { hour, minute } = useMemo(
-    () => parseTime(profile.notification_time ?? DEFAULT_TIME),
-    [profile.notification_time]
-  );
+  const time = nearestSlotValue(profile.notification_time, DEFAULT_TIME);
 
   function flashSaved() {
     setSaved(true);
@@ -73,18 +58,9 @@ export function NotificationsCard({ profile }: NotificationsCardProps) {
     updateSettings.mutate({ uid: profile.id, patch: { notifications_enabled: next } });
   }
 
-  function handleHourChange(nextHour: number) {
-    if (nextHour === hour) return;
+  function handleTimeChange(next: string) {
     updateSettings.mutate(
-      { uid: profile.id, patch: { notification_time: formatTime(nextHour, minute) } },
-      { onSuccess: flashSaved }
-    );
-  }
-
-  function handleMinuteChange(nextMinute: number) {
-    if (nextMinute === minute) return;
-    updateSettings.mutate(
-      { uid: profile.id, patch: { notification_time: formatTime(hour, nextMinute) } },
+      { uid: profile.id, patch: { notification_time: next } },
       { onSuccess: flashSaved }
     );
   }
@@ -114,47 +90,21 @@ export function NotificationsCard({ profile }: NotificationsCardProps) {
       </View>
 
       <View style={[styles.timeSection, !profile.notifications_enabled && styles.disabled]}>
-        <Text style={styles.timeLabel}>Daily reminder time</Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipRow}
-          contentContainerStyle={styles.chipRowContent}
-        >
-          {HOURS.map((h) => (
-            <Pressable
-              key={h}
-              disabled={!profile.notifications_enabled}
-              onPress={() => handleHourChange(h)}
-              style={[styles.chip, h === hour && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, h === hour && styles.chipTextActive]}>
-                {formatHourLabel(h)}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <View style={styles.minuteRow}>
-          {MINUTE_OPTIONS.map((m) => (
-            <Pressable
-              key={m}
-              disabled={!profile.notifications_enabled}
-              onPress={() => handleMinuteChange(m)}
-              style={[styles.chip, m === minute && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, m === minute && styles.chipTextActive]}>
-                :{String(m).padStart(2, "0")}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text style={styles.timeLabel}>Daily reminder</Text>
+        <TimeSelect
+          value={time}
+          disabled={!profile.notifications_enabled}
+          onChange={handleTimeChange}
+          accessibilityLabel="Daily reminder time"
+        />
       </View>
 
       <SavedLabel visible={saved} />
 
-      <Text style={styles.hint}>Reminders arrive around this hour.</Text>
+      <Text style={styles.hint}>
+        Reminders arrive at {formatStoredTime(time)} in your own timezone, on days you have a
+        workout you have not finished.
+      </Text>
     </SettingsCard>
   );
 }
@@ -196,39 +146,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.ink,
     marginBottom: spacing.sm,
-  },
-  chipRow: {
-    marginBottom: spacing.sm,
-  },
-  chipRowContent: {
-    gap: spacing.xs,
-    paddingRight: spacing.sm,
-  },
-  minuteRow: {
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    height: 36,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    borderColor: colors.ink08,
-    backgroundColor: colors.cream,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipActive: {
-    backgroundColor: colors.blue,
-    borderColor: colors.blue,
-  },
-  chipText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    color: colors.ink,
-  },
-  chipTextActive: {
-    color: colors.ink,
   },
   hint: {
     fontFamily: fonts.body,
