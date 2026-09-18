@@ -41,8 +41,11 @@ export const qk = {
       : (["todayWorkout", uid, date] as const),
   goals: (uid: string) => ["goals", uid] as const,
   goalLogs: (uid: string, dateStr: string) => ["goals", uid, "logs", dateStr] as const,
-  /** Nested under `goals(uid)` too — a range covering `dateStr` includes it,
-   * so invalidating `goals(uid)` invalidates both single-date and range keys. */
+  /** Nested under `goals(uid)`, so invalidating `goals(uid)` invalidates both
+   * single-date and range keys. NOTE the one-way-ness: `goalLogs(uid, date)`
+   * is NOT a prefix of this key (index 3 is the literal 'range'), so
+   * invalidating a single date does NOT reach a range covering it. Mutations
+   * touching goal logs must go through `goals(uid)` or write to both. */
   goalLogsRange: (uid: string, fromDateStr: string, toDateStr: string) =>
     ["goals", uid, "logs", "range", fromDateStr, toDateStr] as const,
   messages: (clientId: string) => ["messages", clientId] as const,

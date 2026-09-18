@@ -70,6 +70,14 @@ export function GoalRow({ goal, done, isOwn, isSwipeable, isLast, onToggle, onAr
     onToggle();
   };
 
+  // A swipe steals the responder, so the Pressable's press is CANCELLED and
+  // handlePress never runs to clear the guard — leaving it set to eat the next
+  // genuine tap. onPressIn fires at touch-down, before a pan can claim the
+  // gesture on move, so clearing here is correct for both paths.
+  const handlePressIn = () => {
+    movedPastTapThreshold.current = false;
+  };
+
   const handleArchive = () => {
     latestOffset.current = 0;
     Animated.timing(translateX, { toValue: 0, duration: 150, useNativeDriver: true }).start();
@@ -89,7 +97,7 @@ export function GoalRow({ goal, done, isOwn, isSwipeable, isLast, onToggle, onAr
         {...(isSwipeable ? panResponder.panHandlers : {})}
         style={[styles.row, { transform: [{ translateX }] }]}
       >
-        <Pressable style={styles.rowPressable} onPress={handlePress}>
+        <Pressable style={styles.rowPressable} onPress={handlePress} onPressIn={handlePressIn}>
           <View style={[styles.checkbox, done && styles.checkboxDone]}>
             {done && <Text style={styles.checkmark}>✓</Text>}
           </View>

@@ -137,7 +137,10 @@ export default function GoalsScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* keyboardShouldPersistTaps: with the inline add-goal input focused,
+          the default ("never") makes the first tap on a goal row only dismiss
+          the keyboard — the row never toggles. */}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.headerRow}>
           <View>
