@@ -60,6 +60,16 @@ export const shadows = {
   },
 } as const;
 
+/**
+ * Both display faces are ITALIC. Italic glyphs lean past their advance width,
+ * but React Native measures a Text box from advance widths alone, so the ink
+ * on the final glyph gets clipped at the right edge — worst on round terminals
+ * (3, 6, 9) at large sizes. Negative `letterSpacing` makes it worse: RN applies
+ * it after the last glyph too, shrinking the box further.
+ *
+ * Any large display text needs `italicOverhang(fontSize)` as paddingRight.
+ * See GoalsStreakRow / progress/index for the pattern.
+ */
 export const fonts = {
   display: "Fraunces_600SemiBold_Italic",
   displayRegular: "Fraunces_400Regular_Italic",
@@ -67,6 +77,15 @@ export const fonts = {
   bodyMedium: "Inter_500Medium",
   bodySemiBold: "Inter_600SemiBold",
 } as const;
+
+/**
+ * Right padding that keeps an italic display glyph from being clipped.
+ * ~8% of the type size covers Fraunces' lean with a little slack; it is
+ * padding, not margin, so it never shifts a centred layout off-centre.
+ */
+export function italicOverhang(fontSize: number): number {
+  return Math.ceil(fontSize * 0.08);
+}
 
 export const spacing = {
   xs: 4,

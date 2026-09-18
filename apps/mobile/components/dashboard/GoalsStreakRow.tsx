@@ -1,7 +1,7 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Check } from "lucide-react-native";
 import type { Goal } from "@momentum/shared";
-import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
+import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../theme/tokens";
 
 interface GoalsStreakRowProps {
   goals: Goal[];
@@ -63,7 +63,11 @@ export function GoalsStreakRow({
       <View style={[styles.card, styles.streakCard]}>
         <Text style={styles.label}>STREAK</Text>
         <View style={styles.streakBody}>
-          <Text style={styles.streakNumber}>{streak}</Text>
+          {/* adjustsFontSizeToFit so a 3-digit streak shrinks to fit the
+              fixed-width card instead of overflowing it. */}
+          <Text style={styles.streakNumber} numberOfLines={1} adjustsFontSizeToFit>
+            {streak}
+          </Text>
           <Text style={styles.streakUnit}>days</Text>
         </View>
       </View>
@@ -159,7 +163,9 @@ const styles = StyleSheet.create({
     fontSize: 60,
     lineHeight: 62,
     color: colors.ink,
-    letterSpacing: -1,
+    // No negative letterSpacing here: RN applies it after the final glyph as
+    // well, which shrinks the measured box and clips this italic face.
+    paddingRight: italicOverhang(60),
   },
   streakUnit: {
     fontFamily: fonts.body,

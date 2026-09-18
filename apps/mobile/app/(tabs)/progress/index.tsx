@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronRight, Camera, Ruler } from "lucide-react-native";
 import { useAuth } from "../../../lib/auth";
 import { useStreak } from "../../../lib/queries/useStreak";
-import { colors, fonts, radii, spacing, shadows } from "../../../theme/tokens";
+import { colors, fonts, italicOverhang, radii, shadows, spacing } from "../../../theme/tokens";
 
 /**
  * Progress home: a streak hero (mirrors the dashboard's streak treatment)
@@ -25,7 +25,9 @@ export default function ProgressHomeScreen() {
 
         <View style={[styles.streakCard, shadows.card]}>
           <Text style={styles.streakEyebrow}>CURRENT STREAK</Text>
-          <Text style={styles.streakValue}>{isPending ? "—" : streak}</Text>
+          <Text style={styles.streakValue} numberOfLines={1} adjustsFontSizeToFit>
+            {isPending ? "—" : streak}
+          </Text>
           <Text style={styles.streakUnit}>{streak === 1 ? "day" : "days"}</Text>
         </View>
 
@@ -105,6 +107,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     color: "#fff",
     marginTop: spacing.xs,
+    paddingRight: italicOverhang(56),
   },
   streakUnit: {
     fontFamily: fonts.body,
