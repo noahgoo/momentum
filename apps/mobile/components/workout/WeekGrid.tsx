@@ -151,7 +151,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   cell: {
-    width: "47%",
+    // Two columns that divide the row exactly. The old `width: "47%"` left
+    // 94% + an 8px gap, so a variable dead gutter trailed every row.
+    flexBasis: 0,
+    flexGrow: 1,
+    minWidth: "45%",
     minHeight: 80,
     borderRadius: 16,
     padding: spacing.md,

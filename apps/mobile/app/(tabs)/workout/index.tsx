@@ -66,20 +66,31 @@ export default function WorkoutWeekScreen() {
           <Text style={styles.historyLinkText}>HISTORY →</Text>
         </TouchableOpacity>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.pillRow}
+          contentContainerStyle={styles.pillRowContent}
+        >
           {weekPills.map((w) => {
             const selected = w === effectiveWeek;
             return (
               <TouchableOpacity
                 key={w}
                 onPress={() => setSelectedWeek(w)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Week ${w}`}
                 style={[
                   styles.pill,
                   selected ? styles.pillSelected : undefined,
                   w === data.currentWeekNumber && !selected ? styles.pillCurrent : undefined,
                 ]}
               >
-                <Text style={[styles.pillText, selected ? styles.pillTextSelected : undefined]}>{w}</Text>
+                <Text style={[styles.pillText, selected ? styles.pillTextSelected : undefined]}>
+                  W{w}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -189,14 +200,27 @@ const styles = StyleSheet.create({
   },
   pillRow: {
     marginTop: spacing.lg,
+    // A horizontal ScrollView nested in a vertical one has no intrinsic height
+    // cap; without this it grows to fill whatever the pills happen to measure.
+    flexGrow: 0,
   },
-  pill: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  pillRowContent: {
+    // flexGrow + center means a short program sits centered, while a long one
+    // falls back to normal left-aligned scrolling once the pills overflow.
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacing.xs,
+    gap: spacing.sm,
+    // Keeps the end pills off the screen edge when the row does scroll.
+    paddingHorizontal: spacing.xs,
+  },
+  pill: {
+    minWidth: 48,
+    height: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.creamDeep,
   },
   pillSelected: {
@@ -208,7 +232,7 @@ const styles = StyleSheet.create({
   },
   pillText: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.ink70,
   },
   pillTextSelected: {
