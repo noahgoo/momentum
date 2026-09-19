@@ -68,9 +68,15 @@ begin
   -- ---------------------------------------------------------------------
   v_day := public.get_workout_day(v_new_start);
 
+  -- Pinned deliberately: apps/mobile/lib/queries/useWorkoutDay.ts destructures
+  -- this payload by name, so a key added or renamed here breaks the logger
+  -- silently rather than loudly. Update this list in the same commit that
+  -- changes the RPC. `last_set_weights` arrived with 0027's progressive
+  -- targets and was missed here, which left this assertion red — and a check
+  -- that is always red is a check nobody reads.
   select string_agg(k, ',' order by k) into v_keys from jsonb_object_keys(v_day) k;
   if v_keys is distinct from
-     'exercises,in_range,log,previous_log,program_end_date,program_start_date,warmup,warmup_exercises,workout' then
+     'exercises,in_range,last_set_weights,log,previous_log,program_end_date,program_start_date,warmup,warmup_exercises,workout' then
     failures := array_append(failures, format('get_workout_day payload keys changed: %s', v_keys));
   end if;
 
