@@ -52,10 +52,13 @@ export function ClientHeaderCard({ profile, streak, programStatus, onToggleDisab
     };
   }, [menuOpen]);
 
-  // Only an instance program (client_id set) is safe to edit from here —
-  // editing the coach's template would reach every other assigned client.
-  const editableProgram =
-    programStatus.kind !== "none" && programStatus.program.client_id ? programStatus.program : null;
+  // There is deliberately no "Edit program" link here. It pointed a client's
+  // instance program at /library/programs/:id, whose day picker lists library
+  // workouts only — so the client's own workout copies had no matching option,
+  // every day rendered as "Rest", and save_program reconciled that display back
+  // into a deleted schedule (violation B14). save_program now refuses an
+  // instance program outright. Restore this link when per-client schedules have
+  // an editor that can see them.
 
   return (
     <div className="admin-card p-6">
@@ -176,14 +179,6 @@ export function ClientHeaderCard({ profile, streak, programStatus, onToggleDisab
         >
           {programStatus.kind === "none" ? "Assign program" : "Change program"}
         </Link>
-        {editableProgram && (
-          <Link
-            to={`/library/programs/${editableProgram.id}`}
-            className="admin-secondary px-4 py-2 text-sm"
-          >
-            Edit program
-          </Link>
-        )}
         <button
           type="button"
           disabled={togglePending}

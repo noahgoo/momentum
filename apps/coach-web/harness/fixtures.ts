@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ClientSummary, Exercise, Program, Thread, Workout } from "@momentum/shared";
 import { qk } from "../src/queries/keys";
 import type { WorkoutDetail } from "../src/queries/useWorkoutDetail";
+import type { ProgramDetail } from "../src/queries/usePrograms";
 import type { ThreadWithClient } from "../src/queries/useThreads";
 import { HARNESS_COACH_ID } from "./stub-auth";
 
@@ -21,6 +22,16 @@ import { HARNESS_COACH_ID } from "./stub-auth";
 export const CLIENT_IDS = ["client-0", "client-1", "client-2", "client-3"] as const;
 /** The workout the builder's edit-mode checks open. */
 export const EDITABLE_WORKOUT_ID = "w-1";
+/**
+ * A client's own copy of a program, as `assign_program` leaves it: `client_id`
+ * set, and its schedule pointing at client-stamped workout copies that are
+ * absent from the coach's library list (`useWorkouts` filters `client_id IS
+ * NULL`). Opening it in the library builder is the shape that loses a client's
+ * schedule, so the regression check needs a fixture that is faithful about it.
+ */
+export const INSTANCE_PROGRAM_ID = "p-instance";
+/** A workout stamped with CLIENT_IDS[0] — deliberately NOT in `workouts`. */
+export const INSTANCE_WORKOUT_ID = "w-instance-1";
 /** `updated_at` on that workout; the staleness checks plant drafts either side of it. */
 export const EDITABLE_WORKOUT_UPDATED_AT = "2026-09-01T10:00:00Z";
 /** How long after mount the workout detail lands. See the note in `seed`. */
@@ -164,6 +175,24 @@ const programs = [
     }) as unknown as Program
 );
 
+/**
+ * The client's own copy, the row `ClientHeaderCard`'s "Edit program" link
+ * opens. Its one scheduled day points at INSTANCE_WORKOUT_ID, which the
+ * builder's picker cannot see.
+ */
+const instanceProgramDetail: ProgramDetail = {
+  id: INSTANCE_PROGRAM_ID,
+  name: "12-Week Strength Base",
+  description: "Marguerite's copy",
+  weeks: 12,
+  clientId: CLIENT_IDS[0],
+  phased: false,
+  phases: [],
+  flatActiveDays: ["monday"],
+  flatWeekSchedule: { "1": { monday: INSTANCE_WORKOUT_ID } },
+  updatedAt: "2026-09-01T10:00:00Z",
+};
+
 const threads = CLIENT_IDS.slice(0, 3).map(
   (clientId, i) =>
     ({
@@ -226,6 +255,9 @@ export function seed(qc: QueryClient) {
   }, DETAIL_DELIVERY_MS);
 
   qc.setQueryData(qk.programs(), programs);
+  // Seeded synchronously, unlike workoutDetail: this check is about what the
+  // picker can resolve, not about hydration timing.
+  qc.setQueryData(qk.programDetail(INSTANCE_PROGRAM_ID), instanceProgramDetail);
 
   qc.setQueryData(qk.threads(), threads);
   // useThreadMessages is a plain useQuery over a flat, oldest-first array.

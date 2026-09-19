@@ -377,7 +377,37 @@ export function ProgramBuilderPage() {
     navigate(`/library/programs/${savedId}`, { replace: true });
   }
 
-  if (isEditing && (detailLoading || !hydrated)) {
+  if (isEditing && detailLoading) {
+    return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
+  }
+
+  // A client's own copy schedules client-stamped workouts, and this builder's
+  // picker is `useWorkouts`, which lists only templates. Every day would render
+  // as "Rest" against a schedule that is actually intact, and `save_program`
+  // reconciles slots by (scope, week_number, day_of_week) — so one interaction
+  // with a control showing the wrong value deletes the client's schedule, or
+  // repoints it at a template row shared with every other assigned client.
+  // Refuse before rendering the form; `save_program` refuses server-side too.
+  if (detail?.clientId) {
+    return (
+      <div className="admin-card p-6">
+        <h1 className="text-lg font-semibold text-[var(--ink)]">This is a client's copy</h1>
+        <p className="mt-2 max-w-prose text-sm text-[var(--ink-50)]">
+          {detail.name} belongs to one client, so it can't be edited from the library builder —
+          doing so would overwrite their schedule. Change the template and re-assign it instead.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/library/programs")}
+          className="mt-4 text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
+        >
+          &larr; Back to programs
+        </button>
+      </div>
+    );
+  }
+
+  if (isEditing && !hydrated) {
     return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
   }
 

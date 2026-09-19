@@ -1,4 +1,5 @@
 import { DRAFT_DEBOUNCE_MS, test, expect, visit } from "./fixtures";
+import { INSTANCE_PROGRAM_ID } from "../fixtures";
 
 /**
  * Checks for the review findings on this branch. Each one failed against the
@@ -169,5 +170,27 @@ test.describe("draft validation", () => {
 
     await visit(page, "/library/workouts/new");
     await expect(page.getByPlaceholder(NAME)).toHaveValue("");
+  });
+});
+
+test.describe("per-client program editing", () => {
+  test("a client's own program is not opened by the library builder", async ({ page }) => {
+    // ClientHeaderCard linked a client's instance program at
+    // /library/programs/:id. That builder's picker is useWorkouts(), which
+    // filters `client_id IS NULL`, so the instance's client-stamped workout has
+    // no matching <option> and the day select falls back to "Rest". The schedule
+    // is intact in the database at that point — but save_program reconciles
+    // slots by (scope, week_number, day_of_week), so one interaction with a
+    // control the UI renders blank writes that belief back and deletes the row.
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
+
+    // Before the guard this rendered the full builder with every day select
+    // blank. Asserting the refusal rather than the blank select, because the
+    // route stays reachable by URL after the link is removed.
+    await expect(page.getByText("This is a client's copy")).toBeVisible();
+    await expect(
+      page.locator("select"),
+      "no editable schedule control may render for a client's copy"
+    ).toHaveCount(0);
   });
 });

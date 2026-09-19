@@ -133,6 +133,14 @@ export interface ProgramDetail {
   name: string;
   description: string | null;
   weeks: number | null;
+  /**
+   * Null for a library template, set for a client's own copy. The builder
+   * refuses the latter: its picker is `useWorkouts`, which lists only
+   * templates, so an instance's client-stamped workouts have no matching
+   * option and every day renders as "Rest" — which `save_program` would then
+   * reconcile into a deletion.
+   */
+  clientId: string | null;
   phased: boolean;
   phases: BuilderPhase[];
   /** Flat-mode fields, only meaningful when `phased` is false. */
@@ -188,6 +196,7 @@ export function useProgramDetail(programId: string | undefined) {
           name: program.name,
           description: program.description,
           weeks: program.weeks,
+          clientId: program.client_id,
           phased: true,
           phases: (phases ?? []).map((p) => ({
             id: p.id,
@@ -223,6 +232,7 @@ export function useProgramDetail(programId: string | undefined) {
         name: program.name,
         description: program.description,
         weeks: program.weeks,
+        clientId: program.client_id,
         phased: false,
         phases: [],
         flatActiveDays: Array.from(activeDaySet),
@@ -272,6 +282,8 @@ const SAVE_PROGRAM_ERRORS = {
   stale_write:
     "This program changed while you were editing it. Reload to see the current version before saving.",
   not_found_or_forbidden: "This program no longer exists.",
+  not_a_template:
+    "This is one client's copy of a program, not a library template. Editing it here would overwrite their schedule — change the template and re-assign it instead.",
 };
 
 export function describeSaveProgramError(error: unknown): string {
