@@ -865,6 +865,27 @@ begin
 end $$;
 
 -- ==============================================================================
+-- SESSIONS
+-- ==============================================================================
+-- This file inserts week_schedules directly, so it bypasses both writers that
+-- materialize sessions (copy_program_tree and save_program). Assigned programs
+-- get sessions because the assigns above go through copy_program_tree;
+-- templates would otherwise have none, and 0032's backfill cannot help — it
+-- runs with the migrations, before any of this data exists.
+--
+-- Goes away with week_schedules in 0035, when seeding builds sessions directly.
+
+do $$
+declare
+  v_program_id uuid;
+begin
+  for v_program_id in select id from public.programs loop
+    perform public.resync_program_sessions(v_program_id);
+  end loop;
+end;
+$$;
+
+-- ==============================================================================
 -- VERIFICATION
 -- ==============================================================================
 
