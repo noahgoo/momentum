@@ -50,6 +50,9 @@ export const qk = {
   threadMessages: (threadId: string) => ["threads", threadId, "messages"] as const,
   // clientId widens the list to that client's own shelf alongside the global
   // library, so it has to be part of the key or the two share a cache entry.
+  // Sessions nest under programs: invalidating a program's key also clears
+  // the days inside it.
+  sessionDetail: (id: string) => ["programs", "sessions", id] as const,
   workouts: (clientId?: string) =>
     clientId === undefined ? (["workouts"] as const) : (["workouts", "forClient", clientId] as const),
   warmups: (clientId?: string) =>

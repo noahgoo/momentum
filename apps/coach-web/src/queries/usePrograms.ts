@@ -119,6 +119,24 @@ export function useDuplicateProgram() {
 // ---------------------------------------------------------------------------
 
 /** Builder-local shape for one phase: fields the UI edits before save. `id` is a DB row id (existing phase) or a client-generated id (new phase) — used as SortableList drag identity. */
+/**
+ * What the builder needs about the session behind one (week, day) slot: the
+ * id to link to, and whether the library workout it was built from has been
+ * edited since.
+ *
+ * `sourceChanged` is a heads-up, never a correction. A session is a copy, so
+ * a library edit does not reach it — which is right, but invisible, and a
+ * coach who improves "Push Day" and sees nothing change would reasonably
+ * call that a bug. See R9.
+ */
+export interface SessionSlot {
+  id: string;
+  sourceChanged: boolean;
+}
+
+/** week number → day → the session scheduled there. */
+export type SessionSlots = Record<string, Partial<Record<DayOfWeek, SessionSlot>>>;
+
 export interface BuilderPhase {
   id: string;
   name: string;
@@ -126,6 +144,7 @@ export interface BuilderPhase {
   activeDays: DayOfWeek[];
   /** Phase-LOCAL week schedule: week keys start at 1 within this phase. */
   weekSchedule: WeekSchedule;
+  sessionSlots: SessionSlots;
 }
 
 export interface ProgramDetail {
@@ -146,6 +165,7 @@ export interface ProgramDetail {
   /** Flat-mode fields, only meaningful when `phased` is false. */
   flatActiveDays: DayOfWeek[];
   flatWeekSchedule: WeekSchedule;
+  flatSessionSlots: SessionSlots;
   /** Carried into the next save so a concurrent edit is detected (C3). */
   updatedAt: string;
 }
@@ -173,6 +193,20 @@ export function useProgramDetail(programId: string | undefined) {
 
       const phased = (phases ?? []).length > 0;
 
+      /** True when the library workout has been edited since this day was built. */
+      async function sourceChangedById(sessionRows: { source_workout_id: string | null }[]) {
+        const ids = [
+          ...new Set(sessionRows.map((r) => r.source_workout_id).filter((v): v is string => Boolean(v))),
+        ];
+        if (ids.length === 0) return new Map<string, string>();
+        const { data, error: sourcesError } = await supabase
+          .from("workouts")
+          .select("id, updated_at")
+          .in("id", ids);
+        if (sourcesError) throw sourcesError;
+        return new Map((data ?? []).map((w) => [w.id, w.updated_at]));
+      }
+
       if (phased) {
         const phaseIds = (phases ?? []).map((p) => p.id);
         const { data: sessions, error: sessionsError } = await supabase
@@ -184,7 +218,9 @@ export function useProgramDetail(programId: string | undefined) {
         // The builder's grid holds the LIBRARY workout a coach picked for each
         // slot, which is the session's source_workout_id. A session built
         // freehand has none and cannot be shown in this grid.
+        const sourceUpdatedAt = await sourceChangedById(sessions ?? []);
         const scheduleByPhase = new Map<string, WeekSchedule>();
+        const slotsByPhase = new Map<string, SessionSlots>();
         for (const row of sessions ?? []) {
           if (!row.phase_id || !row.source_workout_id) continue;
           const schedule = scheduleByPhase.get(row.phase_id) ?? {};
@@ -192,6 +228,15 @@ export function useProgramDetail(programId: string | undefined) {
           week[row.day_of_week] = row.source_workout_id;
           schedule[String(row.week_number)] = week;
           scheduleByPhase.set(row.phase_id, schedule);
+
+          const slots = slotsByPhase.get(row.phase_id) ?? {};
+          const slotWeek = slots[String(row.week_number)] ?? {};
+          slotWeek[row.day_of_week] = {
+            id: row.id,
+            sourceChanged: (sourceUpdatedAt.get(row.source_workout_id) ?? "") > row.updated_at,
+          };
+          slots[String(row.week_number)] = slotWeek;
+          slotsByPhase.set(row.phase_id, slots);
         }
 
         return {
@@ -207,9 +252,11 @@ export function useProgramDetail(programId: string | undefined) {
             weeks: p.weeks ?? 1,
             activeDays: (p.active_days ?? []) as DayOfWeek[],
             weekSchedule: scheduleByPhase.get(p.id) ?? {},
+            sessionSlots: slotsByPhase.get(p.id) ?? {},
           })),
           flatActiveDays: [],
           flatWeekSchedule: {},
+          flatSessionSlots: {},
           updatedAt: program.updated_at,
         };
       }
@@ -220,10 +267,18 @@ export function useProgramDetail(programId: string | undefined) {
         .eq("program_id", programId);
       if (sessionsError) throw sessionsError;
 
+      const sourceUpdatedAt = await sourceChangedById(sessions ?? []);
       const flatWeekSchedule: WeekSchedule = {};
+      const flatSessionSlots: SessionSlots = {};
       const activeDaySet = new Set<DayOfWeek>();
       for (const row of sessions ?? []) {
         if (!row.source_workout_id) continue;
+        const slotWeek = flatSessionSlots[String(row.week_number)] ?? {};
+        slotWeek[row.day_of_week] = {
+          id: row.id,
+          sourceChanged: (sourceUpdatedAt.get(row.source_workout_id) ?? "") > row.updated_at,
+        };
+        flatSessionSlots[String(row.week_number)] = slotWeek;
         const week = flatWeekSchedule[String(row.week_number)] ?? {};
         week[row.day_of_week] = row.source_workout_id;
         flatWeekSchedule[String(row.week_number)] = week;
@@ -240,6 +295,7 @@ export function useProgramDetail(programId: string | undefined) {
         phases: [],
         flatActiveDays: Array.from(activeDaySet),
         flatWeekSchedule,
+        flatSessionSlots,
         updatedAt: program.updated_at,
       };
     },

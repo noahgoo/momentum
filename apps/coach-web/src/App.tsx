@@ -9,6 +9,7 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { WorkoutsPage } from "./pages/WorkoutsPage";
 import { WorkoutBuilderPage } from "./pages/WorkoutBuilderPage";
 import { ProgramsPage } from "./pages/ProgramsPage";
+import { SessionBuilderPage } from "./pages/SessionBuilderPage";
 import { ProgramBuilderPage } from "./pages/ProgramBuilderPage";
 import { ClientsPage } from "./pages/ClientsPage";
 import { ClientDetailPage } from "./pages/ClientDetailPage";
@@ -84,6 +85,9 @@ export function AppRoutes() {
           <Route path="programs" element={<ProgramsPage />} />
           <Route path="programs/new" element={<ProgramBuilderPage />} />
           <Route path="programs/:id" element={<ProgramBuilderPage />} />
+          {/* One scheduled day. Lives under the program it belongs to, since
+              a session has no meaning outside one. */}
+          <Route path="programs/:id/days/:sessionId" element={<SessionBuilderPage />} />
           <Route path="exercises" element={<ExercisesPage />} />
           <Route path="motivation" element={<MotivationPage />} />
         </Route>

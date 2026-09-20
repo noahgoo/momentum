@@ -30,6 +30,8 @@ export const ROUTES: [path: string, name: string][] = [
   ["/library/workouts/new", "workout-builder-new"],
   ["/library/workouts/w-1", "workout-builder-edit"],
   ["/library/programs/new", "program-builder"],
+  ["/library/programs/p-instance", "client-program-days"],
+  ["/library/programs/p-1/days/s-1", "session-builder"],
   ["/inbox/messages", "messages"],
   ["/inbox/requests", "requests"],
   ["/inbox/broadcast", "broadcast"],

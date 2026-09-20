@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import type { DayOfWeek, ProgramPreview, WeekSchedule } from "@momentum/shared";
 import { programCreateSchema } from "@momentum/shared";
 import { useAuth } from "../lib/auth";
@@ -63,6 +63,7 @@ function newPhase(index: number): BuilderPhase {
     weeks: 4,
     activeDays: [],
     weekSchedule: {},
+  sessionSlots: {},
   };
 }
 
@@ -381,27 +382,56 @@ export function ProgramBuilderPage() {
     return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
   }
 
-  // A client's own copy schedules client-stamped workouts, and this builder's
-  // picker is `useWorkouts`, which lists only templates. Every day would render
-  // as "Rest" against a schedule that is actually intact, and `save_program`
-  // reconciles slots by (scope, week_number, day_of_week) — so one interaction
-  // with a control showing the wrong value deletes the client's schedule, or
-  // repoints it at a template row shared with every other assigned client.
-  // Refuse before rendering the form; `save_program` refuses server-side too.
+  // A client's own copy cannot be restructured here: this builder's picker
+  // lists library workouts, and save_program reconciles slots by (scope, week,
+  // day), so one interaction with it would delete the client's schedule or
+  // repoint it at rows shared with every other assigned client. save_program
+  // refuses an instance program server-side too.
+  //
+  // Individual DAYS are a different matter — a session owns its exercises, so
+  // editing one touches one client on one day. List them rather than leaving
+  // the coach at a dead end.
   if (detail?.clientId) {
+    const days = Object.entries(detail.flatSessionSlots).flatMap(([week, byDay]) =>
+      Object.entries(byDay).map(([day, slot]) => ({ week, day, slot: slot! }))
+    );
     return (
       <div className="admin-card p-6">
-        <h1 className="text-lg font-semibold text-[var(--ink)]">This is a client's copy</h1>
+        <h1 className="text-lg font-semibold text-[var(--ink)]">{detail.name}</h1>
         <p className="mt-2 max-w-prose text-sm text-[var(--ink-50)]">
-          {detail.name} belongs to one client, so it can't be edited from the library builder —
-          doing so would overwrite their schedule. Change the template and re-assign it instead.
+          This is one client's copy. Its shape — weeks, phases, which days are
+          training days — comes from the template it was assigned from, so
+          change that and re-assign. You can edit any individual day here, and
+          that reaches only this client, only on that day.
         </p>
+        {days.length > 0 && (
+          <ul className="mt-4 divide-y divide-[var(--ink-08)] border-y border-[var(--ink-08)]">
+            {days.map(({ week, day, slot }) => (
+              <li key={slot.id} className="flex items-center gap-3 py-2 text-sm">
+                <span className="text-[var(--ink-50)]">
+                  Week {week} · {day}
+                </span>
+                {slot.sourceChanged && (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                    source changed
+                  </span>
+                )}
+                <Link
+                  to={`/library/programs/${programId}/days/${slot.id}`}
+                  className="ml-auto font-medium text-[var(--ink-50)] underline hover:text-[var(--ink)]"
+                >
+                  Edit day
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
         <button
           type="button"
-          onClick={() => navigate("/library/programs")}
+          onClick={() => navigate(-1)}
           className="mt-4 text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
         >
-          &larr; Back to programs
+          &larr; Back
         </button>
       </div>
     );
@@ -508,7 +538,12 @@ export function ProgramBuilderPage() {
             </div>
             <div className="admin-card p-5">
               {selectedPhase ? (
-                <PhaseEditor phase={selectedPhase} workouts={workouts} onChange={updatePhase} />
+                <PhaseEditor
+                  phase={selectedPhase}
+                  workouts={workouts}
+                  onChange={updatePhase}
+                  sessionHref={(id) => `/library/programs/${programId}/days/${id}`}
+                />
               ) : (
                 <p className="text-sm italic text-[var(--ink-30)]">Select or add a phase to edit its schedule.</p>
               )}
@@ -534,6 +569,8 @@ export function ProgramBuilderPage() {
               workouts={workouts}
               onToggleDay={toggleFlatDay}
               onSetWorkout={setFlatWorkout}
+              sessionSlots={detail?.flatSessionSlots}
+              sessionHref={(id) => `/library/programs/${programId}/days/${id}`}
             />
           </div>
         )}

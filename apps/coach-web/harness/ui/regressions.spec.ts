@@ -185,13 +185,15 @@ test.describe("per-client program editing", () => {
     await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
 
     // Before the guard this rendered the full builder with every day select
-    // blank. Asserting the refusal rather than the blank select, because the
-    // route stays reachable by URL after the link is removed.
-    await expect(page.getByText("This is a client's copy")).toBeVisible();
+    // blank, and one interaction wrote that back as a deleted schedule. The
+    // route stays reachable by URL, so the page itself has to refuse — it
+    // lists the client's days for editing instead of offering the structure
+    // form.
     await expect(
       page.locator("select"),
       "no editable schedule control may render for a client's copy"
     ).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Edit day" }).first()).toBeVisible();
   });
 });
 
@@ -213,5 +215,37 @@ test.describe("workout picker", () => {
     await filter.selectOption("strength");
     await expect(picker.locator("optgroup")).toHaveCount(1);
     await expect(picker.locator("option")).toHaveCount(2); // Rest + the one match
+  });
+});
+
+test.describe("session editor", () => {
+  test("renders both halves of a day and gates the fan-out", async ({ page }) => {
+    await visit(page, "/library/programs/p-1/days/s-1");
+
+    // A session owns its warm-up as section='warmup' rows rather than
+    // pointing at a second workout, so both halves render here.
+    await expect(page.getByRole("heading", { name: "Warm-up" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Exercises" })).toBeVisible();
+    await expect(page.getByText("Changes here affect this day only.")).toBeVisible();
+
+    // Applying to later weeks reads the saved row, so it must be unavailable
+    // while there are unsaved edits — otherwise it would fan out the old
+    // contents and report success.
+    const apply = page.getByRole("button", { name: "Apply to later weeks" });
+    await expect(apply).toBeEnabled();
+    await page.getByPlaceholder("e.g. Upper body strength").fill("Edited name");
+    await expect(apply).toBeDisabled();
+  });
+
+  test("saving as a workout offers this client or everyone", async ({ page }) => {
+    await visit(page, "/library/programs/p-1/days/s-1");
+    await page.getByRole("button", { name: "Save as workout" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Save as workout" });
+    await expect(dialog).toBeVisible();
+    // Defaults to the client's own shelf: a tailored day is usually tailored
+    // to them.
+    await expect(dialog.getByRole("radio").first()).toBeChecked();
+    await expect(dialog.getByText("Every client")).toBeVisible();
   });
 });

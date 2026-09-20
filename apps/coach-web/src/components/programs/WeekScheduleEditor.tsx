@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { DayOfWeek, WeekSchedule, Workout } from "@momentum/shared";
+import { Link } from "react-router";
 import { DAYS, DAY_LABELS } from "./dayConstants";
+import type { SessionSlots } from "../../queries/usePrograms";
 
 export interface WeekScheduleEditorProps {
   weeks: number;
@@ -17,6 +19,13 @@ export interface WeekScheduleEditorProps {
    * template, where every workout is global.
    */
   clientName?: string;
+  /**
+   * The sessions behind each slot, when the program has been saved. Absent
+   * while building a new one, where no day exists to edit yet.
+   */
+  sessionSlots?: SessionSlots;
+  /** Where a day's editor lives, given its session id. */
+  sessionHref?: (sessionId: string) => string;
 }
 
 /**
@@ -35,6 +44,8 @@ export function WeekScheduleEditor({
   onSetWorkout,
   weekLabel = "Week",
   clientName,
+  sessionSlots,
+  sessionHref,
 }: WeekScheduleEditorProps) {
   const orderedActiveDays = DAYS.filter((d) => activeDays.includes(d));
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -146,6 +157,28 @@ export function WeekScheduleEditor({
                         </optgroup>
                       ))}
                     </select>
+                    {(() => {
+                      const slot = sessionSlots?.[String(week)]?.[day];
+                      if (!slot || !sessionHref) return null;
+                      return (
+                        <div className="flex shrink-0 items-center gap-2">
+                          {slot.sourceChanged && (
+                            <span
+                              title="The library workout this day was built from has changed since. This day is a copy, so it kept what you set — open it to pull the changes in."
+                              className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                            >
+                              source changed
+                            </span>
+                          )}
+                          <Link
+                            to={sessionHref(slot.id)}
+                            className="text-xs font-medium text-[var(--ink-50)] underline hover:text-[var(--ink)]"
+                          >
+                            Edit day
+                          </Link>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

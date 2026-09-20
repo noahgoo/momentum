@@ -3,6 +3,7 @@ import type { ClientSummary, Exercise, Program, Thread, Workout } from "@momentu
 import { qk } from "../src/queries/keys";
 import type { WorkoutDetail } from "../src/queries/useWorkoutDetail";
 import type { ProgramDetail } from "../src/queries/usePrograms";
+import type { SessionDetail } from "../src/queries/useSessionDetail";
 import type { ThreadWithClient } from "../src/queries/useThreads";
 import { HARNESS_COACH_ID } from "./stub-auth";
 
@@ -193,7 +194,41 @@ const instanceProgramDetail: ProgramDetail = {
   phases: [],
   flatActiveDays: ["monday"],
   flatWeekSchedule: { "1": { monday: INSTANCE_WORKOUT_ID } },
+  flatSessionSlots: { "1": { monday: { id: "s-instance-1", sourceChanged: false } } },
   updatedAt: "2026-09-01T10:00:00Z",
+};
+
+/** One scheduled day, for the session editor route. */
+const sessionDetail: SessionDetail = {
+  id: "s-1",
+  name: "Upper Body Push A",
+  description: "Bench focus, long rests",
+  estimatedDurationMinutes: 55,
+  warmupName: "Shoulder prep",
+  sourceWorkoutId: EDITABLE_WORKOUT_ID,
+  clientId: CLIENT_IDS[0],
+  programId: "p-1",
+  updatedAt: "2026-09-01T10:00:00Z",
+  exercises: [
+    {
+      id: "se-warm-1",
+      section: "warmup",
+      exerciseId: "e-3",
+      mode: "time",
+      setConfigs: [{ seconds: 45 }],
+      restSeconds: 30,
+      notes: null,
+    },
+    {
+      id: "se-main-1",
+      section: "main",
+      exerciseId: "e-1",
+      mode: "reps",
+      setConfigs: [{ reps: 8, weight: 135, weightUnit: "lbs" }],
+      restSeconds: 90,
+      notes: null,
+    },
+  ],
 };
 
 const threads = CLIENT_IDS.slice(0, 3).map(
@@ -261,6 +296,7 @@ export function seed(qc: QueryClient) {
   // Seeded synchronously, unlike workoutDetail: this check is about what the
   // picker can resolve, not about hydration timing.
   qc.setQueryData(qk.programDetail(INSTANCE_PROGRAM_ID), instanceProgramDetail);
+  qc.setQueryData(qk.sessionDetail("s-1"), sessionDetail);
 
   qc.setQueryData(qk.threads(), threads);
   // useThreadMessages is a plain useQuery over a flat, oldest-first array.

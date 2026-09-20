@@ -3,6 +3,8 @@ import type { BuilderPhase } from "../../queries/usePrograms";
 import { WeekScheduleEditor } from "./WeekScheduleEditor";
 
 export interface PhaseEditorProps {
+  /** Where a day's editor lives, given its session id. */
+  sessionHref?: (sessionId: string) => string;
   phase: BuilderPhase;
   workouts: Workout[];
   onChange: (updated: BuilderPhase) => void;
@@ -14,7 +16,7 @@ export interface PhaseEditorProps {
  * keys are PHASE-LOCAL week numbers (1..phase.weeks) — see the numbering
  * comment in `usePrograms.ts`'s `useSaveProgram`.
  */
-export function PhaseEditor({ phase, workouts, onChange }: PhaseEditorProps) {
+export function PhaseEditor({ phase, workouts, onChange, sessionHref }: PhaseEditorProps) {
   function toggleDay(day: DayOfWeek) {
     const nextActiveDays = phase.activeDays.includes(day)
       ? phase.activeDays.filter((d) => d !== day)
@@ -78,6 +80,8 @@ export function PhaseEditor({ phase, workouts, onChange }: PhaseEditorProps) {
       </div>
 
       <WeekScheduleEditor
+        sessionSlots={phase.sessionSlots}
+        sessionHref={sessionHref}
         weeks={phase.weeks}
         activeDays={phase.activeDays}
         weekSchedule={phase.weekSchedule}
