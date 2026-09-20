@@ -152,6 +152,7 @@ declare
   v_start3 date := current_date - 10; -- client3: 10 days ago
   v_missed3 date; -- client3: most recent actual scheduled day, >=2 days ago, that she misses
   v_day day_of_week;
+  v_wk int;
   v_d date;
   v_i int;
   v_el uuid;
@@ -432,53 +433,45 @@ begin
     (phase1b, prog1_foundation, 'Phase 2: Increase Load', 2, 2, '{monday,wednesday,friday}'::day_of_week[])
   on conflict (id) do nothing;
 
-  -- Phase 1 weeks 1-2: mon=fullbody, wed=cardio, fri=fullbody
-  insert into public.week_schedules (phase_id, week_number, day_of_week, workout_id)
-  select phase1a, wk, d.day_of_week, case d.day_of_week when 'wednesday' then w1_cardio else w1_fullbody end
-  from generate_series(1, 2) as wk
-  cross join (values ('monday'::day_of_week), ('wednesday'::day_of_week), ('friday'::day_of_week)) as d(day_of_week)
-  where not exists (
-    select 1 from public.week_schedules ws
-    where ws.phase_id = phase1a and ws.week_number = wk and ws.day_of_week = d.day_of_week
-  );
+  -- Phase 1 weeks 1-2: mon=fullbody, wed=cardio, fri=fullbody.
+  -- materialize_session is idempotent on an unchanged slot, so a re-seed
+  -- leaves existing sessions alone rather than rebuilding them.
+  for v_wk in select generate_series(1, 2) loop
+    foreach v_day in array array['monday','wednesday','friday']::public.day_of_week[] loop
+      perform public.materialize_session(null, phase1a, v_wk, v_day, case v_day when 'wednesday' then w1_cardio else w1_fullbody end);
+    end loop;
+  end loop;
 
   -- Phase 2 weeks 1-2 (global weeks 3-4): mon=fullbody, wed=cardio, fri=cardio
-  insert into public.week_schedules (phase_id, week_number, day_of_week, workout_id)
-  select phase1b, wk, d.day_of_week, case d.day_of_week when 'monday' then w1_fullbody else w1_cardio end
-  from generate_series(1, 2) as wk
-  cross join (values ('monday'::day_of_week), ('wednesday'::day_of_week), ('friday'::day_of_week)) as d(day_of_week)
-  where not exists (
-    select 1 from public.week_schedules ws
-    where ws.phase_id = phase1b and ws.week_number = wk and ws.day_of_week = d.day_of_week
-  );
+  for v_wk in select generate_series(1, 2) loop
+    foreach v_day in array array['monday','wednesday','friday']::public.day_of_week[] loop
+      perform public.materialize_session(null, phase1b, v_wk, v_day, case v_day when 'monday' then w1_fullbody else w1_cardio end);
+    end loop;
+  end loop;
 
   -- coach1 "Simple": 2 weeks flat, program-level schedule, mon/thu fullbody.
   insert into public.programs (id, name, description, weeks, created_by)
   values (prog1_simple, 'Simple', 'Two-week flat program, no phases.', 2, coach1)
   on conflict (id) do nothing;
 
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-  select prog1_simple, wk, d.day_of_week, w1_fullbody
-  from generate_series(1, 2) as wk
-  cross join (values ('monday'::day_of_week), ('thursday'::day_of_week)) as d(day_of_week)
-  where not exists (
-    select 1 from public.week_schedules ws
-    where ws.program_id = prog1_simple and ws.week_number = wk and ws.day_of_week = d.day_of_week
-  );
+
+  for v_wk in select generate_series(1, 2) loop
+    foreach v_day in array array['monday','thursday']::public.day_of_week[] loop
+      perform public.materialize_session(prog1_simple, null, v_wk, v_day, w1_fullbody);
+    end loop;
+  end loop;
 
   -- coach2 flat program, 2 weeks, tue/thu strength.
   insert into public.programs (id, name, description, weeks, created_by)
   values (prog2_basic, 'Coach2 Basics', 'Two-week flat program.', 2, coach2)
   on conflict (id) do nothing;
 
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-  select prog2_basic, wk, d.day_of_week, w2_strength
-  from generate_series(1, 2) as wk
-  cross join (values ('tuesday'::day_of_week), ('thursday'::day_of_week)) as d(day_of_week)
-  where not exists (
-    select 1 from public.week_schedules ws
-    where ws.program_id = prog2_basic and ws.week_number = wk and ws.day_of_week = d.day_of_week
-  );
+
+  for v_wk in select generate_series(1, 2) loop
+    foreach v_day in array array['tuesday','thursday']::public.day_of_week[] loop
+      perform public.materialize_session(prog2_basic, null, v_wk, v_day, w2_strength);
+    end loop;
+  end loop;
 
   -- ==========================================================================
   -- ASSIGNMENTS
@@ -877,27 +870,6 @@ begin
   perform public.recompute_friendship_stats(v_pair_id);
 
 end $$;
-
--- ==============================================================================
--- SESSIONS
--- ==============================================================================
--- This file inserts week_schedules directly, so it bypasses both writers that
--- materialize sessions (copy_program_tree and save_program). Assigned programs
--- get sessions because the assigns above go through copy_program_tree;
--- templates would otherwise have none, and 0032's backfill cannot help — it
--- runs with the migrations, before any of this data exists.
---
--- Goes away with week_schedules in 0035, when seeding builds sessions directly.
-
-do $$
-declare
-  v_program_id uuid;
-begin
-  for v_program_id in select id from public.programs loop
-    perform public.resync_program_sessions(v_program_id);
-  end loop;
-end;
-$$;
 
 -- ==============================================================================
 -- VERIFICATION

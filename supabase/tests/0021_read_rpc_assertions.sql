@@ -51,15 +51,10 @@ begin
 
   insert into public.programs (id, name, weeks, created_by) values (prog_old, 'Old Program', 8, coach_id);
   insert into public.programs (id, name, weeks, created_by) values (prog_new, 'New Program', 8, coach_id);
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-    values (prog_old, 1, 'monday', w_old);
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-    values (prog_new, 1, 'monday', w_new);
-
-  -- resolve_scheduled_workout reads sessions now, so fixtures that insert
-  -- week_schedules directly must materialize them (0032).
-  perform public.resync_program_sessions(prog_old);
-  perform public.resync_program_sessions(prog_new);
+  -- Schedule a slot the way save_program does: nothing writes
+  -- week_schedules any more (0034).
+  perform public.materialize_session(prog_old, null, 1, 'monday', w_old);
+  perform public.materialize_session(prog_new, null, 1, 'monday', w_new);
 
   insert into public.assignments (client_id, program_id, start_date, active)
     values (client_a, prog_old, v_old_start, false);

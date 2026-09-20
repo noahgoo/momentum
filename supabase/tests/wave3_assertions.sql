@@ -103,15 +103,12 @@ begin
     (w9, 'Override Workout', coach_id),
     (wbonus, 'Bonus Workout', coach_id);
 
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id) values
-    (program_p1, 1, 'monday', w1),
-    (program_p1, 1, 'wednesday', w2),
-    (program_p1, 2, 'monday', w3),
-    (program_p1, 2, 'wednesday', w4);
-
-  -- resolve_scheduled_workout reads sessions now (0033), so a fixture that
-  -- inserts week_schedules directly must materialize them.
-  perform public.resync_program_sessions(program_p1);
+  -- Schedule a slot the way save_program does: nothing writes
+  -- week_schedules any more (0034).
+  perform public.materialize_session(program_p1, null, 1, 'monday', w1);
+  perform public.materialize_session(program_p1, null, 1, 'wednesday', w2);
+  perform public.materialize_session(program_p1, null, 2, 'monday', w3);
+  perform public.materialize_session(program_p1, null, 2, 'wednesday', w4);
 
   insert into public.assignments (id, client_id, program_id, start_date, active)
   values (assignment_a, client_a, program_p1, start_date, true);
@@ -125,12 +122,9 @@ begin
     (phase_a, program_p2, 'Phase A', 1, 2),
     (phase_b, program_p2, 'Phase B', 2, 1);
 
-  insert into public.week_schedules (phase_id, week_number, day_of_week, workout_id) values
-    (phase_a, 1, 'monday', w1),
-    (phase_a, 2, 'monday', w3),
-    (phase_b, 1, 'monday', wb1);
-
-  perform public.resync_program_sessions(program_p2);
+  perform public.materialize_session(null, phase_a, 1, 'monday', w1);
+  perform public.materialize_session(null, phase_a, 2, 'monday', w3);
+  perform public.materialize_session(null, phase_b, 1, 'monday', wb1);
 
   insert into public.assignments (id, client_id, program_id, start_date, active)
   values (assignment_b, client_b, program_p2, start_date, true);
@@ -229,14 +223,8 @@ begin
   -------------------------------------------------------------------------
 
   update public.programs set weeks = 6 where id = program_p1;
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id) values
-    (program_p1, 1, 'friday', w1),
-    (program_p1, 2, 'friday', w3);
-
-  -- Any mid-suite change to week_schedules needs a resync: resolution reads
-  -- sessions (0033), so without this Friday never resolves and the grace-day
-  -- vector silently counts 07-10 as a rest day instead.
-  perform public.resync_program_sessions(program_p1);
+  perform public.materialize_session(program_p1, null, 1, 'friday', w1);
+  perform public.materialize_session(program_p1, null, 2, 'friday', w3);
   -- (week 1: mon/wed/fri = 06-29, 07-01, 07-03; week 2: mon/wed/fri = 07-06, 07-08, 07-10)
 
   -- Vector: keeps counting through rest days without breaking the streak.
@@ -293,9 +281,9 @@ begin
 
   -- Reset client_a's program back to 2 weeks / no Friday slot and clear logs
   -- so later sections aren't affected by this section's fixtures.
-  delete from public.week_schedules where program_id = program_p1 and day_of_week = 'friday';
+  perform public.materialize_session(program_p1, null, 1, 'friday', null);
+  perform public.materialize_session(program_p1, null, 2, 'friday', null);
   update public.programs set weeks = 2 where id = program_p1;
-  perform public.resync_program_sessions(program_p1);
   delete from public.workout_logs where client_id = client_a;
 
   -- Fallback vector: client_c has no active assignment -> plain consecutive-

@@ -69,15 +69,12 @@ begin
   insert into public.programs (id, name, weeks, created_by)
   values (tmpl_program, 'Mat Template', 2, coach_id);
 
-  -- The same workout on two weeks: one week_schedules pointer each, one
-  -- shared workouts row between them.
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-  values
-    (tmpl_program, 1, 'monday', w_push),
-    (tmpl_program, 2, 'monday', w_push);
-
+  -- The same workout on two weeks. Under week_schedules these were two
+  -- pointers at one shared workouts row, which is the thing this suite exists
+  -- to prove is gone.
   perform set_config('request.jwt.claims', json_build_object('sub', coach_id)::text, true);
-  perform public.resync_program_sessions(tmpl_program);
+  perform public.materialize_session(tmpl_program, null, 1, 'monday', w_push);
+  perform public.materialize_session(tmpl_program, null, 2, 'monday', w_push);
 
   -- -----------------------------------------------------------------------
   -- 1. One session per scheduled day
@@ -182,11 +179,15 @@ begin
   set set_configs = '[{"reps":1,"weight":315,"weight_unit":"lbs"}]'::jsonb
   where session_id = v_s_week1 and section = 'main';
 
+  -- 225, not 135: assertion 2 edited the template's week-1 session, and an
+  -- assign copies what the session SAYS. That edit reaching both new clients
+  -- is correct — a coach's change to a template day should apply to whoever
+  -- they assign it to next, and to nobody already assigned.
   select set_configs->0->>'weight' into v_text
   from public.session_exercises se
   join public.sessions s on s.id = se.session_id
   where s.program_id = v_prog_b and s.week_number = 1 and se.section = 'main';
-  if v_text is distinct from '135' then
+  if v_text is distinct from '225' then
     failures := array_append(failures,
       format('editing client A''s session changed client B''s: %s', v_text));
   end if;
@@ -201,12 +202,17 @@ begin
   end if;
 
   -- -----------------------------------------------------------------------
-  -- 6. The dual write: week_schedules still populated, so reads keep working
+  -- 6. An assign writes NO workouts rows
+  --
+  -- The claim the whole split rests on: sessions are the per-client copy, so
+  -- isolating a client no longer means duplicating the coach's library.
   -- -----------------------------------------------------------------------
-  select count(*) into v_count from public.week_schedules where program_id = v_prog_a;
-  if v_count <> 2 then
-    failures := array_append(failures,
-      format('the assign left %s week_schedules rows, expected 2 — reads still use them', v_count));
+  select count(*) into v_workouts_after from public.workouts;
+  if v_workouts_after <> v_workouts_before then
+    failures := array_append(failures, format(
+      'two assigns created %s workouts rows; an assign must not touch the library',
+      v_workouts_after - v_workouts_before
+    ));
   end if;
 
   -- -----------------------------------------------------------------------
@@ -235,19 +241,80 @@ begin
   end if;
 
   -- -----------------------------------------------------------------------
-  -- 8. Still no workouts written by materialization itself
-  --
-  -- The assign in #5 still copies workouts (that rewrite lands in 0035), so
-  -- this checks the narrower claim: a resync creates no workouts rows.
+  -- 8. Materializing writes no workouts rows
   -- -----------------------------------------------------------------------
   select count(*) into v_workouts_before from public.workouts;
-  perform public.resync_program_sessions(tmpl_program);
+  perform public.materialize_session(tmpl_program, null, 1, 'monday', w_push);
   select count(*) into v_workouts_after from public.workouts;
   if v_workouts_after <> v_workouts_before then
     failures := array_append(failures, format(
-      'resync created %s workouts rows; sessions must never write the library',
+      'materializing created %s workouts rows; sessions must never write the library',
       v_workouts_after - v_workouts_before
     ));
+  end if;
+
+  -- -----------------------------------------------------------------------
+  -- 9. Re-saving a program preserves per-day edits
+  --
+  -- The single most likely regression in this restructure. The transitional
+  -- resync rebuilt every session on every save, so a coach who edited week 3
+  -- and then reopened the program builder and pressed Save lost that edit
+  -- with no error. materialize_session leaves a slot alone when its source
+  -- workout has not changed.
+  -- -----------------------------------------------------------------------
+  -- Assertion 7 saved a payload without week 2, which deleted that session.
+  -- Re-establish it, then edit it.
+  perform public.materialize_session(tmpl_program, null, 2, 'monday', w_push);
+  select id into v_s_week2 from public.sessions
+  where program_id = tmpl_program and week_number = 2;
+
+  update public.session_exercises
+  set set_configs = '[{"reps":1,"weight":405,"weight_unit":"lbs"}]'::jsonb
+  where session_id = v_s_week2 and section = 'main';
+
+  perform public.save_program(
+    jsonb_build_object(
+      'name', 'Mat Template', 'description', null, 'weeks', 2,
+      'phased', false, 'phases', '[]'::jsonb,
+      'slots', jsonb_build_array(
+        jsonb_build_object('week_number', 1, 'day_of_week', 'monday', 'workout_id', w_push),
+        jsonb_build_object('week_number', 2, 'day_of_week', 'monday', 'workout_id', w_push)
+      )
+    ),
+    tmpl_program,
+    null
+  );
+
+  select set_configs->0->>'weight' into v_text
+  from public.session_exercises
+  where session_id = v_s_week2 and section = 'main';
+  if v_text is distinct from '405' then
+    failures := array_append(failures, format(
+      're-saving the program discarded a per-day edit: week 2 reads %s, not 405',
+      coalesce(v_text, 'null')));
+  end if;
+
+  if not exists (select 1 from public.sessions where id = v_s_week2) then
+    failures := array_append(failures, 're-saving the program replaced the session row itself');
+  end if;
+
+  -- But changing which workout a slot uses DOES rebuild it.
+  perform public.save_program(
+    jsonb_build_object(
+      'name', 'Mat Template', 'description', null, 'weeks', 2,
+      'phased', false, 'phases', '[]'::jsonb,
+      'slots', jsonb_build_array(
+        jsonb_build_object('week_number', 2, 'day_of_week', 'monday', 'workout_id', w_warm)
+      )
+    ),
+    tmpl_program,
+    null
+  );
+
+  select source_workout_id into v_s_week1 from public.sessions
+  where program_id = tmpl_program and week_number = 2;
+  if v_s_week1 is distinct from w_warm then
+    failures := array_append(failures, 'changing a slot''s workout did not rebuild its session');
   end if;
 
   -- -----------------------------------------------------------------------

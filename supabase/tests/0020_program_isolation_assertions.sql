@@ -47,14 +47,18 @@ begin
 
   insert into public.exercises (id, name, created_by) values (ex_bench, 'Bench', coach_id);
   insert into public.workouts (id, name, type, created_by) values (w_warm, 'Warmup A', 'warmup', coach_id);
+  -- Give the warmup an exercise: without one there is nothing to flatten into
+  -- the session and the warm-up half of the copy goes untested.
+  insert into public.workout_exercises (workout_id, exercise_id, sort_order, mode, set_configs)
+  values (w_warm, ex_bench, 0, 'reps', '[{"reps":10}]'::jsonb);
   insert into public.workouts (id, name, type, warmup_id, created_by)
   values (w_push, 'Push Day', 'workout', w_warm, coach_id);
   insert into public.workout_exercises (workout_id, exercise_id, sort_order, mode, set_configs)
   values (w_push, ex_bench, 0, 'reps', '[{"reps":5,"weight":135,"weight_unit":"lbs"}]'::jsonb);
 
   insert into public.programs (id, name, weeks, created_by) values (tmpl_program, 'Template Program', 2, coach_id);
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-  values (tmpl_program, 1, 'monday', w_push);
+  -- Nothing writes sessions any more (0034); a slot is a session.
+  perform public.materialize_session(tmpl_program, null, 1, 'monday', w_push);
 
   perform set_config('request.jwt.claims', json_build_object('sub', coach_id)::text, true);
 
@@ -79,37 +83,55 @@ begin
     failures := array_append(failures, 'instance program is not stamped with client_id');
   end if;
 
-  -- The instance's schedule must point at the instance's OWN workouts.
+  -- Isolation is no longer "the client got their own copy of the workout" —
+  -- it is "the client's schedule owns its own exercise rows". Sessions keep
+  -- pointing at the LIBRARY workout through source_workout_id, which is
+  -- provenance, not sharing.
   select count(*) into v_count
-  from public.week_schedules ws
-  join public.workouts w on w.id = ws.workout_id
-  where ws.program_id = v_prog_a and w.client_id is distinct from client_a;
-  if v_count <> 0 then
-    failures := array_append(failures, 'client A''s schedule references workouts that are not theirs');
-  end if;
-
-  -- Warmups are copied too, and re-linked to the copy rather than the template.
-  select w.warmup_id into v_uuid
-  from public.week_schedules ws join public.workouts w on w.id = ws.workout_id
-  where ws.program_id = v_prog_a;
-  if v_uuid is null then
-    failures := array_append(failures, 'copied workout lost its warmup link');
-  elsif v_uuid = w_warm then
-    failures := array_append(failures, 'copied workout still points at the TEMPLATE warmup');
-  else
-    select client_id into v_uuid from public.workouts where id = v_uuid;
-    if v_uuid is distinct from client_a then
-      failures := array_append(failures, 'copied warmup is not stamped with client_id');
-    end if;
-  end if;
-
-  -- workout_exercises come along, still FKing the shared exercise library.
-  select count(*) into v_count
-  from public.workout_exercises we
-  join public.week_schedules ws on ws.workout_id = we.workout_id
-  where ws.program_id = v_prog_a and we.exercise_id = ex_bench;
+  from public.session_exercises se
+  join public.sessions ws on ws.id = se.session_id
+  where ws.program_id = v_prog_a and se.section = 'main' and se.exercise_id = ex_bench;
   if v_count <> 1 then
-    failures := array_append(failures, format('expected the copied workout to keep its exercise, got %s', v_count));
+    failures := array_append(failures,
+      format('expected client A''s session to own its exercise row, got %s', v_count));
+  end if;
+
+  -- No exercise row is shared between the two clients' copies.
+  if exists (
+    select 1
+    from public.session_exercises sa
+    join public.sessions wa on wa.id = sa.session_id and wa.program_id = v_prog_a
+    join public.session_exercises sb on sb.id = sa.id
+    join public.sessions wb on wb.id = sb.session_id and wb.program_id = v_prog_b
+  ) then
+    failures := array_append(failures, 'the two clients share session_exercises rows');
+  end if;
+
+  -- The warm-up came along as this session's own rows rather than through a
+  -- second workouts copy re-linked by warmup_id.
+  select count(*) into v_count
+  from public.session_exercises se
+  join public.sessions ws on ws.id = se.session_id
+  where ws.program_id = v_prog_a and se.section = 'warmup';
+  if v_count <> 1 then
+    failures := array_append(failures,
+      format('expected the warmup to be flattened into the session, got %s rows', v_count));
+  end if;
+
+  select warmup_source_workout_id into v_uuid
+  from public.sessions where program_id = v_prog_a;
+  if v_uuid is distinct from w_warm then
+    failures := array_append(failures, 'the session lost its warmup provenance');
+  end if;
+
+  -- Exercise rows still FK the shared exercise library, which is never copied.
+  if not exists (
+    select 1 from public.session_exercises se
+    join public.sessions ws on ws.id = se.session_id
+    join public.exercises e on e.id = se.exercise_id
+    where ws.program_id = v_prog_a and e.id = ex_bench
+  ) then
+    failures := array_append(failures, 'session exercises no longer reference the shared exercise library');
   end if;
 
   -- -----------------------------------------------------------------------
@@ -120,10 +142,13 @@ begin
   where workout_id = w_push;
   update public.programs set name = 'Template Renamed' where id = tmpl_program;
 
-  select (we.set_configs->0->>'weight')::numeric into v_num
-  from public.workout_exercises we
-  join public.week_schedules ws on ws.workout_id = we.workout_id
-  where ws.program_id = v_prog_a;
+  -- Read the CLIENT's program — their session's own rows. Reading
+  -- workout_exercises through source_workout_id would just re-read the
+  -- library workout that was edited a moment ago and prove nothing.
+  select (se.set_configs->0->>'weight')::numeric into v_num
+  from public.session_exercises se
+  join public.sessions ws on ws.id = se.session_id
+  where ws.program_id = v_prog_a and se.section = 'main';
   if v_num is distinct from 135 then
     failures := array_append(failures,
       format('editing the template changed client A''s live program (B2): weight is now %s', v_num));
@@ -137,15 +162,18 @@ begin
   -- -----------------------------------------------------------------------
   -- Editing ONE client's copy reaches only them (tier 2)
   -- -----------------------------------------------------------------------
-  update public.workout_exercises we
+  -- A client's copy is their session_exercises now, not a per-client
+  -- duplicate of the coach's workout. Both clients' sessions still point at
+  -- the SAME source_workout_id — that is provenance, not sharing.
+  update public.session_exercises se
   set set_configs = '[{"reps":3,"weight":225,"weight_unit":"lbs"}]'::jsonb
-  from public.week_schedules ws
-  where ws.workout_id = we.workout_id and ws.program_id = v_prog_a;
+  from public.sessions ws
+  where ws.id = se.session_id and ws.program_id = v_prog_a;
 
-  select (we.set_configs->0->>'weight')::numeric into v_num
-  from public.workout_exercises we
-  join public.week_schedules ws on ws.workout_id = we.workout_id
-  where ws.program_id = v_prog_b;
+  select (se.set_configs->0->>'weight')::numeric into v_num
+  from public.session_exercises se
+  join public.sessions ws on ws.id = se.session_id
+  where ws.program_id = v_prog_b and se.section = 'main';
   if v_num is distinct from 135 then
     failures := array_append(failures,
       format('editing client A''s program changed client B''s: B now reads %s', v_num));
@@ -350,7 +378,7 @@ begin
     end if;
 
     select count(*) into v_count
-    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    from public.sessions ws join public.program_phases ph on ph.id = ws.phase_id
     where ph.program_id = v_prog;
     if v_count <> 2 then
       failures := array_append(failures, format('expected 2 phase-scoped slots, got %s', v_count));
@@ -359,7 +387,7 @@ begin
     select id into v_phase_id_before from public.program_phases
     where program_id = v_prog and sort_order = 0;
     select ws.id into v_slot_id_before
-    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    from public.sessions ws join public.program_phases ph on ph.id = ws.phase_id
     where ph.program_id = v_prog and ph.sort_order = 0;
 
     -- Rename a phase and repoint a slot: ids must survive.
@@ -385,7 +413,7 @@ begin
     end if;
 
     select ws.id into v_slot_id_after
-    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    from public.sessions ws join public.program_phases ph on ph.id = ws.phase_id
     where ph.program_id = v_prog and ph.sort_order = 0;
     if v_slot_id_after is distinct from v_slot_id_before then
       failures := array_append(failures, 'save_program churned the schedule slot id (B3)');
@@ -431,7 +459,7 @@ begin
       p_program_id => v_prog
     );
     select count(*) into v_count
-    from public.week_schedules ws join public.program_phases ph on ph.id = ws.phase_id
+    from public.sessions ws join public.program_phases ph on ph.id = ws.phase_id
     where ph.program_id = v_prog;
     if v_count <> 0 then
       failures := array_append(failures, format('removing every slot should clear them, got %s', v_count));
@@ -452,7 +480,7 @@ begin
     if v_count <> 0 then
       failures := array_append(failures, format('switching to flat should drop phases, got %s', v_count));
     end if;
-    select count(*) into v_count from public.week_schedules where program_id = v_prog;
+    select count(*) into v_count from public.sessions where program_id = v_prog;
     if v_count <> 1 then
       failures := array_append(failures, format('expected 1 flat slot, got %s', v_count));
     end if;

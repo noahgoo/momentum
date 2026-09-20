@@ -67,11 +67,9 @@ begin
     '[{"reps":5,"weight":135,"weight_unit":"lbs"},{"reps":5,"weight":145,"weight_unit":"lbs"}]'::jsonb);
 
   insert into public.programs (id, name, weeks, created_by) values (program_id, 'RPC Program', 4, coach_id);
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-  values (program_id, 1, 'monday', w_mon);
-  -- resolve_scheduled_workout reads sessions now, so fixtures that insert
-  -- week_schedules directly must materialize them (0032).
-  perform public.resync_program_sessions(program_id);
+  -- Schedule a slot the way save_program does: nothing writes
+  -- week_schedules any more (0034).
+  perform public.materialize_session(program_id, null, 1, 'monday', w_mon);
   insert into public.assignments (id, client_id, program_id, start_date, active)
   values (assign_id, client_a, program_id, v_start, true);
 
@@ -330,8 +328,8 @@ begin
 
   -- And deleting the workout itself leaves history readable (R4: the
   -- workout_id FK is provenance, set null, not a dependency).
-  delete from public.week_schedules where workout_id = w_mon;
-  perform public.resync_program_sessions(program_id);
+  -- Clearing the slot: a null source empties it.
+  perform public.materialize_session(program_id, null, 1, 'monday', null);
   delete from public.workouts where id = w_mon;
 
   select count(*) into v_count from public.workout_logs where id = v_log_id;

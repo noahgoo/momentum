@@ -46,8 +46,8 @@ begin
 
   insert into public.programs (id, name, weeks, created_by)
   values (tmpl_program, 'Guard Template', 2, coach_id);
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
-  values (tmpl_program, 1, 'monday', w_push);
+  -- Nothing writes week_schedules any more (0034); a slot is a session.
+  perform public.materialize_session(tmpl_program, null, 1, 'monday', w_push);
 
   perform set_config('request.jwt.claims', json_build_object('sub', coach_id)::text, true);
 
@@ -69,8 +69,8 @@ begin
   -- 1. save_program refuses a client's own copy
   -- -----------------------------------------------------------------------
   select count(*) into v_before
-  from public.week_schedules ws
-  where ws.program_id = v_instance_program;
+  from public.sessions s
+  where s.program_id = v_instance_program;
 
   if v_before = 0 then
     failures := array_append(failures, 'fixture: the instance program has no scheduled days to protect');
@@ -90,8 +90,8 @@ begin
   -- 2. The refusal left the client's schedule untouched
   -- -----------------------------------------------------------------------
   select count(*) into v_after
-  from public.week_schedules ws
-  where ws.program_id = v_instance_program;
+  from public.sessions s
+  where s.program_id = v_instance_program;
 
   if v_after <> v_before then
     failures := array_append(failures, format(
@@ -128,8 +128,8 @@ begin
   -- delete omitted slots, and assertions 1-2 would be guarding nothing.
   -- -----------------------------------------------------------------------
   select count(*) into v_after
-  from public.week_schedules ws
-  where ws.program_id = tmpl_program;
+  from public.sessions s
+  where s.program_id = tmpl_program;
 
   if v_after <> 0 then
     failures := array_append(failures, format(

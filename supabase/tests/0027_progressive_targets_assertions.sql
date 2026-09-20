@@ -129,16 +129,12 @@ begin
       '[{"reps":8,"weight_delta":5,"weight_unit":"lbs"}]'::jsonb);
 
   insert into public.programs (id, name, weeks, created_by) values (prog_id, 'Prog', 8, coach_id);
-  insert into public.week_schedules (program_id, week_number, day_of_week, workout_id) values
-    (prog_id, 1, 'monday', w_push),
-    (prog_id, 1, 'tuesday', w_push),
-    (prog_id, 1, 'wednesday', w_push),
-    (prog_id, 1, 'thursday', w_push);
-
-  -- resolve_scheduled_workout reads sessions now (0033), and workout_logs
-  -- points at one, so fixtures inserting week_schedules directly must
-  -- materialize them first.
-  perform public.resync_program_sessions(prog_id);
+  -- Schedule a slot the way save_program does: nothing writes
+  -- week_schedules any more (0034).
+  perform public.materialize_session(prog_id, null, 1, 'monday', w_push);
+  perform public.materialize_session(prog_id, null, 1, 'tuesday', w_push);
+  perform public.materialize_session(prog_id, null, 1, 'wednesday', w_push);
+  perform public.materialize_session(prog_id, null, 1, 'thursday', w_push);
   insert into public.assignments (client_id, program_id, start_date, active)
     values (client_a, prog_id, v_start, true);
 
