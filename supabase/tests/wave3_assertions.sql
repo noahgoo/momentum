@@ -31,6 +31,7 @@ declare
   wb1 uuid := 'b0000000-0000-0000-0000-000000000005';
   w9 uuid := 'b0000000-0000-0000-0000-000000000009';
   wbonus uuid := 'b0000000-0000-0000-0000-00000000000b';
+  v_sess_override uuid;
 
   -- Programs / phases / assignments
   program_p1 uuid := 'c0000000-0000-0000-0000-000000000001';
@@ -108,6 +109,10 @@ begin
     (program_p1, 2, 'monday', w3),
     (program_p1, 2, 'wednesday', w4);
 
+  -- resolve_scheduled_workout reads sessions now (0033), so a fixture that
+  -- inserts week_schedules directly must materialize them.
+  perform public.resync_program_sessions(program_p1);
+
   insert into public.assignments (id, client_id, program_id, start_date, active)
   values (assignment_a, client_a, program_p1, start_date, true);
 
@@ -125,6 +130,8 @@ begin
     (phase_a, 2, 'monday', w3),
     (phase_b, 1, 'monday', wb1);
 
+  perform public.resync_program_sessions(program_p2);
+
   insert into public.assignments (id, client_id, program_id, start_date, active)
   values (assignment_b, client_b, program_p2, start_date, true);
 
@@ -134,13 +141,15 @@ begin
 
   -- 1. Week 1 Monday resolves scheduled workout.
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
-  if v_result is distinct from w1 then
+  if (select source_workout_id from public.sessions where id = v_result)
+     is distinct from w1 then
     failures := array_append(failures, format('resolve_scheduled_workout week1 monday: expected %s got %s', w1, v_result));
   end if;
 
   -- 2. Week 1 Wednesday resolves scheduled workout.
   v_result := public.resolve_scheduled_workout(client_a, '2026-07-01');
-  if v_result is distinct from w2 then
+  if (select source_workout_id from public.sessions where id = v_result)
+     is distinct from w2 then
     failures := array_append(failures, format('resolve_scheduled_workout week1 wednesday: expected %s got %s', w2, v_result));
   end if;
 
@@ -158,7 +167,8 @@ begin
 
   -- 5. Week rollover: day 8 after start is week 2 (2026-07-06 = Monday).
   v_result := public.resolve_scheduled_workout(client_a, '2026-07-06');
-  if v_result is distinct from w3 then
+  if (select source_workout_id from public.sessions where id = v_result)
+     is distinct from w3 then
     failures := array_append(failures, format('resolve_scheduled_workout week rollover: expected %s got %s', w3, v_result));
   end if;
 
@@ -170,21 +180,27 @@ begin
 
   -- 7. Phase flattening: phase A 2 weeks, phase B week 1 = global week 3.
   v_result := public.resolve_scheduled_workout(client_b, '2026-07-13'); -- Monday, global week 3
-  if v_result is distinct from wb1 then
+  if (select source_workout_id from public.sessions where id = v_result)
+     is distinct from wb1 then
     failures := array_append(failures, format('resolve_scheduled_workout phase flattening: expected %s got %s', wb1, v_result));
   end if;
 
   -- 8. Override wins outright over computed schedule.
-  insert into public.assignment_date_overrides (assignment_id, date, workout_id)
-  values (assignment_a, '2026-06-29', w9);
+  -- An override moves a SESSION onto a date, so it must name one that
+  -- exists: w9 is scheduled nowhere and therefore has no session.
+  select id into v_sess_override from public.sessions
+  where program_id = program_p1 and week_number = 2 and day_of_week = 'wednesday';
+
+  insert into public.assignment_date_overrides (assignment_id, date, session_id)
+  values (assignment_a, '2026-06-29', v_sess_override);
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
-  if v_result is distinct from w9 then
-    failures := array_append(failures, format('resolve_scheduled_workout override wins: expected %s got %s', w9, v_result));
+  if v_result is distinct from v_sess_override then
+    failures := array_append(failures, format('resolve_scheduled_workout override wins: expected %s got %s', v_sess_override, v_result));
   end if;
 
   -- 9. Explicit-rest override (NULL) beats a normally-scheduled workout.
   delete from public.assignment_date_overrides where assignment_id = assignment_a and date = '2026-06-29';
-  insert into public.assignment_date_overrides (assignment_id, date, workout_id)
+  insert into public.assignment_date_overrides (assignment_id, date, session_id)
   values (assignment_a, '2026-06-29', null);
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
   if v_result is not null then
@@ -192,11 +208,11 @@ begin
   end if;
 
   -- 10. Override can add a workout on an otherwise-rest day.
-  insert into public.assignment_date_overrides (assignment_id, date, workout_id)
-  values (assignment_a, '2026-06-30', wbonus);
+  insert into public.assignment_date_overrides (assignment_id, date, session_id)
+  values (assignment_a, '2026-06-30', v_sess_override);
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-30');
-  if v_result is distinct from wbonus then
-    failures := array_append(failures, format('resolve_scheduled_workout override adds workout: expected %s got %s', wbonus, v_result));
+  if v_result is distinct from v_sess_override then
+    failures := array_append(failures, format('resolve_scheduled_workout override adds workout: expected %s got %s', v_sess_override, v_result));
   end if;
 
   -- Clean up overrides before the streak vectors below (which assume the
@@ -216,18 +232,23 @@ begin
   insert into public.week_schedules (program_id, week_number, day_of_week, workout_id) values
     (program_p1, 1, 'friday', w1),
     (program_p1, 2, 'friday', w3);
+
+  -- Any mid-suite change to week_schedules needs a resync: resolution reads
+  -- sessions (0033), so without this Friday never resolves and the grace-day
+  -- vector silently counts 07-10 as a rest day instead.
+  perform public.resync_program_sessions(program_p1);
   -- (week 1: mon/wed/fri = 06-29, 07-01, 07-03; week 2: mon/wed/fri = 07-06, 07-08, 07-10)
 
   -- Vector: keeps counting through rest days without breaking the streak.
   -- All workout days 06-29..07-08 completed; as_of = Thu 07-09 (rest day).
   -- Expected streak = 11 (every day 06-29 through 07-09 inclusive).
   delete from public.workout_logs where client_id = client_a;
-  insert into public.workout_logs (client_id, workout_id, date, completed) values
-    (client_a, w1, '2026-06-29', true),
-    (client_a, w2, '2026-07-01', true),
-    (client_a, w1, '2026-07-03', true),
-    (client_a, w3, '2026-07-06', true),
-    (client_a, w4, '2026-07-08', true);
+  insert into public.workout_logs (client_id, session_id, date, completed) values
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-06-29'), '2026-06-29', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-01'), '2026-07-01', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-03'), '2026-07-03', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-06'), '2026-07-06', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-08'), '2026-07-08', true);
   v_int_result := public.compute_streak(client_a, '2026-07-09');
   if v_int_result is distinct from 11 then
     failures := array_append(failures, format('compute_streak rest-day continue: expected 11 got %s', v_int_result));
@@ -237,8 +258,8 @@ begin
   -- completed; Wed 07-01 (scheduled) missed. as_of = 07-02 (rest, Thursday).
   -- Expected streak = 1 (07-02 rest day counts; walk stops at the 07-01 miss).
   delete from public.workout_logs where client_id = client_a;
-  insert into public.workout_logs (client_id, workout_id, date, completed) values
-    (client_a, w1, '2026-06-29', true);
+  insert into public.workout_logs (client_id, session_id, date, completed) values
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-06-29'), '2026-06-29', true);
   v_int_result := public.compute_streak(client_a, '2026-07-02');
   if v_int_result is distinct from 1 then
     failures := array_append(failures, format('compute_streak missed-day break: expected 1 got %s', v_int_result));
@@ -248,12 +269,12 @@ begin
   -- 07-10 (Fri, scheduled, not completed) -> grace steps back to 07-09.
   -- Completed 06-29,07-01,07-03,07-06,07-08. Expected streak = 11 (06-29..07-09).
   delete from public.workout_logs where client_id = client_a;
-  insert into public.workout_logs (client_id, workout_id, date, completed) values
-    (client_a, w1, '2026-06-29', true),
-    (client_a, w2, '2026-07-01', true),
-    (client_a, w1, '2026-07-03', true),
-    (client_a, w3, '2026-07-06', true),
-    (client_a, w4, '2026-07-08', true);
+  insert into public.workout_logs (client_id, session_id, date, completed) values
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-06-29'), '2026-06-29', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-01'), '2026-07-01', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-03'), '2026-07-03', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-06'), '2026-07-06', true),
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-07-08'), '2026-07-08', true);
   v_int_result := public.compute_streak(client_a, '2026-07-10');
   if v_int_result is distinct from 11 then
     failures := array_append(failures, format('compute_streak grace day: expected 11 got %s', v_int_result));
@@ -263,8 +284,8 @@ begin
   -- as_of = 06-30 (Tue, rest day). Expected streak = 2 (06-29 completed
   -- workout + 06-30 rest); walk then hits 06-28 < start_date and stops.
   delete from public.workout_logs where client_id = client_a;
-  insert into public.workout_logs (client_id, workout_id, date, completed) values
-    (client_a, w1, '2026-06-29', true);
+  insert into public.workout_logs (client_id, session_id, date, completed) values
+    (client_a, public.resolve_scheduled_workout(client_a, '2026-06-29'), '2026-06-29', true);
   v_int_result := public.compute_streak(client_a, '2026-06-30');
   if v_int_result is distinct from 2 then
     failures := array_append(failures, format('compute_streak program-start bound: expected 2 got %s', v_int_result));
@@ -274,11 +295,12 @@ begin
   -- so later sections aren't affected by this section's fixtures.
   delete from public.week_schedules where program_id = program_p1 and day_of_week = 'friday';
   update public.programs set weeks = 2 where id = program_p1;
+  perform public.resync_program_sessions(program_p1);
   delete from public.workout_logs where client_id = client_a;
 
   -- Fallback vector: client_c has no active assignment -> plain consecutive-
   -- completed-dates walk. Parity with old computeStreak(dates, today).
-  insert into public.workout_logs (client_id, workout_id, date, completed) values
+  insert into public.workout_logs (client_id, session_id, date, completed) values
     (client_c, null, '2026-07-07', true),
     (client_c, null, '2026-07-06', true),
     (client_c, null, '2026-07-05', true);
@@ -290,7 +312,7 @@ begin
   -- Fallback grace: today not logged yet -> streak still counts through
   -- yesterday.
   delete from public.workout_logs where client_id = client_c;
-  insert into public.workout_logs (client_id, workout_id, date, completed) values
+  insert into public.workout_logs (client_id, session_id, date, completed) values
     (client_c, null, '2026-07-06', true),
     (client_c, null, '2026-07-05', true),
     (client_c, null, '2026-07-04', true);
@@ -316,7 +338,8 @@ begin
   -- from_date); from_date (06-29) should resolve to null (what was on
   -- to_date, i.e. rest).
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-30');
-  if v_result is distinct from w1 then
+  if (select source_workout_id from public.sessions where id = v_result)
+     is distinct from w1 then
     failures := array_append(failures, format('apply_change_request_swap to_date: expected %s got %s', w1, v_result));
   end if;
   v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
@@ -417,8 +440,8 @@ begin
     delete from public.workout_logs where client_id in (client_a, client_b);
     -- Only client_a completes a workout yesterday; client_b does nothing.
     -- Per finding #4, one member completing suffices to count the day.
-    insert into public.workout_logs (client_id, workout_id, date, completed)
-    values (client_a, w1, v_yesterday, true);
+    insert into public.workout_logs (client_id, session_id, date, completed)
+    values (client_a, public.resolve_scheduled_workout(client_a, v_yesterday), v_yesterday, true);
 
     perform public.recompute_friendship_stats(pair_ab);
     select stats, shared_streak into v_stats, v_shared_streak

@@ -134,12 +134,18 @@ begin
     (prog_id, 1, 'tuesday', w_push),
     (prog_id, 1, 'wednesday', w_push),
     (prog_id, 1, 'thursday', w_push);
+
+  -- resolve_scheduled_workout reads sessions now (0033), and workout_logs
+  -- points at one, so fixtures inserting week_schedules directly must
+  -- materialize them first.
+  perform public.resync_program_sessions(prog_id);
   insert into public.assignments (client_id, program_id, start_date, active)
     values (client_a, prog_id, v_start, true);
 
   -- Squat: logged MONDAY, a ramp, weights actually typed.
-  insert into public.workout_logs (id, client_id, date, workout_id, completed, completed_at)
-    values (gen_random_uuid(), client_a, v_start, w_push, true, now())
+  insert into public.workout_logs (id, client_id, date, session_id, completed, completed_at)
+    values (gen_random_uuid(), client_a, v_start,
+            public.resolve_scheduled_workout(client_a, v_start), true, now())
     returning id into log_old;
   insert into public.exercise_logs (workout_log_id, exercise_id, exercise_name, mode, sort_order)
     values (log_old, ex_squat, 'Back Squat', 'reps', 0) returning id into el_id;
@@ -149,8 +155,9 @@ begin
            (el_id, 3, true, 175, 'lbs', true);
 
   -- An OLDER squat session that must lose to Monday's.
-  insert into public.workout_logs (id, client_id, date, workout_id, completed, completed_at)
-    values (gen_random_uuid(), client_a, v_start - 7, w_push, true, now())
+  insert into public.workout_logs (id, client_id, date, session_id, completed, completed_at)
+    values (gen_random_uuid(), client_a, v_start - 7,
+            public.resolve_scheduled_workout(client_a, v_start - 7), true, now())
     returning id into log_mid;
   insert into public.exercise_logs (workout_log_id, exercise_id, exercise_name, mode, sort_order)
     values (log_mid, ex_squat, 'Back Squat', 'reps', 0) returning id into el_id;
@@ -159,8 +166,9 @@ begin
 
   -- Row: logged WEDNESDAY (more recently than the squat) but only checked
   -- off — no weight typed. P2 says this must not seed a progression.
-  insert into public.workout_logs (id, client_id, date, workout_id, completed, completed_at)
-    values (gen_random_uuid(), client_a, v_start + 2, w_push, true, now())
+  insert into public.workout_logs (id, client_id, date, session_id, completed, completed_at)
+    values (gen_random_uuid(), client_a, v_start + 2,
+            public.resolve_scheduled_workout(client_a, v_start + 2), true, now())
     returning id into log_mid;
   insert into public.exercise_logs (workout_log_id, exercise_id, exercise_name, mode, sort_order)
     values (log_mid, ex_row, 'Barbell Row', 'reps', 0) returning id into el_id;
@@ -234,7 +242,7 @@ begin
   -- The log side keeps the client's work and drops only the bad snapshot.
   perform set_config('request.jwt.claims', json_build_object('sub', client_a)::text, true);
 
-  v_new_id := public.save_workout_log(v_today, w_push, true, jsonb_build_array(
+  v_new_id := public.save_workout_log(v_today, public.resolve_scheduled_workout(client_a, v_today), true, jsonb_build_array(
     jsonb_build_object(
       'exercise_id', ex_squat,
       'exercise_name', 'Back Squat',

@@ -562,8 +562,13 @@ begin
   for v_d in select generate_series(v_start1, current_date, interval '1 day')::date loop
     if public.resolve_scheduled_workout(client1, v_d) is not null and v_d < current_date then
       wl_c1_d0 := gen_random_uuid();
-      insert into public.workout_logs (id, client_id, workout_id, date, completed, completed_at)
-      values (wl_c1_d0, client1, public.resolve_scheduled_workout(client1, v_d), v_d, true, v_d + time '18:00')
+      insert into public.workout_logs (id, client_id, session_id, session_name, date, completed, completed_at)
+      values (
+        wl_c1_d0, client1,
+        public.resolve_scheduled_workout(client1, v_d),
+        (select s.name from public.sessions s where s.id = public.resolve_scheduled_workout(client1, v_d)),
+        v_d, true, v_d + time '18:00'
+      )
       on conflict (client_id, date) do nothing;
     end if;
   end loop;
@@ -572,12 +577,12 @@ begin
   -- realistic detail (full-body log with reps sets).
   select id into wl_c1_d1 from public.workout_logs where client_id = client1 order by date desc limit 1;
   if wl_c1_d1 is not null then
-    -- Match on name, not on w1_fullbody's id: the log points at client1's
-    -- INSTANCE copy of that workout, which has a fresh id. The deep copy
-    -- preserves the name, so that is the stable handle here.
-    select workout_id into v_el from public.workout_logs where id = wl_c1_d1;
+    -- Match on name, not on w1_fullbody's id: the log points at one of
+    -- client1's SESSIONS, which has a fresh id. A session snapshots the
+    -- name it was materialized from, so that is the stable handle here.
+    select session_id into v_el from public.workout_logs where id = wl_c1_d1;
     if exists (
-      select 1 from public.workouts
+      select 1 from public.sessions
       where id = v_el and name = 'Full Body Strength'
     ) then
       insert into public.exercise_logs (id, workout_log_id, exercise_id, exercise_name, mode, sort_order)
@@ -596,8 +601,12 @@ begin
   select public.resolve_scheduled_workout(client2, v_start2) into v_el;
   if v_el is not null then
     wl_c2_d0 := gen_random_uuid();
-    insert into public.workout_logs (id, client_id, workout_id, date, completed, warmup_completed, completed_at)
-    values (wl_c2_d0, client2, v_el, v_start2, true, true, v_start2 + time '07:30')
+    insert into public.workout_logs (id, client_id, session_id, session_name, date, completed, warmup_completed, completed_at)
+    values (
+      wl_c2_d0, client2, v_el,
+      (select s.name from public.sessions s where s.id = v_el),
+      v_start2, true, true, v_start2 + time '07:30'
+    )
     on conflict (client_id, date) do nothing;
   end if;
 
@@ -612,9 +621,12 @@ begin
       end if;
 
       wl_c3_after := gen_random_uuid();
-      insert into public.workout_logs (id, client_id, workout_id, date, completed, completed_at, difficulty, next_day_feel)
+      insert into public.workout_logs (id, client_id, session_id, session_name, date, completed, completed_at, difficulty, next_day_feel)
       values (
-        wl_c3_after, client3, public.resolve_scheduled_workout(client3, v_d), v_d, true, v_d + time '19:00',
+        wl_c3_after, client3,
+        public.resolve_scheduled_workout(client3, v_d),
+        (select s.name from public.sessions s where s.id = public.resolve_scheduled_workout(client3, v_d)),
+        v_d, true, v_d + time '19:00',
         case when v_d = current_date - 1 then 'challenging'::workout_difficulty else null end,
         case when v_d = current_date - 1 then 4 else null end
       )
@@ -623,9 +635,10 @@ begin
   end loop;
 
   -- Exercise/set logs for client3: one reps-mode log and one distance-mode log.
-  select wl.id, wl.workout_id into wl_c3_before, v_el
+  select wl.id, wl.session_id into wl_c3_before, v_el
   from public.workout_logs wl
-  where wl.client_id = client3 and wl.workout_id = w1_fullbody
+  join public.sessions s on s.id = wl.session_id
+  where wl.client_id = client3 and s.name = 'Full Body Strength'
   order by wl.date desc limit 1;
 
   if wl_c3_before is not null then
@@ -642,7 +655,8 @@ begin
 
   select wl.id into wl_c3_missed
   from public.workout_logs wl
-  where wl.client_id = client3 and wl.workout_id = w1_cardio
+  join public.sessions s on s.id = wl.session_id
+  where wl.client_id = client3 and s.name = 'Cardio Intervals'
   order by wl.date desc limit 1;
 
   if wl_c3_missed is not null then
@@ -830,7 +844,7 @@ begin
       v_to_date := v_from_date + 1;
       v_workout_id := public.resolve_scheduled_workout(client1, v_from_date);
 
-      insert into public.change_requests (id, client_id, coach_id, from_date, to_date, workout_id, status)
+      insert into public.change_requests (id, client_id, coach_id, from_date, to_date, session_id, status)
       values (cr_client1, client1, coach1, v_from_date, v_to_date, v_workout_id, 'pending')
       on conflict (id) do nothing;
     end if;

@@ -56,6 +56,11 @@ begin
   insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
     values (prog_new, 1, 'monday', w_new);
 
+  -- resolve_scheduled_workout reads sessions now, so fixtures that insert
+  -- week_schedules directly must materialize them (0032).
+  perform public.resync_program_sessions(prog_old);
+  perform public.resync_program_sessions(prog_new);
+
   insert into public.assignments (client_id, program_id, start_date, active)
     values (client_a, prog_old, v_old_start, false);
   insert into public.assignments (client_id, program_id, start_date, active)

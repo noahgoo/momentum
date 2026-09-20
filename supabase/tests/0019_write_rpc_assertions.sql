@@ -69,6 +69,9 @@ begin
   insert into public.programs (id, name, weeks, created_by) values (program_id, 'RPC Program', 4, coach_id);
   insert into public.week_schedules (program_id, week_number, day_of_week, workout_id)
   values (program_id, 1, 'monday', w_mon);
+  -- resolve_scheduled_workout reads sessions now, so fixtures that insert
+  -- week_schedules directly must materialize them (0032).
+  perform public.resync_program_sessions(program_id);
   insert into public.assignments (id, client_id, program_id, start_date, active)
   values (assign_id, client_a, program_id, v_start, true);
 
@@ -80,7 +83,7 @@ begin
   -- ---------------------------------------------------------------------
 
   v_log_id := public.save_workout_log(
-    v_scheduled, w_mon, false,
+    v_scheduled, public.resolve_scheduled_workout(client_a, v_scheduled), false,
     '[{"exercise_id":"e9000000-0000-0000-0000-000000000001","exercise_name":"Squat",
        "mode":"reps","sort_order":0,
        "prescribed":[{"reps":5,"weight":135,"weight_unit":"lbs"}],
@@ -107,7 +110,7 @@ begin
 
   -- Called twice, the tree is replaced, not duplicated (idempotent per C4).
   perform public.save_workout_log(
-    v_scheduled, w_mon, true,
+    v_scheduled, public.resolve_scheduled_workout(client_a, v_scheduled), true,
     '[{"exercise_id":"e9000000-0000-0000-0000-000000000001","exercise_name":"Squat",
        "mode":"reps","sort_order":0,
        "sets":[{"set_number":1,"completed":true,"reps":5,"weight":135,"weight_unit":"lbs","weight_entered":true}]}]'::jsonb);
@@ -133,7 +136,7 @@ begin
   -- (second save omitted `prescribed`, so it is null now — assert the FIRST
   -- save stored it by re-saving with it and re-reading)
   perform public.save_workout_log(
-    v_scheduled, w_mon, true,
+    v_scheduled, public.resolve_scheduled_workout(client_a, v_scheduled), true,
     '[{"exercise_id":"e9000000-0000-0000-0000-000000000001","exercise_name":"Squat",
        "mode":"reps","sort_order":0,
        "sets":[{"set_number":1,"completed":true,"reps":5,"weight":135,"weight_unit":"lbs",
@@ -162,7 +165,7 @@ begin
 
   -- W2: saving the log must not touch warmup_completed.
   update public.workout_logs set warmup_completed = true where id = v_log_id;
-  perform public.save_workout_log(v_scheduled, w_mon, true, '[]'::jsonb);
+  perform public.save_workout_log(v_scheduled, public.resolve_scheduled_workout(client_a, v_scheduled), true, '[]'::jsonb);
   select warmup_completed into v_bool from public.workout_logs where id = v_log_id;
   if not v_bool then
     failures := array_append(failures, 'save_workout_log cleared warmup_completed (W2 violation)');
@@ -170,7 +173,7 @@ begin
 
   -- Cannot CREATE a log on an unscheduled date.
   begin
-    perform public.save_workout_log(v_rest, w_mon, true, '[]'::jsonb);
+    perform public.save_workout_log(v_rest, public.resolve_scheduled_workout(client_a, v_rest), true, '[]'::jsonb);
     failures := array_append(failures, 'save_workout_log should raise not_scheduled for a rest day');
   exception when others then
     if sqlerrm <> 'not_scheduled' then
@@ -291,7 +294,7 @@ begin
   -- Re-establish a logged set with its snapshot: the W2 check above
   -- deliberately saved an empty exercise list, which cleared the children.
   perform public.save_workout_log(
-    v_scheduled, w_mon, true,
+    v_scheduled, public.resolve_scheduled_workout(client_a, v_scheduled), true,
     '[{"exercise_id":"e9000000-0000-0000-0000-000000000001","exercise_name":"Squat",
        "mode":"reps","sort_order":0,
        "sets":[{"set_number":1,"completed":true,"reps":5,"weight":135,"weight_unit":"lbs",
@@ -328,6 +331,7 @@ begin
   -- And deleting the workout itself leaves history readable (R4: the
   -- workout_id FK is provenance, set null, not a dependency).
   delete from public.week_schedules where workout_id = w_mon;
+  perform public.resync_program_sessions(program_id);
   delete from public.workouts where id = w_mon;
 
   select count(*) into v_count from public.workout_logs where id = v_log_id;
