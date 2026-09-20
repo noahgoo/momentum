@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { dateStr, parseDateStr, type WorkoutLog } from "@momentum/shared";
+import { addDaysStr, dateStr, mondayOfStr, parseDateStr, type WorkoutLog } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 import { deriveDayState, type DayState } from "../../components/workout/dayState";
@@ -40,17 +40,15 @@ export interface WorkoutWeekResult {
   /** % of program days elapsed as of today, clamped to [0, 100]. */
   percentElapsed: number;
   days: WorkoutWeekDay[];
-  /** Weekday index (0=Sun..6=Sat) the program's start date falls on — the
-   * grid rotates so this weekday leads instead of always starting Monday. */
-  startWeekday: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Resolves one program week's 7-day grid, rotated so the program's start
- * weekday leads (constraint: "rotated so program's start weekday leads"),
- * rather than the old app's fixed Monday-Sunday calendar week.
+ * Resolves one program week's 7-day grid, always Monday-to-Sunday
+ * regardless of the program's start date. Weeks are numbered from the
+ * Monday on/before start_date, so a program starting midweek can show a
+ * partial (mostly outOfRange) first and last week.
  */
 export function useWorkoutWeek(uid: string | undefined, weekNumber: number, todayStr: string) {
   return useQuery<WorkoutWeekResult | null>({
@@ -88,28 +86,30 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
             )
           : startDateStr;
 
-      const totalWeeks = programTotalWeeks;
       const daysDiffToday = Math.floor(
         (new Date(todayStr + "T00:00:00").getTime() - start.getTime()) / DAY_MS
       );
-      const currentWeekNumber = Math.max(1, Math.floor(daysDiffToday / 7) + 1);
-      const totalProgramDays = totalWeeks * 7;
+      const totalProgramDays = programTotalWeeks * 7;
       const percentElapsed =
         totalProgramDays > 0
           ? Math.min(100, Math.max(0, Math.round(((daysDiffToday + 1) / totalProgramDays) * 100)))
           : 0;
 
-      const weekStart = new Date(
-        start.getFullYear(),
-        start.getMonth(),
-        start.getDate() + (weekNumber - 1) * 7
+      // Weeks are numbered from the Monday on/before start_date, so the grid
+      // is always Monday-first regardless of which weekday the program
+      // actually starts on.
+      const anchorMonday = mondayOfStr(startDateStr);
+      const anchor = parseDateStr(anchorMonday) as Date;
+      const end = parseDateStr(endDateStr) as Date;
+      const anchorToEndDays = Math.floor((end.getTime() - anchor.getTime()) / DAY_MS);
+      const totalWeeks = Math.max(1, Math.ceil((anchorToEndDays + 1) / 7));
+      const daysDiffAnchorToday = Math.floor(
+        (new Date(todayStr + "T00:00:00").getTime() - anchor.getTime()) / DAY_MS
       );
+      const currentWeekNumber = Math.max(1, Math.floor(daysDiffAnchorToday / 7) + 1);
 
-      const dayDates = Array.from(
-        { length: 7 },
-        (_, i) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i)
-      );
-      const dayDateStrs = dayDates.map(dateStr);
+      const weekStart = addDaysStr(anchorMonday, (weekNumber - 1) * 7);
+      const dayDateStrs = Array.from({ length: 7 }, (_, i) => addDaysStr(weekStart, i));
 
       // One call resolves all seven days through the same SQL the day view
       // uses, so the grid can never disagree with what the day screen shows.
@@ -139,8 +139,7 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
         ])
       );
 
-      const days: WorkoutWeekDay[] = dayDates.map((date, i) => {
-        const ds = dayDateStrs[i];
+      const days: WorkoutWeekDay[] = dayDateStrs.map((ds) => {
         const row = rowByDate.get(ds);
         const workout: WeekWorkout | null = row?.workout_id
           ? {
@@ -174,7 +173,6 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
         currentWeekNumber,
         percentElapsed,
         days,
-        startWeekday: start.getDay(),
       };
     },
   });
