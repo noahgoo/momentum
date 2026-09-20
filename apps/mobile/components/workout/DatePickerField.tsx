@@ -7,7 +7,6 @@ import {
   initialMonthKey,
   isWithinRange,
   monthHasSelectableDay,
-  monthKeyOf,
   monthLabel,
   shiftMonth,
 } from "./calendarMonth";

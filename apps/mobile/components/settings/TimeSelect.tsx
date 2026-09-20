@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { Check, ChevronDown } from "lucide-react-native";
 import { colors, fonts, radii, shadows, spacing } from "../../theme/tokens";
 import { ROW_HEIGHT, buildSlots } from "./timeSlots";
