@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import type { Exercise, SessionSection } from "@momentum/shared";
 import { SortableList } from "../components/builder/SortableList";
@@ -15,6 +15,34 @@ import {
 } from "../queries/useSessionDetail";
 import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import { useAuth } from "../lib/auth";
+import { draftKey, useDraft } from "../lib/useDraft";
+import { RestoreBanner } from "../components/builder/RestoreBanner";
+
+/**
+ * What is persisted locally between visits. A day's value is almost entirely
+ * in its exercises, so the two text fields ride along rather than being the
+ * point.
+ */
+interface SessionDraft {
+  name: string;
+  description: string;
+  exercises: BuilderExercise[];
+  warmupExercises: BuilderExercise[];
+}
+
+/**
+ * Enough of a check that a corrupt or outdated draft is dropped rather than
+ * spread into state — both arrays are rendered with `.map` and reach the save
+ * RPC unvalidated.
+ */
+function isSessionDraft(value: unknown): boolean {
+  const d = value as Partial<SessionDraft>;
+  return (
+    typeof d.name === "string" &&
+    Array.isArray(d.exercises) &&
+    Array.isArray(d.warmupExercises)
+  );
+}
 
 /**
  * Editor for ONE scheduled day.
@@ -46,6 +74,18 @@ export function SessionBuilderPage() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [dismissedRestore, setDismissedRestore] = useState(false);
+
+  // The key is withheld until `detail` arrives. `useDraft` reads storage once,
+  // when the key first becomes non-null, and reading it before the server copy
+  // is known means `serverUpdatedAt` is null and every draft is waved through
+  // — including one another device has already superseded, which Save would
+  // then write back over the newer row.
+  const draft = useDraft<SessionDraft>(
+    detail ? draftKey(profile?.id, "session", sessionId) : null,
+    detail?.updatedAt ?? null,
+    isSessionDraft
+  );
 
   useEffect(() => {
     if (!detail || hydrated) return;
@@ -68,10 +108,42 @@ export function SessionBuilderPage() {
     setHydrated(true);
   }, [detail, hydrated]);
 
+  // Applied *after* the server hydration above, or it would be overwritten the
+  // moment the detail query resolves.
+  const appliedDraft = useRef(false);
+  useEffect(() => {
+    if (!hydrated || appliedDraft.current || !draft.restored) return;
+    appliedDraft.current = true;
+    const d = draft.restored;
+    setName(d.name);
+    setDescription(d.description);
+    setExercises(d.exercises);
+    setWarmupExercises(d.warmupExercises);
+    setDirty(true);
+  }, [hydrated, draft.restored]);
+
+  // Persist on change, but only once hydrated — otherwise the empty initial
+  // state is written over a real draft before it has been applied. Depends on
+  // `draft.save` rather than `draft`, which is a new object every render.
+  const saveDraft = draft.save;
+  useEffect(() => {
+    if (!hydrated || !dirty) return;
+    saveDraft({ name, description, exercises, warmupExercises });
+  }, [hydrated, dirty, name, description, exercises, warmupExercises, saveDraft]);
+
   const confirmLeave = useUnsavedChangesGuard(
     dirty,
-    "You have unsaved changes to this day. Leave without saving?"
+    "This day has unsaved changes. They're saved on this device and will be restored when you come back. Leave anyway?"
   );
+
+  function discardDraft() {
+    draft.clear();
+    setDismissedRestore(true);
+    setDirty(false);
+    // Re-run server hydration so the form returns to the saved day.
+    appliedDraft.current = true;
+    setHydrated(false);
+  }
 
   function edit<T>(setter: (v: T) => void) {
     return (value: T) => {
@@ -126,6 +198,8 @@ export function SessionBuilderPage() {
       });
       setDirty(false);
       setSavedAt(new Date().toISOString());
+      draft.clear();
+      setDismissedRestore(true);
     } catch (error) {
       setSaveError(describeSaveSessionError(error));
     }
@@ -145,6 +219,10 @@ export function SessionBuilderPage() {
       >
         &larr; Back
       </button>
+
+      {draft.restored && !dismissedRestore && (
+        <RestoreBanner onDiscard={discardDraft} onDismiss={() => setDismissedRestore(true)} />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">

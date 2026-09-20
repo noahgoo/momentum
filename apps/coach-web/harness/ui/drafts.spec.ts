@@ -157,3 +157,34 @@ test.describe("builder drafts", () => {
     expect(mondayBg).not.toBe("rgba(0, 0, 0, 0)");
   });
 });
+
+test.describe("session drafts", () => {
+  test("a day's unsaved edits survive a reload", async ({ page }) => {
+    // The session editor was the one builder without this, so exiting or
+    // backgrounding mid-edit lost the work (S1).
+    await visit(page, "/library/programs/p-1/days/s-1");
+    const nameField = page.getByPlaceholder("e.g. Upper body strength");
+    await nameField.fill("Heavy Bench Day");
+    await page.waitForTimeout(DRAFT_DEBOUNCE_MS);
+
+    await visit(page, "/library/programs/p-1/days/s-1");
+    await expect(nameField).toHaveValue("Heavy Bench Day");
+    await expect(page.getByText("Restored your unsaved progress")).toBeVisible();
+  });
+
+  test("discarding returns the day to its saved state", async ({ page }) => {
+    await visit(page, "/library/programs/p-1/days/s-1");
+    const nameField = page.getByPlaceholder("e.g. Upper body strength");
+    await nameField.fill("Scratch That");
+    await page.waitForTimeout(DRAFT_DEBOUNCE_MS);
+
+    await visit(page, "/library/programs/p-1/days/s-1");
+    await page.getByRole("button", { name: "Discard" }).click();
+    await expect(nameField).toHaveValue("Upper Body Push A");
+
+    // And it does not come back.
+    await visit(page, "/library/programs/p-1/days/s-1");
+    await expect(nameField).toHaveValue("Upper Body Push A");
+    await expect(page.getByText("Restored your unsaved progress")).toHaveCount(0);
+  });
+});
