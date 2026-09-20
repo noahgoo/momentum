@@ -1278,6 +1278,7 @@ export type Database = {
       }
       workouts: {
         Row: {
+          category: string | null
           client_id: string | null
           created_at: string
           created_by: string | null
@@ -1286,11 +1287,13 @@ export type Database = {
           estimated_duration_minutes: number | null
           id: string
           name: string
+          source_workout_id: string | null
           type: Database["public"]["Enums"]["workout_type"]
           updated_at: string
           warmup_id: string | null
         }
         Insert: {
+          category?: string | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1299,11 +1302,13 @@ export type Database = {
           estimated_duration_minutes?: number | null
           id?: string
           name: string
+          source_workout_id?: string | null
           type?: Database["public"]["Enums"]["workout_type"]
           updated_at?: string
           warmup_id?: string | null
         }
         Update: {
+          category?: string | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1312,6 +1317,7 @@ export type Database = {
           estimated_duration_minutes?: number | null
           id?: string
           name?: string
+          source_workout_id?: string | null
           type?: Database["public"]["Enums"]["workout_type"]
           updated_at?: string
           warmup_id?: string | null
@@ -1329,6 +1335,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workouts_source_workout_id_fkey"
+            columns: ["source_workout_id"]
+            isOneToOne: false
+            referencedRelation: "workouts"
             referencedColumns: ["id"]
           },
           {
@@ -1353,6 +1366,10 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: undefined
       }
+      apply_session_to_future: {
+        Args: { p_include_warmup?: boolean; p_session_id: string }
+        Returns: Json
+      }
       assign_program: {
         Args: {
           p_client_id: string
@@ -1375,6 +1392,10 @@ export type Database = {
         Returns: string
       }
       duplicate_program: { Args: { p_program_id: string }; Returns: string }
+      duplicate_workout: {
+        Args: { p_client_id?: string; p_workout_id: string }
+        Returns: string
+      }
       get_my_streak: { Args: never; Returns: number }
       get_workout_day: { Args: { p_date: string }; Returns: Json }
       get_workout_week: {
@@ -1436,6 +1457,18 @@ export type Database = {
         }
         Returns: string
       }
+      save_session: {
+        Args: {
+          p_expected_updated_at?: string
+          p_payload: Json
+          p_session_id: string
+        }
+        Returns: string
+      }
+      save_session_as_workout: {
+        Args: { p_client_id?: string; p_name?: string; p_session_id: string }
+        Returns: string
+      }
       save_workout: {
         Args: {
           p_expected_updated_at?: string
@@ -1456,6 +1489,10 @@ export type Database = {
       send_message: {
         Args: { p_text: string; p_thread_client_id: string }
         Returns: Json
+      }
+      session_scheduled_date: {
+        Args: { p_session_id: string }
+        Returns: string
       }
       set_warmup_completed: {
         Args: { p_completed: boolean; p_date: string }
