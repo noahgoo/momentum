@@ -18,14 +18,16 @@ and what a write is allowed to affect. This is the core model — everything in
 
 | Tier | Tables | Identified by | Write rule |
 | --- | --- | --- | --- |
-| **Template** | `programs`, `workouts`, `workout_exercises`, `program_phases`, `week_schedules`, `exercises` | `client_id IS NULL` | Freely editable by the authoring coach. **Must never affect a client who is already assigned.** |
-| **Instance** | the same tables | `client_id = <a client>` | Editable by that client's coach. Affects exactly one client. |
+| **Library** | `exercises`, `workouts`, `workout_exercises` | `client_id IS NULL` = global, set = one client's shelf | Freely editable by the authoring coach. A library row **never has a live dependent** — every scheduled day is a copy — so there is nothing to protect. |
+| **Schedule** | `programs`, `program_phases`, `sessions`, `session_exercises` | `programs.client_id IS NULL` = template, set = one client's assigned copy | Editable by the authoring coach. A template edit reaches nobody already assigned; an instance edit reaches exactly one client, on exactly one day. |
 | **Event** | `workout_logs`, `exercise_logs`, `set_logs`, `goal_logs`, `body_measurements`, `progress_photos`, `messages` | always client-owned | Append and correct only. Never rewritten by a coach action, never cascade-deleted. |
 
-Assigning a program **deep-copies** the template tree into `client_id`-stamped
-instance rows. Editing a template never touches an assigned client; editing an
-instance touches exactly one. Logs snapshot what they need so history never
-changes underneath a client.
+Assigning a program **deep-copies** it into the client's own `programs`,
+`program_phases` and `sessions` rows. A session is one scheduled day, owning
+its exercises, so editing week 3 edits week 3 and nothing else. It records the
+library workout it came from in `source_workout_id` — provenance, never read
+for display. An assign writes no `workouts` rows at all. Logs snapshot what
+they need so history never changes underneath a client.
 
 ---
 
@@ -37,6 +39,7 @@ touching:
 | If you are touching… | Read first |
 | --- | --- |
 | `supabase/migrations/`, any `queries/` hook, a mutation, RLS policies, deletes | [`docs/rules/data-model.md`](docs/rules/data-model.md) |
+| `sessions`, `session_exercises`, the program builder, anything that materializes a scheduled day | [`docs/rules/data-model.md`](docs/rules/data-model.md) — R9 in particular |
 | the workout logger, workout history, `set_configs`, `set_logs`, reps/weights/durations | [`docs/rules/workout-numbers.md`](docs/rules/workout-numbers.md) |
 | anything dated, any cron job, timezones, `client_summaries`, optimistic updates, a row two people can edit | [`docs/rules/concurrency.md`](docs/rules/concurrency.md) |
 | a form, the query client, `staleTime`, offline behavior, a screen's load path | [`docs/rules/offline-perf.md`](docs/rules/offline-perf.md) |
@@ -47,7 +50,7 @@ touching:
 If more than one row matches, read all of them. If none obviously matches but
 you are writing data code, read `data-model.md`.
 
-`docs/rules/violations.md` tracks ~30 known breaches with `file:line`. Current
+`docs/rules/violations.md` tracks the known breaches still open, with `file:line`. Current
 code is **not** a reliable example to copy — check that file before treating
 an existing pattern as the norm. When you fix one, delete its row.
 
@@ -64,6 +67,8 @@ an existing pattern as the norm. When you fix one, delete its row.
 - [ ] Are both coach-side and client-side query keys invalidated?
 - [ ] New table → RLS enabled, policies written, in the same migration.
 - [ ] Does any displayed historical value get joined live instead of snapshotted?
+- [ ] Does this write a library row expecting a scheduled day to change, or the reverse? (R9)
+- [ ] Could re-saving a program overwrite session contents a coach already edited?
 
 For anything touching reps, weights, durations or distances:
 
