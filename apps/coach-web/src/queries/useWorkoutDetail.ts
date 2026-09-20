@@ -19,6 +19,8 @@ export interface WorkoutDetail {
   description: string | null;
   type: WorkoutType;
   estimatedDurationMinutes: number | null;
+  /** Free-text grouping, for the library filter. Null when uncategorized. */
+  category: string | null;
   equipment: string[];
   warmupId: string | null;
   /** Carried into the next save so a concurrent edit is detected (C3). */
@@ -53,6 +55,7 @@ export function useWorkoutDetail(workoutId: string | undefined) {
         description: workout.description,
         type: workout.type,
         estimatedDurationMinutes: workout.estimated_duration_minutes,
+        category: workout.category,
         equipment: workout.equipment ?? [],
         warmupId: workout.warmup_id,
         updatedAt: workout.updated_at,
@@ -96,6 +99,7 @@ export interface SaveWorkoutInput {
   name: string;
   description: string;
   estimatedDurationMinutes: number | undefined;
+  category?: string;
   equipment: string[];
   warmupId: string | null;
   exercises: BuilderExercise[]; // in final display order
@@ -142,6 +146,7 @@ export function useSaveWorkout() {
           description: input.description || null,
           type: input.type,
           estimated_duration_minutes: input.estimatedDurationMinutes ?? null,
+          category: input.category ?? null,
           equipment: input.equipment.length > 0 ? input.equipment : null,
           warmup_id: input.warmupId,
           exercises: input.exercises.map((ex) => ({

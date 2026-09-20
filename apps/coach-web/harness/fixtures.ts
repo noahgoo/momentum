@@ -122,12 +122,14 @@ const workouts = [
     name: "Upper Body Push A",
     description: "Bench focus, long rests",
     estimated_duration_minutes: 55,
+    category: "strength",
   },
   {
     id: "w-2",
     name: "Conditioning — Intervals & Accessory Circuit",
     description: null,
     estimated_duration_minutes: 30,
+    category: "conditioning",
   },
 ].map(
   (w) =>
@@ -147,6 +149,7 @@ const workoutDetail: WorkoutDetail = {
   description: "Bench focus, long rests",
   type: "workout",
   estimatedDurationMinutes: 55,
+  category: "strength",
   equipment: ["dumbbells", "bench"],
   warmupId: null,
   updatedAt: EDITABLE_WORKOUT_UPDATED_AT,

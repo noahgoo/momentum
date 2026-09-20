@@ -48,8 +48,14 @@ export const qk = {
       : (["clientSummaries", id, "activeAssignment", date] as const),
   threads: () => ["threads"] as const,
   threadMessages: (threadId: string) => ["threads", threadId, "messages"] as const,
-  workouts: () => ["workouts"] as const,
-  warmups: () => ["workouts", "warmups"] as const,
+  // clientId widens the list to that client's own shelf alongside the global
+  // library, so it has to be part of the key or the two share a cache entry.
+  workouts: (clientId?: string) =>
+    clientId === undefined ? (["workouts"] as const) : (["workouts", "forClient", clientId] as const),
+  warmups: (clientId?: string) =>
+    clientId === undefined
+      ? (["workouts", "warmups"] as const)
+      : (["workouts", "warmups", "forClient", clientId] as const),
   workoutDetail: (id: string) => ["workouts", id] as const,
   workoutExerciseCounts: (workoutIds: string[]) =>
     ["workouts", "exerciseCounts", [...workoutIds].sort()] as const,

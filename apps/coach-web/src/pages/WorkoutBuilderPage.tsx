@@ -12,7 +12,7 @@ import { defaultSetConfig } from "../components/builder/defaultSetConfig";
 import { ExerciseLibraryPanel } from "../components/exercises/ExerciseLibraryPanel";
 import { MobileSheet } from "../components/MobileSheet";
 import { useExercises } from "../queries/useExercises";
-import { useWorkouts } from "../queries/useWorkouts";
+import { deriveCategories, useWorkouts } from "../queries/useWorkouts";
 import {
   describeSaveWorkoutError,
   useSaveWorkout,
@@ -35,6 +35,7 @@ interface WorkoutDraft {
   name: string;
   description: string;
   durationStr: string;
+  category: string;
   equipmentStr: string;
   warmupId: string;
   exercises: BuilderExercise[];
@@ -94,12 +95,16 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
 
   const { data: detail, isLoading: detailLoading } = useWorkoutDetail(workoutId);
   const { data: warmupOptions = [] } = useWorkouts("warmup");
+  // Facet values come from the rows the coach already has, not a fixed list.
+  const { data: allWorkouts = [] } = useWorkouts(isWarmup ? "warmup" : "workout");
+  const categoryOptions = useMemo(() => deriveCategories(allWorkouts), [allWorkouts]);
   const { data: libraryExercises = [] } = useExercises();
   const saveWorkout = useSaveWorkout();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [durationStr, setDurationStr] = useState("");
+  const [category, setCategory] = useState("");
   const [equipmentStr, setEquipmentStr] = useState("");
   const [warmupId, setWarmupId] = useState<string>("");
   const [exercises, setExercises] = useState<BuilderExercise[]>([]);
@@ -137,6 +142,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
     setName(detail.name);
     setDescription(detail.description ?? "");
     setDurationStr(formatDurationMinutes(detail.estimatedDurationMinutes));
+    setCategory(detail.category ?? "");
     setEquipmentStr(detail.equipment.join(", "));
     setWarmupId(detail.warmupId ?? "");
     setExercises(
@@ -164,6 +170,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
     setName(d.name);
     setDescription(d.description);
     setDurationStr(d.durationStr);
+    setCategory(d.category ?? "");
     setEquipmentStr(d.equipmentStr);
     setWarmupId(d.warmupId);
     setExercises(d.exercises);
@@ -178,8 +185,8 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
   const saveDraft = draft.save;
   useEffect(() => {
     if (!hydrated || !dirty) return;
-    saveDraft({ name, description, durationStr, equipmentStr, warmupId, exercises });
-  }, [hydrated, dirty, name, description, durationStr, equipmentStr, warmupId, exercises, saveDraft]);
+    saveDraft({ name, description, durationStr, category, equipmentStr, warmupId, exercises });
+  }, [hydrated, dirty, name, description, durationStr, category, equipmentStr, warmupId, exercises, saveDraft]);
 
   const confirmLeave = useUnsavedChangesGuard(
     dirty,
@@ -205,6 +212,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
       setName("");
       setDescription("");
       setDurationStr("");
+      setCategory("");
       setEquipmentStr("");
       setWarmupId("");
       setExercises([]);
@@ -249,6 +257,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
       description: description.trim() || undefined,
       type,
       estimatedDurationMinutes: estimatedDurationMinutes ?? undefined,
+      category: category.trim() || undefined,
       equipment: equipment.length > 0 ? equipment : undefined,
       warmupId: isWarmup ? undefined : warmupId || undefined,
     });
@@ -262,6 +271,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
         name: parsed.data.name,
         description: parsed.data.description ?? "",
         estimatedDurationMinutes: parsed.data.estimatedDurationMinutes,
+        category: parsed.data.category,
         equipment: parsed.data.equipment ?? [],
         warmupId: isWarmup ? null : parsed.data.warmupId ?? null,
         exercises,
@@ -336,6 +346,25 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
                 placeholder="Optional"
                 className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
               />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Category</label>
+              <input
+                value={category}
+                onChange={(e) => edit(setCategory)(e.target.value)}
+                list="workout-category-options"
+                placeholder="strength"
+                className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
+              />
+              {/* Free text with the coach's own values as suggestions, exactly
+                  as the exercise library does it — a new category is coined by
+                  typing one, not by a migration. */}
+              <datalist id="workout-category-options">
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

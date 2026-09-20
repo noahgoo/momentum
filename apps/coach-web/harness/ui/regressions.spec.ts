@@ -194,3 +194,24 @@ test.describe("per-client program editing", () => {
     ).toHaveCount(0);
   });
 });
+
+test.describe("workout picker", () => {
+  test("groups workouts by category and filters to one", async ({ page }) => {
+    // Story 2: a coach scanning for a workout sees them grouped, not as one
+    // flat alphabetical list of everything they have ever written.
+    await visit(page, "/library/programs/new");
+
+    // Flat mode with one active day gives exactly one picker to assert on.
+    await page.getByRole("button", { name: "Mon", exact: true }).click();
+
+    const picker = page.locator("select").filter({ has: page.locator('option:text("Rest")') }).first();
+    await expect(picker.locator("optgroup")).toHaveCount(2);
+    await expect(picker.locator('optgroup[label="strength"]')).toHaveCount(1);
+    await expect(picker.locator('optgroup[label="conditioning"]')).toHaveCount(1);
+
+    const filter = page.getByLabel("Filter workouts by category");
+    await filter.selectOption("strength");
+    await expect(picker.locator("optgroup")).toHaveCount(1);
+    await expect(picker.locator("option")).toHaveCount(2); // Rest + the one match
+  });
+});

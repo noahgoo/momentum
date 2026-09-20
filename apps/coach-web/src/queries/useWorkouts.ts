@@ -4,25 +4,38 @@ import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
 
 /**
- * Coach's workout (or warmup) library list, filtered by `type`. No
- * client-side `created_by = auth.uid()` filter — RLS already scopes
- * `workouts` reads to rows this coach can see (own content), per the
- * README's rule against redundant coach filters.
+ * Coach's workout (or warmup) library, filtered by `type`.
+ *
+ * With `clientId`, the list widens to that client's own shelf alongside the
+ * global library — `client_id is null or client_id = :clientId`. That filter
+ * carries DOMAIN meaning (whose shelf an entry sits on), not security, so it
+ * belongs here and must stay: RLS already scopes these reads to this coach's
+ * own rows, which is why there is no `created_by` filter.
+ *
+ * Without `clientId` the list is global-only, which is what the library page
+ * shows.
  */
-export function useWorkouts(type: WorkoutType) {
+export function useWorkouts(type: WorkoutType, clientId?: string) {
   return useQuery<Workout[]>({
-    queryKey: type === "warmup" ? qk.warmups() : qk.workouts(),
+    queryKey: type === "warmup" ? qk.warmups(clientId) : qk.workouts(clientId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("workouts")
-        .select("*")
-        .eq("type", type)
-        .is("client_id", null)
-        .order("name", { ascending: true });
+      let query = supabase.from("workouts").select("*").eq("type", type);
+      query = clientId
+        ? query.or(`client_id.is.null,client_id.eq.${clientId}`)
+        : query.is("client_id", null);
+
+      const { data, error } = await query.order("name", { ascending: true });
       if (error) throw error;
       return data ?? [];
     },
   });
+}
+
+/** The category values a coach has actually used, for the filter facets. */
+export function deriveCategories(workouts: Workout[]): string[] {
+  const seen = new Set<string>();
+  for (const w of workouts) if (w.category) seen.add(w.category);
+  return Array.from(seen).sort();
 }
 
 /** Per-workout exercise counts, keyed by workout id, for the list cards. */
@@ -83,58 +96,25 @@ export function useDeleteWorkout(type: WorkoutType) {
 }
 
 /**
- * Duplicates a workout: copies the workout row (name suffixed " (copy)")
- * and every workout_exercises row, preserving sort_order and set_configs.
+ * Duplicates a workout through the `duplicate_workout` RPC.
+ *
+ * This was four separate requests with no transaction — read the workout,
+ * read its exercises, insert the copy, insert the children — so a dropped
+ * connection could leave a workout with no exercises (R2, violation B15).
+ * `clientId` files the copy under one client rather than the global library.
  */
 export function useDuplicateWorkout(type: WorkoutType) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (workoutId: string) => {
-      const { data: source, error: sourceError } = await supabase
-        .from("workouts")
-        .select("*")
-        .eq("id", workoutId)
-        .single();
-      if (sourceError) throw sourceError;
-
-      const { data: sourceExercises, error: exercisesError } = await supabase
-        .from("workout_exercises")
-        .select("*")
-        .eq("workout_id", workoutId)
-        .order("sort_order", { ascending: true });
-      if (exercisesError) throw exercisesError;
-
-      const { data: inserted, error: insertError } = await supabase
-        .from("workouts")
-        .insert({
-          name: `${source.name} (copy)`,
-          description: source.description,
-          type: source.type,
-          estimated_duration_minutes: source.estimated_duration_minutes,
-          equipment: source.equipment,
-          warmup_id: source.warmup_id,
-          created_by: source.created_by,
-        })
-        .select("*")
-        .single();
-      if (insertError) throw insertError;
-
-      if (sourceExercises && sourceExercises.length > 0) {
-        const { error: copyError } = await supabase.from("workout_exercises").insert(
-          sourceExercises.map((ex) => ({
-            workout_id: inserted.id,
-            exercise_id: ex.exercise_id,
-            sort_order: ex.sort_order,
-            mode: ex.mode,
-            set_configs: ex.set_configs,
-            rest_seconds: ex.rest_seconds,
-            notes: ex.notes,
-          })),
-        );
-        if (copyError) throw copyError;
-      }
-
-      return inserted;
+    mutationFn: async (input: string | { workoutId: string; clientId?: string }) => {
+      const { workoutId, clientId } =
+        typeof input === "string" ? { workoutId: input, clientId: undefined } : input;
+      const { data, error } = await supabase.rpc("duplicate_workout", {
+        p_workout_id: workoutId,
+        p_client_id: clientId ?? undefined,
+      });
+      if (error) throw new Error(error.message);
+      return data as string;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: invalidateListsFor(type) });

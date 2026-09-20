@@ -15,10 +15,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.momentum.mobile"
+      "bundleIdentifier": "com.noahgoo.momentum",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.momentum.mobile",
+      "package": "com.noahgoo.momentum",
       "adaptiveIcon": {
         "backgroundColor": "#F6F4F0",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,9 +35,19 @@
       "bundler": "metro",
       "output": "static"
     },
-    "plugins": ["expo-router", "expo-secure-store", "expo-font"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font"
+    ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f65194cd-5fb6-479c-8689-983ee8b76079"
+      }
     }
   }
 }

@@ -139,6 +139,7 @@ export const workoutCreateSchema = z.object({
   description: z.string().max(2000).optional(),
   type: workoutTypeSchema,
   estimatedDurationMinutes: z.number().int().min(1).max(300).optional(),
+  category: z.string().trim().min(1).max(40).optional(),
   equipment: z.array(z.string().trim().min(1)).max(20).optional(),
   warmupId: z.string().uuid().nullable().optional(),
   exercises: z.array(workoutExerciseInputSchema).optional(),
