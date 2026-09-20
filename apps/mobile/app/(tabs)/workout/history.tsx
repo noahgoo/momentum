@@ -81,16 +81,16 @@ export default function WorkoutHistoryScreen() {
 
         <View style={styles.list}>
           {visible.map((log) => {
-            const workout = log.workout_id ? data?.workoutsById[log.workout_id] : undefined;
+            const session = log.session_id ? data?.sessionsById[log.session_id] : undefined;
             const open = openId === log.id;
             return (
               <View key={log.id} style={[styles.entryCard, shadows.cardSubtle]}>
                 <TouchableOpacity onPress={() => setOpenId(open ? null : log.id)} style={styles.entryHeaderRow}>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={styles.entryDate}>{formatLogDate(log.date).toUpperCase()}</Text>
-                    <Text style={styles.entryName}>{workout?.name ?? "Workout"}</Text>
-                    {workout?.estimated_duration_minutes ? (
-                      <Text style={styles.entryDuration}>{workout.estimated_duration_minutes} min</Text>
+                    <Text style={styles.entryName}>{log.session_name ?? "Workout"}</Text>
+                    {session?.estimated_duration_minutes ? (
+                      <Text style={styles.entryDuration}>{session.estimated_duration_minutes} min</Text>
                     ) : null}
                   </View>
                   <View style={styles.entryBadges}>

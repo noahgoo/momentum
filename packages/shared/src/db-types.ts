@@ -39,19 +39,19 @@ export type Database = {
           assignment_id: string
           date: string
           id: string
-          workout_id: string | null
+          session_id: string | null
         }
         Insert: {
           assignment_id: string
           date: string
           id?: string
-          workout_id?: string | null
+          session_id?: string | null
         }
         Update: {
           assignment_id?: string
           date?: string
           id?: string
-          workout_id?: string | null
+          session_id?: string | null
         }
         Relationships: [
           {
@@ -62,10 +62,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "assignment_date_overrides_workout_id_fkey"
-            columns: ["workout_id"]
+            foreignKeyName: "assignment_date_overrides_session_id_fkey"
+            columns: ["session_id"]
             isOneToOne: false
-            referencedRelation: "workouts"
+            referencedRelation: "sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -173,9 +173,9 @@ export type Database = {
           id: string
           requested_at: string
           responded_at: string | null
+          session_id: string | null
           status: Database["public"]["Enums"]["change_request_status"]
           to_date: string
-          workout_id: string | null
         }
         Insert: {
           client_id: string
@@ -184,9 +184,9 @@ export type Database = {
           id?: string
           requested_at?: string
           responded_at?: string | null
+          session_id?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           to_date: string
-          workout_id?: string | null
         }
         Update: {
           client_id?: string
@@ -195,9 +195,9 @@ export type Database = {
           id?: string
           requested_at?: string
           responded_at?: string | null
+          session_id?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           to_date?: string
-          workout_id?: string | null
         }
         Relationships: [
           {
@@ -215,10 +215,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "change_requests_workout_id_fkey"
-            columns: ["workout_id"]
+            foreignKeyName: "change_requests_session_id_fkey"
+            columns: ["session_id"]
             isOneToOne: false
-            referencedRelation: "workouts"
+            referencedRelation: "sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -923,6 +923,137 @@ export type Database = {
           },
         ]
       }
+      session_exercises: {
+        Row: {
+          exercise_id: string | null
+          id: string
+          mode: Database["public"]["Enums"]["exercise_mode"]
+          notes: string | null
+          rest_seconds: number | null
+          section: Database["public"]["Enums"]["session_section"]
+          session_id: string
+          set_configs: Json
+          sort_order: number
+        }
+        Insert: {
+          exercise_id?: string | null
+          id?: string
+          mode?: Database["public"]["Enums"]["exercise_mode"]
+          notes?: string | null
+          rest_seconds?: number | null
+          section?: Database["public"]["Enums"]["session_section"]
+          session_id: string
+          set_configs?: Json
+          sort_order: number
+        }
+        Update: {
+          exercise_id?: string | null
+          id?: string
+          mode?: Database["public"]["Enums"]["exercise_mode"]
+          notes?: string | null
+          rest_seconds?: number | null
+          section?: Database["public"]["Enums"]["session_section"]
+          session_id?: string
+          set_configs?: Json
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_exercises_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          created_at: string
+          day_of_week: Database["public"]["Enums"]["day_of_week"]
+          description: string | null
+          equipment: string[] | null
+          estimated_duration_minutes: number | null
+          id: string
+          name: string
+          phase_id: string | null
+          program_id: string | null
+          source_workout_id: string | null
+          updated_at: string
+          warmup_name: string | null
+          warmup_source_workout_id: string | null
+          week_number: number
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: Database["public"]["Enums"]["day_of_week"]
+          description?: string | null
+          equipment?: string[] | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          name: string
+          phase_id?: string | null
+          program_id?: string | null
+          source_workout_id?: string | null
+          updated_at?: string
+          warmup_name?: string | null
+          warmup_source_workout_id?: string | null
+          week_number: number
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: Database["public"]["Enums"]["day_of_week"]
+          description?: string | null
+          equipment?: string[] | null
+          estimated_duration_minutes?: number | null
+          id?: string
+          name?: string
+          phase_id?: string | null
+          program_id?: string | null
+          source_workout_id?: string | null
+          updated_at?: string
+          warmup_name?: string | null
+          warmup_source_workout_id?: string | null
+          week_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sessions_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "program_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_source_workout_id_fkey"
+            columns: ["source_workout_id"]
+            isOneToOne: false
+            referencedRelation: "workouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sessions_warmup_source_workout_id_fkey"
+            columns: ["warmup_source_workout_id"]
+            isOneToOne: false
+            referencedRelation: "workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       set_logs: {
         Row: {
           actual_miles: number | null
@@ -1037,55 +1168,6 @@ export type Database = {
           },
         ]
       }
-      week_schedules: {
-        Row: {
-          day_of_week: Database["public"]["Enums"]["day_of_week"]
-          id: string
-          phase_id: string | null
-          program_id: string | null
-          week_number: number
-          workout_id: string | null
-        }
-        Insert: {
-          day_of_week: Database["public"]["Enums"]["day_of_week"]
-          id?: string
-          phase_id?: string | null
-          program_id?: string | null
-          week_number: number
-          workout_id?: string | null
-        }
-        Update: {
-          day_of_week?: Database["public"]["Enums"]["day_of_week"]
-          id?: string
-          phase_id?: string | null
-          program_id?: string | null
-          week_number?: number
-          workout_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "week_schedules_phase_id_fkey"
-            columns: ["phase_id"]
-            isOneToOne: false
-            referencedRelation: "program_phases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "week_schedules_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "programs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "week_schedules_workout_id_fkey"
-            columns: ["workout_id"]
-            isOneToOne: false
-            referencedRelation: "workouts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       workout_exercises: {
         Row: {
           exercise_id: string | null
@@ -1144,9 +1226,10 @@ export type Database = {
           difficulty: Database["public"]["Enums"]["workout_difficulty"] | null
           id: string
           next_day_feel: number | null
+          session_id: string | null
+          session_name: string | null
           updated_at: string
           warmup_completed: boolean
-          workout_id: string | null
         }
         Insert: {
           client_id: string
@@ -1157,9 +1240,10 @@ export type Database = {
           difficulty?: Database["public"]["Enums"]["workout_difficulty"] | null
           id?: string
           next_day_feel?: number | null
+          session_id?: string | null
+          session_name?: string | null
           updated_at?: string
           warmup_completed?: boolean
-          workout_id?: string | null
         }
         Update: {
           client_id?: string
@@ -1170,9 +1254,10 @@ export type Database = {
           difficulty?: Database["public"]["Enums"]["workout_difficulty"] | null
           id?: string
           next_day_feel?: number | null
+          session_id?: string | null
+          session_name?: string | null
           updated_at?: string
           warmup_completed?: boolean
-          workout_id?: string | null
         }
         Relationships: [
           {
@@ -1183,10 +1268,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "workout_logs_workout_id_fkey"
-            columns: ["workout_id"]
+            foreignKeyName: "workout_logs_session_id_fkey"
+            columns: ["session_id"]
             isOneToOne: false
-            referencedRelation: "workouts"
+            referencedRelation: "sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -1298,12 +1383,24 @@ export type Database = {
       }
       is_coach: { Args: never; Returns: boolean }
       is_coach_of: { Args: { p_client_id: string }; Returns: boolean }
+      is_valid_set_config: { Args: { p_config: Json }; Returns: boolean }
+      is_valid_set_configs: { Args: { p_configs: Json }; Returns: boolean }
       list_coach_siblings: {
         Args: never
         Returns: {
           display_name: string
           id: string
         }[]
+      }
+      materialize_session: {
+        Args: {
+          p_day_of_week: Database["public"]["Enums"]["day_of_week"]
+          p_phase_id: string
+          p_program_id: string
+          p_source_workout_id: string
+          p_week_number: number
+        }
+        Returns: string
       }
       my_coach_id: { Args: never; Returns: string }
       program_delete_blockers: {
@@ -1364,10 +1461,8 @@ export type Database = {
         Args: { p_completed: boolean; p_date: string }
         Returns: undefined
       }
-      workout_delete_blockers: {
-        Args: { p_workout_id: string }
-        Returns: number
-      }
+      shares_my_coach: { Args: { p_other_id: string }; Returns: boolean }
+      workout_usage_count: { Args: { p_workout_id: string }; Returns: number }
     }
     Enums: {
       change_request_status: "pending" | "accepted" | "rejected"
@@ -1381,6 +1476,7 @@ export type Database = {
         | "sunday"
       exercise_mode: "reps" | "time" | "distance"
       friendship_status: "pending" | "accepted"
+      session_section: "warmup" | "main"
       sex: "male" | "female"
       user_role: "coach" | "client"
       weight_unit: "lbs" | "kg"
@@ -1528,6 +1624,7 @@ export const Constants = {
       ],
       exercise_mode: ["reps", "time", "distance"],
       friendship_status: ["pending", "accepted"],
+      session_section: ["warmup", "main"],
       sex: ["male", "female"],
       user_role: ["coach", "client"],
       weight_unit: ["lbs", "kg"],

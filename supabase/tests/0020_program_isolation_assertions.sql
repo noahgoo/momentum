@@ -566,10 +566,13 @@ begin
       failures := array_append(failures,
         format('program_delete_blockers leaked another coach''s count: %s', v_count));
     end if;
-    select public.workout_delete_blockers(w_push) into v_count;
+    -- workout_delete_blockers is gone: nothing schedules a library workout
+    -- any more, so there is nothing to block. workout_usage_count replaced it
+    -- as an informational count, and carries the same scoping requirement.
+    select public.workout_usage_count(w_push) into v_count;
     if v_count <> 0 then
       failures := array_append(failures,
-        format('workout_delete_blockers leaked another coach''s count: %s', v_count));
+        format('workout_usage_count leaked another coach''s count: %s', v_count));
     end if;
 
     perform set_config('request.jwt.claims', json_build_object('sub', coach_id)::text, true);

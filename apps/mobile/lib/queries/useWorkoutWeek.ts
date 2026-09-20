@@ -1,8 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
-import { dateStr, parseDateStr, type Workout, type WorkoutLog } from "@momentum/shared";
+import { dateStr, parseDateStr, type WorkoutLog } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 import { deriveDayState, type DayState } from "../../components/workout/dayState";
+
+/** One row of get_workout_week's payload. */
+interface WeekRow {
+  date: string;
+  workout_id: string | null;
+  name: string | null;
+  estimated_duration_minutes: number | null;
+  completed: boolean;
+}
+
+/** Just enough of a session for the week grid to render a day. */
+export interface WeekWorkout {
+  id: string;
+  name: string | null;
+  estimated_duration_minutes: number | null;
+}
 
 export interface WorkoutWeekDay {
   /**
@@ -11,7 +27,7 @@ export interface WorkoutWeekDay {
    * call on it threw. `dateStr` is the stored form; render from that.
    */
   dateStr: string;
-  workout: Workout | null;
+  workout: WeekWorkout | null;
   state: DayState;
 }
 
@@ -103,31 +119,19 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
       });
       if (weekError) throw new Error(weekError.message);
 
-      const resolvedByDate = new Map(
-        ((weekRows ?? []) as { date: string; workout_id: string | null }[]).map((row) => [
-          row.date,
-          row.workout_id,
-        ])
-      );
-      const resolvedWorkoutIds = dayDateStrs.map((d) => resolvedByDate.get(d) ?? null);
-      const workoutIds = [...new Set(resolvedWorkoutIds.filter((id): id is string => Boolean(id)))];
+      // The RPC carries the display fields, so there is no second query for
+      // them. There cannot be: a client has no policy letting them read the
+      // coach's `workouts` library, and that read would have failed silently
+      // by returning an empty set rather than erroring.
+      const rowByDate = new Map(((weekRows ?? []) as unknown as WeekRow[]).map((row) => [row.date, row]));
 
-      const [{ data: workouts, error: workoutsError }, { data: logs, error: logsError }] =
-        await Promise.all([
-          workoutIds.length > 0
-            ? supabase.from("workouts").select("*").in("id", workoutIds)
-            : Promise.resolve({ data: [] as Workout[], error: null }),
-          supabase
-            .from("workout_logs")
-            .select("*, exercise_logs(*, set_logs(*))")
-            .eq("client_id", clientId)
-            .gte("date", dayDateStrs[0])
-            .lte("date", dayDateStrs[6]),
-        ]);
-      if (workoutsError) throw workoutsError;
+      const { data: logs, error: logsError } = await supabase
+        .from("workout_logs")
+        .select("*, exercise_logs(*, set_logs(*))")
+        .eq("client_id", clientId)
+        .gte("date", dayDateStrs[0])
+        .lte("date", dayDateStrs[6]);
       if (logsError) throw logsError;
-
-      const workoutById = new Map((workouts ?? []).map((w) => [w.id, w]));
       const logByDate = new Map(
         (logs ?? []).map((log) => [
           log.date,
@@ -137,8 +141,14 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
 
       const days: WorkoutWeekDay[] = dayDates.map((date, i) => {
         const ds = dayDateStrs[i];
-        const workoutId = resolvedWorkoutIds[i];
-        const workout = workoutId ? (workoutById.get(workoutId) ?? null) : null;
+        const row = rowByDate.get(ds);
+        const workout: WeekWorkout | null = row?.workout_id
+          ? {
+              id: row.workout_id,
+              name: row.name,
+              estimated_duration_minutes: row.estimated_duration_minutes,
+            }
+          : null;
         const log = logByDate.get(ds);
         const hasProgress =
           log?.exercise_logs?.some((ex) => ex.set_logs?.some((s) => s.completed)) ?? false;

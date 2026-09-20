@@ -50,35 +50,29 @@ function invalidateListsFor(type: WorkoutType) {
   return type === "warmup" ? qk.warmups() : qk.workouts();
 }
 
-/** Raised instead of a raw foreign-key error when a workout is still scheduled. */
-export class WorkoutInUseError extends Error {
-  constructor(public readonly scheduleCount: number) {
-    super(
-      scheduleCount === 1
-        ? "This workout is scheduled on 1 day of a program."
-        : `This workout is scheduled on ${scheduleCount} days across your programs.`
-    );
-    this.name = "WorkoutInUseError";
-  }
+/**
+ * How many scheduled sessions were built from this library workout.
+ *
+ * INFORMATIONAL, not a blocker. A session is a copy and records only where it
+ * came from (`source_workout_id`, on delete set null), so deleting a library
+ * entry leaves every scheduled day standing with its own exercises intact.
+ * This exists so the confirm can say what the delete affects — the old
+ * `workout_delete_blockers` refused the delete outright, which was right when
+ * a schedule pointed at the workout and is wrong now.
+ */
+export async function fetchWorkoutUsageCount(workoutId: string): Promise<number> {
+  const { data, error } = await supabase.rpc("workout_usage_count", {
+    p_workout_id: workoutId,
+  });
+  if (error) throw new Error(error.message);
+  return (data as number | null) ?? 0;
 }
 
-/**
- * Deletes a workout (its workout_exercises cascade). Checks what depends on
- * it first so the coach sees which programs still schedule it rather than a
- * raw 23503 (R4). The FK is `on delete restrict`, so this is the message,
- * not the guard.
- */
+/** Deletes a workout; its workout_exercises cascade. */
 export function useDeleteWorkout(type: WorkoutType) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (workoutId: string) => {
-      const { data: blockers, error: blockersError } = await supabase.rpc(
-        "workout_delete_blockers",
-        { p_workout_id: workoutId }
-      );
-      if (blockersError) throw new Error(blockersError.message);
-      if ((blockers ?? 0) > 0) throw new WorkoutInUseError(blockers as number);
-
       const { error } = await supabase.from("workouts").delete().eq("id", workoutId);
       if (error) throw error;
     },

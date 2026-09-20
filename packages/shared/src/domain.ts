@@ -10,6 +10,7 @@
 import type { Database, Json } from "./db-types.js";
 
 type Tables = Database["public"]["Tables"];
+type Enums = Database["public"]["Enums"];
 
 // ---------------------------------------------------------------------------
 // Enums (re-exported under friendlier names where useful)
@@ -47,8 +48,19 @@ export type ProgramInsert = Tables["programs"]["Insert"];
 export type ProgramPhase = Tables["program_phases"]["Row"];
 export type ProgramPhaseInsert = Tables["program_phases"]["Insert"];
 
-export type WeekScheduleRow = Tables["week_schedules"]["Row"];
-export type WeekScheduleRowInsert = Tables["week_schedules"]["Insert"];
+/**
+ * One scheduled day, owning its own exercise rows. Replaces the
+ * `week_schedules` pointer: a session is a copy of a library workout, so
+ * editing week 3 edits week 3 and nothing else.
+ */
+export type Session = Tables["sessions"]["Row"];
+export type SessionInsert = Tables["sessions"]["Insert"];
+
+export type SessionExercise = Tables["session_exercises"]["Row"];
+export type SessionExerciseInsert = Tables["session_exercises"]["Insert"];
+
+/** Which half of a session an exercise row belongs to. */
+export type SessionSection = Enums["session_section"];
 
 export type Assignment = Tables["assignments"]["Row"];
 export type AssignmentInsert = Tables["assignments"]["Insert"];

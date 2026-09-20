@@ -96,7 +96,7 @@ export function useDeleteProgram() {
  *
  * This was ~100 lines of client-side tree walking — insert the program, the
  * phases, remap phase ids by sort_order, then branch on phased vs flat to
- * copy week_schedules. The RPC shares `copy_program_tree` with
+ * copy the schedule. The RPC shares `copy_program_tree` with
  * `assign_program`, so there is one implementation of the copy instead of two
  * that can drift apart.
  */
@@ -150,7 +150,7 @@ export interface ProgramDetail {
   updatedAt: string;
 }
 
-/** Loads one program plus its phases (if any) and week_schedules, for the builder's edit mode. */
+/** Loads one program plus its phases (if any) and sessions, for the builder's edit mode. */
 export function useProgramDetail(programId: string | undefined) {
   return useQuery<ProgramDetail | null>({
     queryKey: programId ? qk.programDetail(programId) : qk.programDetail("__none__"),
@@ -175,18 +175,21 @@ export function useProgramDetail(programId: string | undefined) {
 
       if (phased) {
         const phaseIds = (phases ?? []).map((p) => p.id);
-        const { data: weekSchedules, error: weekSchedulesError } = await supabase
-          .from("week_schedules")
+        const { data: sessions, error: sessionsError } = await supabase
+          .from("sessions")
           .select("*")
           .in("phase_id", phaseIds);
-        if (weekSchedulesError) throw weekSchedulesError;
+        if (sessionsError) throw sessionsError;
 
+        // The builder's grid holds the LIBRARY workout a coach picked for each
+        // slot, which is the session's source_workout_id. A session built
+        // freehand has none and cannot be shown in this grid.
         const scheduleByPhase = new Map<string, WeekSchedule>();
-        for (const row of weekSchedules ?? []) {
-          if (!row.phase_id || !row.workout_id) continue;
+        for (const row of sessions ?? []) {
+          if (!row.phase_id || !row.source_workout_id) continue;
           const schedule = scheduleByPhase.get(row.phase_id) ?? {};
           const week = schedule[String(row.week_number)] ?? {};
-          week[row.day_of_week] = row.workout_id;
+          week[row.day_of_week] = row.source_workout_id;
           schedule[String(row.week_number)] = week;
           scheduleByPhase.set(row.phase_id, schedule);
         }
@@ -211,18 +214,18 @@ export function useProgramDetail(programId: string | undefined) {
         };
       }
 
-      const { data: weekSchedules, error: weekSchedulesError } = await supabase
-        .from("week_schedules")
+      const { data: sessions, error: sessionsError } = await supabase
+        .from("sessions")
         .select("*")
         .eq("program_id", programId);
-      if (weekSchedulesError) throw weekSchedulesError;
+      if (sessionsError) throw sessionsError;
 
       const flatWeekSchedule: WeekSchedule = {};
       const activeDaySet = new Set<DayOfWeek>();
-      for (const row of weekSchedules ?? []) {
-        if (!row.workout_id) continue;
+      for (const row of sessions ?? []) {
+        if (!row.source_workout_id) continue;
         const week = flatWeekSchedule[String(row.week_number)] ?? {};
-        week[row.day_of_week] = row.workout_id;
+        week[row.day_of_week] = row.source_workout_id;
         flatWeekSchedule[String(row.week_number)] = week;
         activeDaySet.add(row.day_of_week);
       }
@@ -261,11 +264,11 @@ export interface SaveProgramInput {
 /**
  * Saves a program: upsert the `programs` row (weeks = sum of phase weeks in
  * phased mode, or the explicit flat weeks input otherwise), then replace
- * `program_phases` + `week_schedules` wholesale (delete-then-insert, same
+ * `program_phases` + the schedule wholesale (delete-then-insert, same
  * pattern as `useSaveWorkout`'s workout_exercises replacement).
  *
  * Week-number scoping (documented per the task's numbering requirement):
- * - Phased mode: each `week_schedules` row carries `phase_id` (never
+ * - Phased mode: each `sessions` row carries `phase_id` (never
  *   `program_id`) and `week_number` is PHASE-LOCAL, starting at 1 within
  *   that phase — matching the seeded Foundation program's convention and
  *   `resolveWeekSchedule`'s phase-flattening contract (packages/shared
@@ -273,7 +276,7 @@ export interface SaveProgramInput {
  *   phases' `weeks` at read time. Phase-local numbering means reordering
  *   phases or changing an earlier phase's week count never requires
  *   renumbering later phases' schedule rows.
- * - Flat mode: each `week_schedules` row carries `program_id` (never
+ * - Flat mode: each `sessions` row carries `program_id` (never
  *   `phase_id`) and `week_number` is GLOBAL (1..weeks), since there are no
  *   phases to offset from.
  */
@@ -294,7 +297,7 @@ export function describeSaveProgramError(error: unknown): string {
  * Saves a program through the `save_program` RPC.
  *
  * The old version deleted every program_phases row (cascading their
- * week_schedules) and reinserted, so each save handed every phase and every
+ * their sessions) and reinserted, so each save handed every phase and every
  * scheduled slot a new primary key — and did it across up to six separate
  * requests, any of which could leave the program half-written (B3, R2).
  *

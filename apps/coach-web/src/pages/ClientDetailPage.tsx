@@ -60,7 +60,7 @@ export function ClientDetailPage() {
     );
   }
 
-  const { profile, streak, programStatus, logs, workoutsById, measurements } = data;
+  const { profile, streak, programStatus, logs, measurements } = data;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -87,7 +87,6 @@ export function ClientDetailPage() {
       <SectionCard title="Recent workouts">
         <RecentWorkouts
           logs={logs}
-          workoutsById={workoutsById}
         />
       </SectionCard>
 

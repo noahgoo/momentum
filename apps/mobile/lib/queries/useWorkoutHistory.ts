@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Workout } from "@momentum/shared";
+import type { Session } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 import { STATIC_CACHE } from "./cachePolicy";
@@ -9,12 +9,16 @@ export interface WorkoutHistoryResult {
   logs: WorkoutLogWithChildren[];
   /** Plain object, not a Map — see useDashboard.completedGoalIds: a Map does
    * not survive the persister's JSON round trip either. */
-  workoutsById: Record<string, Workout>;
+  sessionsById: Record<string, Session>;
 }
 
 /**
- * Completed workout_logs, most recent first, plus the workouts they
- * reference — for the workout NAME only.
+ * Completed workout_logs, most recent first, plus the sessions they
+ * reference — for the estimated duration only.
+ *
+ * The NAME comes off the log itself: workout_logs.session_name snapshots it
+ * at log time, so history renders the name the client was actually given and
+ * keeps rendering after the session is rescheduled away (R8).
  *
  * Targets are NOT fetched: each set carries its own `prescribed` snapshot
  * from when it was logged. This used to join `workout_exercises` and match
@@ -37,19 +41,19 @@ export function useWorkoutHistory(uid: string | undefined) {
         .order("date", { ascending: false });
       if (logsError) throw logsError;
 
-      const workoutIds = [
-        ...new Set((logs ?? []).map((l) => l.workout_id).filter((id): id is string => Boolean(id))),
+      const sessionIds = [
+        ...new Set((logs ?? []).map((l) => l.session_id).filter((id): id is string => Boolean(id))),
       ];
 
-      const { data: workouts, error: workoutsError } =
-        workoutIds.length > 0
-          ? await supabase.from("workouts").select("*").in("id", workoutIds)
-          : { data: [] as Workout[], error: null };
-      if (workoutsError) throw workoutsError;
+      const { data: sessions, error: sessionsError } =
+        sessionIds.length > 0
+          ? await supabase.from("sessions").select("*").in("id", sessionIds)
+          : { data: [] as Session[], error: null };
+      if (sessionsError) throw sessionsError;
 
       return {
         logs: (logs ?? []) as WorkoutLogWithChildren[],
-        workoutsById: Object.fromEntries((workouts ?? []).map((w) => [w.id, w])),
+        sessionsById: Object.fromEntries((sessions ?? []).map((s) => [s.id, s])),
       };
     },
   });

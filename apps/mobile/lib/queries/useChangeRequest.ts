@@ -38,8 +38,8 @@ interface CreateChangeRequestInput {
   coachId: string;
   fromDate: string;
   toDate: string;
-  /** Workout currently resolved for `fromDate` — what's being moved. */
-  workoutId: string | null;
+  /** Session currently resolved for `fromDate` — what's being moved. */
+  sessionId: string | null;
 }
 
 /**
@@ -77,7 +77,7 @@ export function useCreateChangeRequest() {
         coach_id: input.coachId,
         from_date: input.fromDate,
         to_date: input.toDate,
-        workout_id: input.workoutId,
+        session_id: input.sessionId,
       });
 
       if (error) {

@@ -13,7 +13,7 @@ interface MoveWorkoutCardProps {
   clientId: string;
   coachId: string;
   fromDate: string;
-  workoutId: string | null;
+  sessionId: string | null;
   minDate: string;
   maxDate: string;
   pendingRequest: ChangeRequest | null | undefined;
@@ -35,7 +35,7 @@ export function MoveWorkoutCard({
   clientId,
   coachId,
   fromDate,
-  workoutId,
+  sessionId,
   minDate,
   maxDate,
   pendingRequest,
@@ -87,7 +87,7 @@ export function MoveWorkoutCard({
         coachId,
         fromDate,
         toDate,
-        workoutId,
+        sessionId,
       });
       setOpen(false);
       setToDate("");

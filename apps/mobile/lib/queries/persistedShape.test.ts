@@ -51,13 +51,13 @@ describe("values stored in persisted query data", () => {
     expect(restored.completedGoalIds.includes("goal-3")).toBe(false);
   });
 
-  it("survives the round trip as workoutsById is now built", () => {
-    const workouts = [{ id: "w-1", name: "Push" }];
-    const workoutsById = Object.fromEntries(workouts.map((w) => [w.id, w]));
+  it("survives the round trip as sessionsById is now built", () => {
+    const sessions = [{ id: "s-1", name: "Push" }];
+    const sessionsById = Object.fromEntries(sessions.map((s) => [s.id, s]));
 
-    const restored = roundTrip({ workoutsById });
-    expect(restored.workoutsById["w-1"]).toEqual({ id: "w-1", name: "Push" });
-    expect(restored.workoutsById["missing"]).toBeUndefined();
+    const restored = roundTrip({ sessionsById });
+    expect(restored.sessionsById["s-1"]).toEqual({ id: "s-1", name: "Push" });
+    expect(restored.sessionsById["missing"]).toBeUndefined();
   });
 
   it("survives the round trip as a week day is now built", () => {

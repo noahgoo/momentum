@@ -187,7 +187,7 @@ export default function WorkoutDayScreen() {
             <WorkoutLogger
               clientId={uid}
               date={dateParam}
-              workoutId={workout.id}
+              sessionId={workout.id}
               exercises={data.exercises}
               existingLog={log?.exercise_logs}
               logUpdatedAt={log?.updated_at}
@@ -203,7 +203,7 @@ export default function WorkoutDayScreen() {
             clientId={uid}
             coachId={profile.invited_by}
             fromDate={dateParam}
-            workoutId={workout.id}
+            sessionId={workout.id}
             minDate={todayStr}
             maxDate={data.programEndDate}
             pendingRequest={pendingRequest}

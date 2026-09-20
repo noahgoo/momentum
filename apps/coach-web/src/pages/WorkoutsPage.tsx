@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import type { WorkoutType } from "@momentum/shared";
-import { useDeleteWorkout, useDuplicateWorkout, useWorkoutExerciseCounts, useWorkouts, WorkoutInUseError } from "../queries/useWorkouts";
+import { fetchWorkoutUsageCount, useDeleteWorkout, useDuplicateWorkout, useWorkoutExerciseCounts, useWorkouts } from "../queries/useWorkouts";
 
 export interface WorkoutsPageProps {
   /** "warmup" renders the Warmups list (same component, filtered + relabeled). */
@@ -27,16 +27,32 @@ export function WorkoutsPage({ type = "workout" }: WorkoutsPageProps) {
   const duplicateWorkout = useDuplicateWorkout(type);
 
   async function handleDelete(id: string, name: string) {
-    const ok = window.confirm(`Delete "${name}"? This removes all its exercises too. This can't be undone.`);
+    // Scheduled days are copies, so deleting the library entry does not
+    // change any of them — it only means this workout can no longer be picked
+    // for a new slot. Say that up front rather than refusing the delete after
+    // the fact, which is what the old blocker check did.
+    let used = 0;
+    try {
+      used = await fetchWorkoutUsageCount(id);
+    } catch {
+      // A failed count must not stop a delete the database will allow.
+    }
+
+    const scheduled =
+      used === 0
+        ? ""
+        : used === 1
+          ? " 1 scheduled day was built from it and keeps its own copy."
+          : ` ${used} scheduled days were built from it and keep their own copies.`;
+
+    const ok = window.confirm(
+      `Delete "${name}"? This removes all its exercises too.${scheduled} This can't be undone.`
+    );
     if (!ok) return;
     try {
       await deleteWorkout.mutateAsync(id);
-    } catch (error) {
-      window.alert(
-        error instanceof WorkoutInUseError
-          ? `${error.message} Remove it from those programs before deleting it.`
-          : `Could not delete "${name}". Please try again.`
-      );
+    } catch {
+      window.alert(`Could not delete "${name}". Please try again.`);
     }
   }
 

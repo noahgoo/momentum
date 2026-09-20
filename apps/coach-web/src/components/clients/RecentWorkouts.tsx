@@ -1,12 +1,10 @@
 import { useState } from "react";
-import type { Workout } from "@momentum/shared";
 import { type WorkoutLogWithSets } from "../../queries/useClientDetail";
 import { parseSetConfig } from "@momentum/shared";
 import { DIFFICULTY_LABELS, DIFFICULTY_STYLES, computePace, formatLogDate, formatLogDuration, formatLogMiles, formatPace, formatTargetReps, formatTargetWeight } from "./logFormat";
 
 interface Props {
   logs: WorkoutLogWithSets[];
-  workoutsById: Map<string, Workout>;
 }
 
 const COLLAPSED_COUNT = 15;
@@ -24,7 +22,7 @@ const COLLAPSED_COUNT = 15;
  *    workout — the coach may have changed the exercise's mode since this
  *    session was recorded.
  */
-export function RecentWorkouts({ logs, workoutsById }: Props) {
+export function RecentWorkouts({ logs }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
 
@@ -37,7 +35,6 @@ export function RecentWorkouts({ logs, workoutsById }: Props) {
   return (
     <div>
       {visible.map((log) => {
-        const workout = log.workout_id ? workoutsById.get(log.workout_id) : undefined;
         const open = openId === log.id;
         const exerciseLogs = [...log.exercise_logs].sort(
           (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
@@ -52,7 +49,7 @@ export function RecentWorkouts({ logs, workoutsById }: Props) {
             >
               <div className="min-w-0">
                 <span className="mr-2 text-xs text-[var(--ink-30)]">{formatLogDate(log.date)}</span>
-                <span className="text-sm font-medium text-[var(--ink)]">{workout?.name ?? "Workout"}</span>
+                <span className="text-sm font-medium text-[var(--ink)]">{log.session_name ?? "Workout"}</span>
               </div>
               <div className="flex flex-none items-center gap-1.5">
                 {log.warmup_completed && (

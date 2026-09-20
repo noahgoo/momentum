@@ -31,7 +31,7 @@ export interface ExerciseLogInput {
 
 export interface SaveWorkoutLogInput {
   date: string;
-  workoutId: string;
+  sessionId: string;
   exercises: ExerciseLogInput[];
   /** true = "Complete ✓" (all sets done); false = a background autosave. */
   completed: boolean;
@@ -61,10 +61,10 @@ export interface SaveWorkoutLogInput {
  * mapping would drift from this one.
  */
 export function buildSaveWorkoutLogArgs(input: SaveWorkoutLogInput) {
-  const { date, workoutId, exercises, completed } = input;
+  const { date, sessionId, exercises, completed } = input;
   return {
     p_date: date,
-    p_workout_id: workoutId,
+    p_workout_id: sessionId,
     p_completed: completed,
     p_exercises: exercises.map((exercise) => ({
       exercise_id: exercise.exerciseId,

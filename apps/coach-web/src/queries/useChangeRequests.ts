@@ -74,27 +74,27 @@ export function useChangeRequests() {
       const all = [...pending, ...history];
 
       const clientIds = [...new Set(all.map((r) => r.client_id))];
-      const workoutIds = [...new Set(all.map((r) => r.workout_id).filter((v): v is string => Boolean(v)))];
+      const sessionIds = [...new Set(all.map((r) => r.session_id).filter((v): v is string => Boolean(v)))];
 
-      const [clientsRes, workoutsRes] = await Promise.all([
+      const [clientsRes, sessionsRes] = await Promise.all([
         clientIds.length > 0
           ? supabase.from("client_summaries").select("client_id, display_name").in("client_id", clientIds)
           : Promise.resolve({ data: [], error: null }),
-        workoutIds.length > 0
-          ? supabase.from("workouts").select("id, name").in("id", workoutIds)
+        sessionIds.length > 0
+          ? supabase.from("sessions").select("id, name").in("id", sessionIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (clientsRes.error) throw clientsRes.error;
-      if (workoutsRes.error) throw workoutsRes.error;
+      if (sessionsRes.error) throw sessionsRes.error;
 
       const nameByClientId = new Map((clientsRes.data ?? []).map((c) => [c.client_id, c.display_name]));
-      const nameByWorkoutId = new Map((workoutsRes.data ?? []).map((w) => [w.id, w.name]));
+      const nameBySessionId = new Map((sessionsRes.data ?? []).map((s) => [s.id, s.name]));
 
       const attach = (r: ChangeRequest): ChangeRequestRow => ({
         ...r,
         clientName: nameByClientId.get(r.client_id) ?? null,
-        workoutName: r.workout_id ? (nameByWorkoutId.get(r.workout_id) ?? null) : null,
+        workoutName: r.session_id ? (nameBySessionId.get(r.session_id) ?? null) : null,
       });
 
       return {

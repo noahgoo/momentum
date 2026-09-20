@@ -19,7 +19,7 @@ const AUTOSAVE_DEBOUNCE_MS = 2000;
 interface WorkoutLoggerProps {
   clientId: string;
   date: string;
-  workoutId: string;
+  sessionId: string;
   exercises: WorkoutExerciseWithName[];
   existingLog: ExerciseLogWithSets[] | undefined;
   /** workout_logs.updated_at — decides whether a stored draft is still newer. */
@@ -114,7 +114,7 @@ function getPrevSets(previousLog: ExerciseLogWithSets[] | undefined, exerciseId:
 export function WorkoutLogger({
   clientId,
   date,
-  workoutId,
+  sessionId,
   exercises,
   existingLog,
   logUpdatedAt,
@@ -129,7 +129,7 @@ export function WorkoutLogger({
   const [dismissedRestore, setDismissedRestore] = useState(false);
   const saveWorkoutLog = useSaveWorkoutLog();
 
-  const draft = useWorkoutDraft<ExerciseDraft[]>(clientId, date, workoutId, logUpdatedAt);
+  const draft = useWorkoutDraft<ExerciseDraft[]>(clientId, date, sessionId, logUpdatedAt);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The debounced autosave fires later, from a closure created earlier. Going
   // through a ref means it always calls the current saveDrafts rather than a
@@ -229,7 +229,7 @@ export function WorkoutLogger({
     await saveWorkoutLog.mutateAsync({
       clientId,
       date,
-      workoutId,
+      sessionId,
       exercises: exercisesInput,
       completed,
     });

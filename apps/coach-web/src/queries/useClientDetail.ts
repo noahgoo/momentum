@@ -7,7 +7,6 @@ import type {
   Profile,
   Program,
   SetLog,
-  Workout,
   WorkoutLog,
 } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
@@ -38,7 +37,6 @@ export interface ClientDetail {
   programStatus: ProgramStatus;
   /** Last 12 weeks (84 days) of workout logs, for the heatmap + recent-workouts list, newest first. */
   logs: WorkoutLogWithSets[];
-  workoutsById: Map<string, Workout>;
   measurements: BodyMeasurement[];
 }
 
@@ -130,19 +128,6 @@ export function useClientDetail(clientId: string | undefined, todayStr: string) 
 
       const logs = (logsRes.data ?? []) as unknown as WorkoutLogWithSets[];
 
-      // Workouts are fetched for their NAME only. Targets come from each
-      // set's own `prescribed` snapshot — see WorkoutLogWithSets.
-      const workoutIds = [...new Set(logs.map((l) => l.workout_id).filter((v): v is string => Boolean(v)))];
-      let workoutsById = new Map<string, Workout>();
-      if (workoutIds.length > 0) {
-        const { data: workouts, error: workoutsError } = await supabase
-          .from("workouts")
-          .select("*")
-          .in("id", workoutIds);
-        if (workoutsError) throw workoutsError;
-        workoutsById = new Map((workouts ?? []).map((w) => [w.id, w]));
-      }
-
       return {
         profile: profileRes.data,
         streak: summary?.streak ?? 0,
@@ -151,7 +136,6 @@ export function useClientDetail(clientId: string | undefined, todayStr: string) 
           todayStr
         ),
         logs,
-        workoutsById,
         measurements: measurementsRes.data ?? [],
       };
     },
