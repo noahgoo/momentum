@@ -311,55 +311,17 @@ begin
   delete from public.workout_logs where client_id = client_c;
 
   -------------------------------------------------------------------------
-  -- accept_change_request: swap correctness + double-accept failure, via
-  -- apply_change_request_swap directly (called as postgres — the auth check
-  -- inside accept_change_request itself is asserted separately below).
+  -- Move semantics (batches, missed days, rest-only targets, auto-approve)
+  -- live in 0041_schedule_moves_assertions.sql. The two-way swap this block
+  -- used to assert was retired with apply_change_request_swap; and a move to a
+  -- past date is now refused (date_passed), which these fixed 2026-06 dates are.
   -------------------------------------------------------------------------
 
-  -- client_a: 2026-06-29 (Mon) = w1 scheduled, 2026-06-30 (Tue) = rest.
-  insert into public.change_requests (id, client_id, coach_id, from_date, to_date, status)
-  values (cr_pending, client_a, coach_id, '2026-06-29', '2026-06-30', 'pending');
-
-  perform public.apply_change_request_swap(cr_pending);
-
-  -- After swap: to_date (06-30) should now resolve to w1 (what was on
-  -- from_date); from_date (06-29) should resolve to null (what was on
-  -- to_date, i.e. rest).
-  v_result := public.resolve_scheduled_workout(client_a, '2026-06-30');
-  if (select source_workout_id from public.sessions where id = v_result)
-     is distinct from w1 then
-    failures := array_append(failures, format('apply_change_request_swap to_date: expected %s got %s', w1, v_result));
-  end if;
-  v_result := public.resolve_scheduled_workout(client_a, '2026-06-29');
-  if v_result is not null then
-    failures := array_append(failures, format('apply_change_request_swap from_date: expected null got %s', v_result));
-  end if;
-
-  if not exists (select 1 from public.change_requests where id = cr_pending and status = 'accepted' and responded_at is not null) then
-    failures := array_append(failures, 'apply_change_request_swap did not flip status to accepted');
-  end if;
-
-  -- Double-accept: calling again on an already-accepted request should
-  -- raise nothing_to_move (from_date is now a rest day, so from_workout is
-  -- null) — apply_change_request_swap has no status guard itself (that's
-  -- accept_change_request's job), but re-resolving live means the second
-  -- call fails naturally once the schedule no longer has anything on
-  -- from_date. We assert it raises.
-  v_caught := false;
-  begin
-    perform public.apply_change_request_swap(cr_pending);
-  exception
-    when others then
-      v_caught := true;
-  end;
-  if not v_caught then
-    failures := array_append(failures, 'apply_change_request_swap on an already-swapped request should raise (nothing_to_move) but did not');
-  end if;
-
-  -- Auth check: accept_change_request itself must raise when the request
-  -- doesn't belong to the calling coach. In this test context auth.uid() is
-  -- null (no JWT), so coach_id (a real uuid) is always <> auth.uid() —
-  -- exercising the not_found_or_forbidden path.
+  -- Auth check: accept_change_request (now a wrapper over
+  -- decide_schedule_moves) must raise when the request doesn't belong to the
+  -- calling coach. In this test context auth.uid() is null (no JWT), so
+  -- coach_id (a real uuid) is always <> auth.uid() — exercising the
+  -- not_found_or_forbidden path.
   insert into public.change_requests (client_id, coach_id, from_date, to_date, status)
   values (client_a, coach_id, '2026-07-01', '2026-07-02', 'pending')
   returning id into v_result;

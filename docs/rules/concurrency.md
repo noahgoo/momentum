@@ -145,8 +145,9 @@ race between the check and the write.
 
 Where a unique constraint is the guard, catch the violation and translate it
 into a domain message rather than surfacing a Postgres code.
-`useCreateChangeRequest` does this correctly (23505 →
-`DuplicatePendingRequestError`).
+`request_schedule_moves` does this correctly: a retried batch is recognised by
+its client-minted `batch_id` and does nothing twice, and a day that is already
+waiting on a decision (23505) comes back as `already_pending`.
 
 ## C5. State transitions are atomic and re-runnable
 
@@ -158,13 +159,15 @@ Do the transition in one SQL function that re-checks the precondition inside
 the transaction. A second call finds the precondition already false and
 returns a clean domain error rather than double-applying.
 
-`accept_change_request` is the exemplar: it re-resolves the schedule
-server-side, applies the swap, and stamps the status atomically; a second
-call cleanly raises `not_found_or_forbidden`. Note what it does *not* do —
-trust the `workout_id` the client sent. That was a snapshot from when the
-request was filed and may be stale by the time the coach acts; the RPC
-re-resolves live. **Any action taken on stale user-submitted context
-re-validates server-side.**
+`decide_schedule_moves` is the exemplar: for each line it locks the row,
+re-resolves the schedule server-side, applies the move, and stamps the status
+atomically; a second call reports `not_found_or_forbidden` for that line
+instead of double-applying. Note what it does *not* do — trust the session the
+client sent. That was a snapshot from when the move was filed and may be stale
+by the time the coach acts (the client may have trained that day since); the
+RPC re-resolves live, and a line that can no longer apply is stamped `skipped`
+with its reason and reported back rather than forced. **Any action taken on
+stale user-submitted context re-validates server-side.**
 
 ## C6. Optimistic updates snapshot and roll back
 

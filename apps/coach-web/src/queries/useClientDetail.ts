@@ -165,6 +165,26 @@ export function useToggleClientDisabled(clientId: string) {
   });
 }
 
+/**
+ * Sets whether this client's schedule moves wait for the coach ('coach') or
+ * apply when the client files them ('auto'). Single-owner field written only
+ * by the coach, so last-write-wins is the right call (C3); a client cannot
+ * write it (prevent_profile_privilege_change). Takes effect for moves filed
+ * after the change — moves already pending still wait for a decision.
+ */
+export function useSetMoveApproval(clientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (mode: "coach" | "auto") => {
+      const { error } = await supabase.from("profiles").update({ move_approval: mode }).eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.clientDetail(clientId) });
+    },
+  });
+}
+
 /** The three override columns a coach edits together on the client detail page. */
 export interface MotivationOverrideInput {
   quote: string;

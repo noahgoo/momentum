@@ -6,6 +6,12 @@ import type { DayState } from "./dayState";
 
 interface WeekGridProps {
   days: WorkoutWeekDay[];
+  /**
+   * Per-date notes about a move ("Moved to Oct 28", "Move pending"). A day that
+   * was moved away resolves to rest, so without this it reads as an unexplained
+   * rest day.
+   */
+  moveNotes?: Record<string, string>;
 }
 
 const STATUS_LABEL: Partial<Record<DayState, string>> = {
@@ -74,12 +80,13 @@ function dateLabel(dateStr: string): string {
  * dashed line rather than a full tile, so a mostly-rest week doesn't cost
  * seven tiles of scroll.
  */
-export function WeekGrid({ days }: WeekGridProps) {
+export function WeekGrid({ days, moveNotes }: WeekGridProps) {
   return (
     <View style={styles.list}>
       {days.map((day) => {
         const { state } = day;
         const label = dateLabel(day.dateStr);
+        const note = moveNotes?.[day.dateStr];
 
         if (state === "outOfRange" || state === "rest") {
           return (
@@ -88,7 +95,11 @@ export function WeekGrid({ days }: WeekGridProps) {
               style={[styles.thinRow, state === "outOfRange" ? styles.thinRowFaded : undefined]}
             >
               <Text style={styles.thinDateLabel}>{label}</Text>
-              {state === "rest" && <Text style={styles.thinStatus}>Rest</Text>}
+              {note ? (
+                <Text style={styles.moveNote}>{note}</Text>
+              ) : (
+                state === "rest" && <Text style={styles.thinStatus}>Rest</Text>
+              )}
             </View>
           );
         }
@@ -113,6 +124,7 @@ export function WeekGrid({ days }: WeekGridProps) {
               <Text style={styles.workoutName} numberOfLines={1}>
                 {day.workout?.name}
               </Text>
+              {note && <Text style={styles.moveNote}>{note}</Text>}
             </View>
             <View style={styles.cardRight}>
               {statusLabel && (
@@ -170,6 +182,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 11,
     color: colors.ink50,
+    marginTop: 2,
+  },
+  moveNote: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 11,
+    color: colors.blueDeep,
     marginTop: 2,
   },
   thinRow: {

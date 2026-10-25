@@ -95,6 +95,97 @@ export type FriendshipInsert = Tables["friendships"]["Insert"];
 export type ChangeRequest = Tables["change_requests"]["Row"];
 export type ChangeRequestInsert = Tables["change_requests"]["Insert"];
 
+/** Why a move could not be filed or applied — the strings the move RPCs raise or stamp as skip_reason. */
+export type ScheduleMoveReason =
+  | "nothing_to_move"
+  | "already_logged"
+  | "date_passed"
+  | "program_changed"
+  | "target_not_rest"
+  | "duplicate_date"
+  | "already_pending"
+  | "invalid_moves"
+  | "too_many_moves"
+  | "not_found_or_forbidden";
+
+const SCHEDULE_MOVE_MESSAGES: Record<ScheduleMoveReason, string> = {
+  nothing_to_move: "That workout is no longer on the original day.",
+  already_logged: "You already trained on that day, so it cannot be moved.",
+  date_passed: "That day has already passed.",
+  program_changed: "That day is outside your current program.",
+  target_not_rest: "That day already has a workout. Pick a rest day.",
+  duplicate_date: "Each day can only appear once.",
+  already_pending: "That workout already has a move waiting for a decision.",
+  invalid_moves: "Those moves could not be read. Try again.",
+  too_many_moves: "That is too many moves at once.",
+  not_found_or_forbidden: "This move was already handled.",
+};
+
+/**
+ * Turns a move RPC error (or a skip_reason) into a sentence. The RPCs raise
+ * `<reason>` or `<reason>: <date>`; the date is kept so the person can tell
+ * which line failed. Unrecognised errors fall through unchanged.
+ */
+export function describeScheduleMoveError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
+  const [reason, date] = raw.split(": ");
+  const message = SCHEDULE_MOVE_MESSAGES[reason as ScheduleMoveReason];
+  if (!message) return raw;
+  return date ? `${date}: ${message}` : message;
+}
+
+/** One line of a decide_schedule_moves / request_schedule_moves result. */
+export interface ScheduleMoveSkip {
+  id: string;
+  reason: ScheduleMoveReason;
+}
+
+export interface DecideScheduleMovesResult {
+  applied: number;
+  rejected: number;
+  skipped: ScheduleMoveSkip[];
+}
+
+export interface RequestScheduleMovesResult {
+  batch_id: string;
+  duplicate: boolean;
+  filed?: number;
+  auto_applied?: boolean;
+  applied?: number;
+  skipped?: ScheduleMoveSkip[];
+}
+
+export interface MovableDay {
+  date: string;
+  session_id: string;
+  name: string | null;
+}
+
+export interface PendingMove {
+  id: string;
+  batch_id: string;
+  from_date: string;
+  to_date: string;
+  session_name: string | null;
+}
+
+/** get_movable_days: everything the reschedule screen needs in one round trip. */
+export interface MovableDays {
+  today: string;
+  missed: MovableDay[];
+  upcoming: MovableDay[];
+  rest_days: string[];
+  pending: PendingMove[];
+}
+
+/** get_moved_days: an accepted move touching the requested window. */
+export interface MovedDay {
+  from_date: string;
+  to_date: string;
+  session_name: string | null;
+  auto_applied: boolean;
+}
+
 export type ProgressPhoto = Tables["progress_photos"]["Row"];
 export type ProgressPhotoInsert = Tables["progress_photos"]["Insert"];
 

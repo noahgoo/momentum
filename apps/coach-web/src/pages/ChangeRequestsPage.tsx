@@ -1,71 +1,109 @@
-import { useState } from "react";
-import { HistoryRequestRow, PendingRequestCard } from "../components/changeRequests/RequestCard";
+import { useMemo, useState } from "react";
+import { HistoryRequestRow, MoveBatchCard } from "../components/changeRequests/RequestCard";
 import {
   describeChangeRequestError,
-  useAcceptChangeRequest,
+  groupIntoBatches,
   useChangeRequests,
-  useRejectChangeRequest,
+  useDecideScheduleMoves,
 } from "../queries/useChangeRequests";
 
-// Stub owned by its feature slice — replace the body, not the route wiring.
+type Notice = { tone: "ok" | "warn"; text: string };
+
+/** Says what a decision actually did, line by line, instead of claiming success. */
+function summarize(
+  decision: "accept" | "reject",
+  result: { applied: number; rejected: number; skipped: { reason: string }[] }
+): Notice {
+  const done = decision === "accept" ? result.applied : result.rejected;
+  const verb = decision === "accept" ? "Moved" : "Declined";
+  const parts: string[] = [];
+  if (done > 0) parts.push(`${verb} ${done} workout${done === 1 ? "" : "s"}.`);
+  if (result.skipped.length > 0) {
+    const reasons = [...new Set(result.skipped.map((s) => describeChangeRequestError(s.reason)))];
+    parts.push(`${result.skipped.length} not applied: ${reasons.join(" ")}`);
+  }
+  return { tone: result.skipped.length > 0 ? "warn" : "ok", text: parts.join(" ") || "Nothing to do." };
+}
+
 export function ChangeRequestsPage() {
   const { data, isLoading } = useChangeRequests();
-  const acceptRequest = useAcceptChangeRequest();
-  const rejectRequest = useRejectChangeRequest();
+  const decide = useDecideScheduleMoves();
 
-  // Per-row in-flight id + error message, so one card's failed accept/decline
-  // doesn't disable or mislabel every other row.
-  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
-  const [pendingActionKind, setPendingActionKind] = useState<"accept" | "decline" | null>(null);
-  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [busy, setBusy] = useState<{ batchId: string; decision: "accept" | "reject" } | null>(null);
+  const [notices, setNotices] = useState<Record<string, Notice>>({});
+  const [banner, setBanner] = useState<Notice | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const pending = data?.pending ?? [];
+  const batches = useMemo(() => groupIntoBatches(data?.pending ?? []), [data?.pending]);
   const history = data?.history ?? [];
 
-  async function handleAccept(requestId: string) {
-    setPendingActionId(requestId);
-    setPendingActionKind("accept");
-    setRowErrors((prev) => ({ ...prev, [requestId]: "" }));
-    try {
-      await acceptRequest.mutateAsync(requestId);
-      setRowErrors((prev) => {
-        const next = { ...prev };
-        delete next[requestId];
-        return next;
-      });
-    } catch (error) {
-      setRowErrors((prev) => ({ ...prev, [requestId]: describeChangeRequestError(error) }));
-    } finally {
-      setPendingActionId(null);
-      setPendingActionKind(null);
-    }
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
-  async function handleDecline(requestId: string) {
-    setPendingActionId(requestId);
-    setPendingActionKind("decline");
-    setRowErrors((prev) => ({ ...prev, [requestId]: "" }));
+  function toggleAll(ids: string[]) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const all = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (all) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleDecide(batchId: string, ids: string[], decision: "accept" | "reject") {
+    if (ids.length === 0) return;
+    setBusy({ batchId, decision });
+    setNotices((prev) => {
+      const next = { ...prev };
+      delete next[batchId];
+      return next;
+    });
     try {
-      await rejectRequest.mutateAsync(requestId);
-      setRowErrors((prev) => {
-        const next = { ...prev };
-        delete next[requestId];
+      const result = await decide.mutateAsync({ ids, decision });
+      // A fully decided batch leaves the list, taking its card (and any notice
+      // on it) with it, so the outcome also goes in a banner that stays put.
+      const outcome = summarize(decision, result);
+      const clientName = batches.find((b) => b.batchId === batchId)?.clientName;
+      setBanner({ tone: outcome.tone, text: clientName ? `${clientName}: ${outcome.text}` : outcome.text });
+      if (outcome.tone === "warn") setNotices((prev) => ({ ...prev, [batchId]: outcome }));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
         return next;
       });
     } catch (error) {
-      setRowErrors((prev) => ({ ...prev, [requestId]: describeChangeRequestError(error) }));
+      setNotices((prev) => ({ ...prev, [batchId]: { tone: "warn", text: describeChangeRequestError(error) } }));
     } finally {
-      setPendingActionId(null);
-      setPendingActionKind(null);
+      setBusy(null);
     }
   }
 
   return (
     <div className="mx-auto w-full max-w-3xl">
       <p className="mb-6 text-sm text-[var(--ink-50)]">
-        Clients asking to move a scheduled workout to a different day.
+        Clients asking to move scheduled or missed workouts to a different day. Approve a whole request, or tick
+        individual workouts. Clients set to auto-approve move on their own and show up here as history.
       </p>
+
+      {banner && (
+        <p
+          role="status"
+          className={`mb-4 rounded-lg px-3 py-2 text-xs ${
+            banner.tone === "ok" ? "bg-[var(--ok)]/10 text-[var(--ok)]" : "bg-[var(--bad)]/10 text-[var(--bad)]"
+          }`}
+        >
+          {banner.text}
+        </p>
+      )}
 
       {isLoading && (
         <div className="space-y-3">
@@ -75,23 +113,24 @@ export function ChangeRequestsPage() {
         </div>
       )}
 
-      {!isLoading && pending.length === 0 && (
+      {!isLoading && batches.length === 0 && (
         <div className="admin-card border border-dashed border-[var(--ink-08)] py-16 text-center">
           <p className="text-sm text-[var(--ink-50)]">No pending requests.</p>
         </div>
       )}
 
-      {!isLoading && pending.length > 0 && (
+      {!isLoading && batches.length > 0 && (
         <div className="space-y-3">
-          {pending.map((request) => (
-            <PendingRequestCard
-              key={request.id}
-              request={request}
-              onAccept={() => handleAccept(request.id)}
-              onDecline={() => handleDecline(request.id)}
-              isAccepting={pendingActionId === request.id && pendingActionKind === "accept"}
-              isDeclining={pendingActionId === request.id && pendingActionKind === "decline"}
-              errorMessage={rowErrors[request.id] || null}
+          {batches.map((batch) => (
+            <MoveBatchCard
+              key={batch.batchId}
+              batch={batch}
+              selected={selected}
+              onToggle={toggle}
+              onToggleAll={() => toggleAll(batch.moves.map((m) => m.id))}
+              onDecide={(ids, decision) => void handleDecide(batch.batchId, ids, decision)}
+              busy={busy?.batchId === batch.batchId ? busy.decision : null}
+              notice={notices[batch.batchId] ?? null}
             />
           ))}
         </div>

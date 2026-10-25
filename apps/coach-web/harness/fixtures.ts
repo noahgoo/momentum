@@ -3,6 +3,7 @@ import type { ClientSummary, Exercise, Program, Thread, Workout } from "@momentu
 import { qk } from "../src/queries/keys";
 import type { WorkoutDetail } from "../src/queries/useWorkoutDetail";
 import type { ProgramDetail } from "../src/queries/usePrograms";
+import type { ChangeRequestRow, ChangeRequestsData } from "../src/queries/useChangeRequests";
 import type { SessionDetail } from "../src/queries/useSessionDetail";
 import type { ThreadWithClient } from "../src/queries/useThreads";
 import { HARNESS_COACH_ID } from "./stub-auth";
@@ -302,5 +303,72 @@ export function seed(qc: QueryClient) {
   // useThreadMessages is a plain useQuery over a flat, oldest-first array.
   qc.setQueryData(qk.threadMessages("t-0"), threadMessages);
 
-  qc.setQueryData(qk.changeRequests(), { pending: [], history: [] });
+  qc.setQueryData(qk.changeRequests(), changeRequests);
 }
+
+/** One move, with the fields the hook attaches for display. */
+function move(
+  id: string,
+  batchId: string,
+  position: number,
+  clientIdx: number,
+  from: string,
+  to: string,
+  workoutName: string,
+  overrides: Partial<ChangeRequestRow> = {}
+): ChangeRequestRow {
+  return {
+    id,
+    batch_id: batchId,
+    position,
+    client_id: CLIENT_IDS[clientIdx]!,
+    coach_id: HARNESS_COACH_ID,
+    from_date: from,
+    to_date: to,
+    session_id: null,
+    session_name: workoutName,
+    workoutName,
+    clientName: clientSummaries[clientIdx]!.display_name,
+    status: "pending",
+    requested_at: "2026-10-20T09:00:00Z",
+    responded_at: null,
+    decided_by: null,
+    auto_applied: false,
+    skip_reason: null,
+    ...overrides,
+  };
+}
+
+/**
+ * A three-workout batch from a client with a name long enough to overflow a
+ * phone (two of them missed days), a single-workout request, and one row of
+ * each decided state so history exercises every label.
+ */
+const changeRequests: ChangeRequestsData = {
+  pending: [
+    move("m-1", "b-1", 1, 0, "2026-10-12", "2026-10-26", "Upper Body Strength and Hypertrophy Block"),
+    move("m-2", "b-1", 2, 0, "2026-10-14", "2026-10-27", "Lower Body Power"),
+    move("m-3", "b-1", 3, 0, "2026-10-28", "2026-10-30", "Conditioning"),
+    move("m-4", "b-2", 1, 1, "2026-10-26", "2026-10-27", "Push Day", { requested_at: "2026-10-21T09:00:00Z" }),
+  ],
+  history: [
+    move("h-1", "b-3", 1, 2, "2026-10-05", "2026-10-06", "Push Day", {
+      status: "accepted",
+      responded_at: "2026-10-05T12:00:00Z",
+    }),
+    move("h-2", "b-4", 1, 3, "2026-10-05", "2026-10-07", "Pull Day", {
+      status: "accepted",
+      auto_applied: true,
+      responded_at: "2026-10-05T12:00:00Z",
+    }),
+    move("h-3", "b-5", 1, 3, "2026-10-08", "2026-10-09", "Legs", {
+      status: "skipped",
+      skip_reason: "already_logged",
+      responded_at: "2026-10-08T12:00:00Z",
+    }),
+    move("h-4", "b-6", 1, 2, "2026-10-09", "2026-10-10", "Core", {
+      status: "cancelled",
+      responded_at: "2026-10-09T12:00:00Z",
+    }),
+  ],
+};

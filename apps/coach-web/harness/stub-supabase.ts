@@ -39,10 +39,22 @@ export const supabase: any = new Proxy(
   {
     get(_t, prop) {
       if (prop === "rpc") {
-        return async () =>
-          control.failWrites
-            ? { data: null, error: { message: "network unreachable" } }
-            : { data: "harness-saved-id", error: null };
+        return async (name: string, args?: { p_ids?: string[]; p_decision?: string }) => {
+          if (control.failWrites) return { data: null, error: { message: "network unreachable" } };
+          // decide_schedule_moves reports counts, and the page renders them.
+          if (name === "decide_schedule_moves") {
+            const n = args?.p_ids?.length ?? 0;
+            return {
+              data: {
+                applied: args?.p_decision === "accept" ? n : 0,
+                rejected: args?.p_decision === "reject" ? n : 0,
+                skipped: [],
+              },
+              error: null,
+            };
+          }
+          return { data: "harness-saved-id", error: null };
+        };
       }
       return chain()[prop as string];
     },

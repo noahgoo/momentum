@@ -9,7 +9,8 @@ import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutWeek } from "../../../lib/queries/useWorkoutWeek";
 import { ProgressRing } from "../../../components/workout/ProgressRing";
 import { WeekGrid } from "../../../components/workout/WeekGrid";
-import { colors, fonts, spacing } from "../../../theme/tokens";
+import { useMovableDays, useMovedDays } from "../../../lib/queries/useScheduleMoves";
+import { colors, fonts, radii, spacing } from "../../../theme/tokens";
 
 /**
  * Workout tab week view. Ported from mindful-miya's
@@ -31,6 +32,26 @@ export default function WorkoutWeekScreen() {
   const bootstrapQuery = useWorkoutWeek(uid, selectedWeek ?? 1, todayStr);
   const effectiveWeek = selectedWeek ?? bootstrapQuery.data?.currentWeekNumber ?? 1;
   const { data, isPending } = useWorkoutWeek(uid, effectiveWeek, todayStr);
+
+  // Moves are resolved in SQL; this only labels the days they touched.
+  const { data: movable } = useMovableDays(uid);
+  const weekStart = data?.days[0]?.dateStr;
+  const { data: movedDays } = useMovedDays(uid, weekStart);
+  const moveNotes = useMemo(() => {
+    const notes: Record<string, string> = {};
+    const short = (d: string) =>
+      new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    for (const m of movedDays ?? []) {
+      notes[m.from_date] = `Moved to ${short(m.to_date)}`;
+      notes[m.to_date] = `Moved from ${short(m.from_date)}`;
+    }
+    // Pending wins over a past accepted note on the same date: it is the newer fact.
+    for (const m of movable?.pending ?? []) {
+      notes[m.from_date] = `Move pending · ${short(m.to_date)}`;
+    }
+    return notes;
+  }, [movedDays, movable?.pending]);
+  const missedCount = movable?.missed.length ?? 0;
 
   const weekPills = useMemo(
     () => Array.from({ length: data?.totalWeeks ?? 0 }, (_, i) => i + 1),
@@ -71,9 +92,30 @@ export default function WorkoutWeekScreen() {
           </View>
         </View>
 
-        <TouchableOpacity onPress={() => router.push("/(tabs)/workout/history")} style={styles.historyLink}>
-          <Text style={styles.historyLinkText}>HISTORY →</Text>
-        </TouchableOpacity>
+        {missedCount > 0 && (
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/workout/reschedule")}
+            style={styles.missedBanner}
+            accessibilityRole="button"
+          >
+            <View style={styles.missedBannerText}>
+              <Text style={styles.missedBannerTitle}>
+                {missedCount} missed workout{missedCount === 1 ? "" : "s"}
+              </Text>
+              <Text style={styles.missedBannerBody}>Fit them back into your week</Text>
+            </View>
+            <Text style={styles.missedBannerAction}>RESCHEDULE →</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.linkRow}>
+          <TouchableOpacity onPress={() => router.push("/(tabs)/workout/reschedule")}>
+            <Text style={styles.historyLinkText}>RESCHEDULE →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/(tabs)/workout/history")}>
+            <Text style={styles.historyLinkText}>HISTORY →</Text>
+          </TouchableOpacity>
+        </View>
 
         <ScrollView
           horizontal
@@ -137,7 +179,7 @@ export default function WorkoutWeekScreen() {
           </TouchableOpacity>
         </View>
 
-        <WeekGrid days={data.days} />
+        <WeekGrid days={data.days} moveNotes={moveNotes} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -196,9 +238,42 @@ const styles = StyleSheet.create({
     color: colors.ink50,
     marginTop: 2,
   },
-  historyLink: {
-    alignSelf: "flex-end",
+  linkRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: spacing.sm,
+  },
+  missedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.badLine,
+    backgroundColor: colors.badBg,
+  },
+  missedBannerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  missedBannerTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    color: colors.ink,
+  },
+  missedBannerBody: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.ink50,
+    marginTop: 2,
+  },
+  missedBannerAction: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    color: colors.bad,
   },
   historyLinkText: {
     fontFamily: fonts.bodySemiBold,

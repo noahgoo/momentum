@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   bodyMeasurementCreateSchema,
   changeRequestCreateSchema,
+  scheduleMovesRequestSchema,
   friendRequestCreateSchema,
   goalCreateSchema,
   messageSendSchema,
@@ -175,6 +176,51 @@ describe("changeRequestCreateSchema", () => {
       fromDate: "2026-09-01",
       toDate: "2026-09-01",
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("scheduleMovesRequestSchema", () => {
+  it("accepts several distinct moves", () => {
+    const result = scheduleMovesRequestSchema.safeParse([
+      { fromDate: "2026-09-01", toDate: "2026-09-02" },
+      { fromDate: "2026-09-03", toDate: "2026-09-04" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("allows a later move to target the day an earlier one vacates", () => {
+    const result = scheduleMovesRequestSchema.safeParse([
+      { fromDate: "2026-09-01", toDate: "2026-09-02" },
+      { fromDate: "2026-09-03", toDate: "2026-09-01" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty list", () => {
+    expect(scheduleMovesRequestSchema.safeParse([]).success).toBe(false);
+  });
+
+  it("rejects the same source day twice", () => {
+    const result = scheduleMovesRequestSchema.safeParse([
+      { fromDate: "2026-09-01", toDate: "2026-09-02" },
+      { fromDate: "2026-09-01", toDate: "2026-09-04" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects two moves onto the same target day", () => {
+    const result = scheduleMovesRequestSchema.safeParse([
+      { fromDate: "2026-09-01", toDate: "2026-09-04" },
+      { fromDate: "2026-09-02", toDate: "2026-09-04" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a line whose dates match", () => {
+    const result = scheduleMovesRequestSchema.safeParse([
+      { fromDate: "2026-09-01", toDate: "2026-09-01" },
+    ]);
     expect(result.success).toBe(false);
   });
 });

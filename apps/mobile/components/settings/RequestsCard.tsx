@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import type { ChangeRequest } from "@momentum/shared";
+import { describeScheduleMoveError, type ChangeRequest } from "@momentum/shared";
 import { colors, fonts, spacing } from "../../theme/tokens";
 import { SettingsCard } from "./SettingsCard";
 
@@ -17,6 +17,14 @@ function formatDate(dateStr: string): string {
 
 function statusLabel(request: ChangeRequest): string {
   if (request.status === "pending") return "Waiting on coach";
+  if (request.status === "cancelled") return "Withdrawn";
+  if (request.status === "skipped") {
+    return request.skip_reason
+      ? `Not applied · ${describeScheduleMoveError(request.skip_reason)}`
+      : "Not applied";
+  }
+  // C8: say whether a person looked at it.
+  if (request.status === "accepted" && request.auto_applied) return "Moved automatically";
   const respondedOn = request.responded_at
     ? new Date(request.responded_at).toLocaleDateString("en-US", {
         month: "short",
@@ -28,10 +36,10 @@ function statusLabel(request: ChangeRequest): string {
 }
 
 /**
- * Read-only history of this client's own change_requests (workout-move
- * requests, plan finding #3), most recent 5. No accept/reject controls —
- * that's a coach-side action via SECURITY DEFINER RPCs; the client only
- * ever creates a request (MoveWorkoutCard) and watches its status here.
+ * Read-only history of this client's own change_requests (one row per moved
+ * workout), most recent 5. No accept/reject controls — that's a coach-side
+ * action via decide_schedule_moves; the client files moves from the
+ * reschedule screen and watches their status here.
  */
 export function RequestsCard({ requests, loading }: RequestsCardProps) {
   return (
@@ -55,7 +63,7 @@ export function RequestsCard({ requests, loading }: RequestsCardProps) {
                   style={[
                     styles.itemStatus,
                     request.status === "accepted" && styles.itemStatusOk,
-                    request.status === "rejected" && styles.itemStatusBad,
+                    (request.status === "rejected" || request.status === "skipped") && styles.itemStatusBad,
                   ]}
                 >
                   {statusLabel(request)}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  describeScheduleMoveError,
   parseSetConfig,
   parseSetConfigs,
   serializeSetConfig,
@@ -110,5 +111,29 @@ describe("parseSetConfigs / serializeSetConfigs", () => {
   it("returns an empty array for a non-array", () => {
     expect(parseSetConfigs(null)).toEqual([]);
     expect(parseSetConfigs({ reps: 8 })).toEqual([]);
+  });
+});
+
+describe("describeScheduleMoveError", () => {
+  it("maps a bare reason to a sentence", () => {
+    expect(describeScheduleMoveError(new Error("target_not_rest"))).toBe(
+      "That day already has a workout. Pick a rest day."
+    );
+  });
+
+  it("keeps the date so the person can tell which line failed", () => {
+    expect(describeScheduleMoveError(new Error("date_passed: 2026-10-01"))).toBe(
+      "2026-10-01: That day has already passed."
+    );
+  });
+
+  it("maps a stamped skip_reason string", () => {
+    expect(describeScheduleMoveError("already_logged")).toBe(
+      "You already trained on that day, so it cannot be moved."
+    );
+  });
+
+  it("passes unrecognised errors through unchanged", () => {
+    expect(describeScheduleMoveError(new Error("boom"))).toBe("boom");
   });
 });

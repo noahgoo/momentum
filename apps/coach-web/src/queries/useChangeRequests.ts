@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ChangeRequest } from "@momentum/shared";
+import { describeScheduleMoveError } from "@momentum/shared";
+import type { ChangeRequest, DecideScheduleMovesResult } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
+import { useRealtimeSubscription } from "./useRealtime";
 
-const HISTORY_LIMIT = 20;
+/** History is one row per move and a batch can carry many, so this is larger than a per-request limit would be. */
+const HISTORY_LIMIT = 60;
 
-/** A pending/accepted/rejected change request, with display-only client/workout names attached. */
+/** One move (a change_requests row), with display-only client/session names attached. */
 export interface ChangeRequestRow extends ChangeRequest {
   clientName: string | null;
   workoutName: string | null;
@@ -16,39 +19,66 @@ export interface ChangeRequestsData {
   history: ChangeRequestRow[];
 }
 
-/** Human-readable messages for the RPC error strings raised by accept_change_request/reject_change_request (0013/0015). */
-const RPC_ERROR_MESSAGES: Record<string, string> = {
-  not_found_or_forbidden: "This request was already handled.",
-  no_active_assignment: "This client no longer has an active program.",
-  nothing_to_move: "That workout is no longer on the original day.",
-};
+/** Human-readable text for a move RPC error or a stamped skip_reason. */
+export const describeChangeRequestError = describeScheduleMoveError;
 
-/** Maps a raised RPC error string to a human-readable message; falls back to the raw message for anything unrecognized. */
-export function describeChangeRequestError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return RPC_ERROR_MESSAGES[message] ?? message;
+/** One client's moves filed together, so the coach can decide the lot or pick lines out of it. */
+export interface MoveBatch {
+  batchId: string;
+  clientId: string;
+  clientName: string | null;
+  requestedAt: string;
+  moves: ChangeRequestRow[];
+}
+
+/** Groups pending moves by the submission they arrived in: newest batch first, lines in filing order. */
+export function groupIntoBatches(rows: ChangeRequestRow[]): MoveBatch[] {
+  const byBatch = new Map<string, MoveBatch>();
+  for (const row of rows) {
+    const existing = byBatch.get(row.batch_id);
+    if (existing) {
+      existing.moves.push(row);
+    } else {
+      byBatch.set(row.batch_id, {
+        batchId: row.batch_id,
+        clientId: row.client_id,
+        clientName: row.clientName,
+        requestedAt: row.requested_at,
+        moves: [row],
+      });
+    }
+  }
+  const batches = [...byBatch.values()];
+  for (const batch of batches) batch.moves.sort((a, b) => a.position - b.position);
+  return batches.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
 }
 
 /**
- * Loads the coach's pending change requests (oldest-request-first UI actually
- * wants newest-first per spec) plus the most recent 20 accepted/rejected, with
- * client display name (from `client_summaries`) and workout name (from
- * `workouts`, keyed by the request's stored `workout_id`) attached for
- * display only.
+ * Loads the coach's pending moves plus the most recent decided ones, with the
+ * client's display name (from `client_summaries`) and the session name
+ * attached for display only.
  *
- * NOTE: the stored `workout_id` on a request is a snapshot taken when the
- * client filed the request — it is NEVER re-resolved here. Constraint #3
- * (plan) requires accept/reject to re-resolve live via
- * `resolve_scheduled_workout`, but that function is only callable from other
- * SECURITY DEFINER functions (revoked from `authenticated` — see 0011), so
- * this page cannot and does not attempt to re-resolve it client-side. It is
- * display-only context for the coach; the actual swap math happens entirely
- * inside `accept_change_request`'s SQL.
+ * `session_name` on a row is a snapshot taken when the client filed the move;
+ * it is never re-resolved here. Whether the move can still apply is decided
+ * inside `decide_schedule_moves`, against the live schedule, when the coach
+ * acts (C5) — `resolve_scheduled_workout` is not callable from the browser
+ * anyway.
  *
  * No client-side `coach_id = auth.uid()` filter — RLS already scopes
  * `change_requests` SELECT to `coach_id = auth.uid()` (0006).
  */
 export function useChangeRequests() {
+  const queryClient = useQueryClient();
+
+  // R6: a client filing, withdrawing or auto-applying a move reaches the coach
+  // without a refresh. RLS scopes the events to this coach's own rows.
+  useRealtimeSubscription({
+    table: "change_requests",
+    onChange: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.changeRequests() });
+    },
+  });
+
   return useQuery<ChangeRequestsData>({
     queryKey: qk.changeRequests(),
     queryFn: async () => {
@@ -57,11 +87,12 @@ export function useChangeRequests() {
           .from("change_requests")
           .select("*")
           .eq("status", "pending")
-          .order("requested_at", { ascending: false }),
+          .order("requested_at", { ascending: false })
+          .order("position", { ascending: true }),
         supabase
           .from("change_requests")
           .select("*")
-          .in("status", ["accepted", "rejected"])
+          .in("status", ["accepted", "rejected", "cancelled", "skipped"])
           .order("responded_at", { ascending: false })
           .limit(HISTORY_LIMIT),
       ]);
@@ -91,10 +122,13 @@ export function useChangeRequests() {
       const nameByClientId = new Map((clientsRes.data ?? []).map((c) => [c.client_id, c.display_name]));
       const nameBySessionId = new Map((sessionsRes.data ?? []).map((s) => [s.id, s.name]));
 
+      // Snapshot first (R8): the name the client was given, which survives the
+      // session being rebuilt. The live name is only a fallback for rows filed
+      // before the snapshot existed.
       const attach = (r: ChangeRequest): ChangeRequestRow => ({
         ...r,
         clientName: nameByClientId.get(r.client_id) ?? null,
-        workoutName: r.session_id ? (nameBySessionId.get(r.session_id) ?? null) : null,
+        workoutName: r.session_name ?? (r.session_id ? (nameBySessionId.get(r.session_id) ?? null) : null),
       });
 
       return {
@@ -106,29 +140,28 @@ export function useChangeRequests() {
 }
 
 /**
- * Accept/decline share the same shape: call the RPC, invalidate the list on
- * settle regardless of outcome (constraint #3 — double-click safe, since a
- * second call on an already-handled row cleanly raises
- * not_found_or_forbidden rather than throwing something unrecoverable; the
- * invalidation on settle picks up whatever the first call actually did).
+ * Decides any subset of pending moves in one call. The RPC re-checks every
+ * line inside its transaction, so a double click or a stale list cannot apply
+ * anything twice; the result says how many applied and which lines were
+ * skipped and why, and the caller shows that rather than claiming success.
+ *
+ * Invalidates the coach's request list (which also feeds the inbox count).
+ * The client-side counterparts — week, day and pending-move keys in
+ * apps/mobile — are refreshed by realtime on change_requests (R6).
  */
-function useChangeRequestAction(rpcName: "accept_change_request" | "reject_change_request") {
+export function useDecideScheduleMoves() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (requestId: string) => {
-      const { error } = await supabase.rpc(rpcName, { p_request_id: requestId });
+    mutationFn: async ({ ids, decision }: { ids: string[]; decision: "accept" | "reject" }) => {
+      const { data, error } = await supabase.rpc("decide_schedule_moves", {
+        p_ids: ids,
+        p_decision: decision,
+      });
       if (error) throw new Error(error.message);
+      return data as unknown as DecideScheduleMovesResult;
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: qk.changeRequests() });
     },
   });
-}
-
-export function useAcceptChangeRequest() {
-  return useChangeRequestAction("accept_change_request");
-}
-
-export function useRejectChangeRequest() {
-  return useChangeRequestAction("reject_change_request");
 }

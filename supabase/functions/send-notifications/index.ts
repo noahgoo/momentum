@@ -48,6 +48,23 @@ function nextAttemptAt(attempts: number): string {
  * time rather than delivering something stale.
  */
 async function stillWorthSending(row: OutboxRow): Promise<boolean> {
+  if (row.kind === "schedule_move_requested") {
+    // Nothing to tell the coach about if every move in the batch was already
+    // decided or withdrawn before this was delivered. Auto-applied batches
+    // are decided at filing time, and are still worth a heads-up.
+    const batchId = row.payload?.batch_id as string | undefined;
+    if (!batchId) return false;
+    if (row.payload?.auto_applied) return true;
+
+    const { count } = await supabase
+      .from("change_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("batch_id", batchId)
+      .eq("status", "pending");
+
+    return (count ?? 0) > 0;
+  }
+
   if (row.kind !== "workout_reminder") return true;
 
   const date = row.payload?.date as string | undefined;
@@ -67,6 +84,12 @@ function describe(row: OutboxRow): { title: string; body: string } {
   switch (row.kind) {
     case "workout_reminder":
       return { title: "Today's workout", body: "You have a workout scheduled today." };
+    case "schedule_move_requested":
+      return row.payload?.auto_applied
+        ? { title: "Workouts moved", body: "A client rescheduled workouts. No action needed." }
+        : { title: "Move request", body: "A client asked to move workouts. Tap to review." };
+    case "schedule_move_decided":
+      return { title: "Schedule updated", body: "Your coach replied to your move request." };
     default:
       return { title: "Momentum", body: "You have an update." };
   }
