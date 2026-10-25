@@ -228,6 +228,47 @@ test.describe("workout picker", () => {
   });
 });
 
+test.describe("move requests", () => {
+  test("groups a client's moves and lets the coach pick lines out of the batch", async ({ page }) => {
+    await visit(page, "/inbox/requests");
+
+    const batches = page.getByTestId("move-batch");
+    await expect(batches).toHaveCount(2);
+
+    // Newest request first, so the single-workout request from Sam leads.
+    const first = batches.filter({ hasText: "Marguerite" });
+    await expect(first.getByRole("button", { name: "Approve all (3)" })).toBeEnabled();
+    // Nothing ticked yet, so there is no subset to approve.
+    await expect(first.getByRole("button", { name: "Approve selected (0)" })).toBeDisabled();
+
+    await first.getByRole("checkbox", { name: /Lower Body Power/ }).check();
+    await expect(first.getByRole("button", { name: "Approve selected (1)" })).toBeEnabled();
+
+    // A lone workout keeps the plain Accept / Decline pair, with no checkboxes.
+    const single = batches.filter({ hasText: "Sam Reyes" });
+    await expect(single.getByRole("button", { name: "Accept" })).toBeVisible();
+    await expect(single.getByRole("checkbox")).toHaveCount(0);
+  });
+
+  test("reports what a decision did instead of assuming it worked", async ({ page }) => {
+    await visit(page, "/inbox/requests");
+    await page
+      .getByTestId("move-batch")
+      .filter({ hasText: "Marguerite" })
+      .getByRole("button", { name: "Approve all (3)" })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Moved 3 workouts.");
+  });
+
+  test("history says who decided and why a move did not apply", async ({ page }) => {
+    await visit(page, "/inbox/requests");
+    await page.getByRole("button", { name: /History/ }).click();
+    await expect(page.getByText("Auto-approved")).toBeVisible();
+    await expect(page.getByText("Withdrawn")).toBeVisible();
+    await expect(page.getByText(/Not applied · You already trained/)).toBeVisible();
+  });
+});
+
 test.describe("session editor", () => {
   test("renders both halves of a day and gates the fan-out", async ({ page }) => {
     await visit(page, "/library/programs/p-1/days/s-1");

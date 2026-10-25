@@ -7,10 +7,10 @@ const HISTORY_LIMIT = 5;
 
 /**
  * This client's own change_requests, any status, most recent 5 first
- * (settings.tsx "Requests" card). Distinct from `usePendingChangeRequest`
- * (useChangeRequest.ts), which reads only the single pending row for
- * MoveWorkoutCard — this is a read-only history list, no accept/reject
- * actions here (those are coach-side RPCs, plan finding #3).
+ * (settings.tsx "Requests" card). Distinct from `useMovableDays`
+ * (useScheduleMoves.ts), which carries the pending moves for the reschedule
+ * screen — this is a read-only history list, no accept/reject actions here
+ * (those are the coach-side decide_schedule_moves RPC).
  */
 export function useChangeRequestHistory(uid: string | undefined) {
   return useQuery<ChangeRequest[]>({

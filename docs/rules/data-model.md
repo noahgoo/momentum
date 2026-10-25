@@ -224,4 +224,26 @@ is the exemplar: it skips any day the client has already reached, and any day
 that already has a log, and returns counts so the UI says what it did instead
 of claiming success.
 
+### R10. Moving a scheduled day writes overrides, never sessions or logs
+
+A client's request to move workouts — upcoming or missed — is a Schedule-tier
+write: one `assignment_date_overrides` row per affected date, for one client.
+It never edits a `sessions` row and never touches an Event row.
+
+- Filing and applying both go through RPCs (`request_schedule_moves`,
+  `decide_schedule_moves`); `change_requests` has no insert/update policies, so
+  the checks cannot be skipped. One row is one move, `batch_id` groups a
+  submission, and the coach decides any subset.
+- A move is refused when either date has a `workout_logs` row, when the target
+  is before the **client's** today (C1), or when it is not a rest day inside
+  the same assignment. Targets must be rest days: a swap would put a workout on
+  a date that has already passed.
+- The source becomes an explicit rest override. That does change what a past
+  date resolves to, so the accepted `change_requests` row keeps a
+  `session_name` snapshot (R8) and the week view reads "Moved to <date>" from
+  it. Do not treat a rest override on a past date as proof nothing was
+  scheduled there.
+- `profiles.move_approval` (`coach` | `auto`) is coach-set per client. `auto`
+  applies at filing time and the row says so (`auto_applied`, C8).
+
 ---

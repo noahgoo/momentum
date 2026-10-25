@@ -10,12 +10,10 @@ import { useAuth } from "../../../lib/auth";
 import { useProfile } from "../../../lib/queries/useProfile";
 import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutDay } from "../../../lib/queries/useWorkoutDay";
-import { usePendingChangeRequest } from "../../../lib/queries/useChangeRequest";
 import { useWarmupToggle } from "../../../lib/queries/useWarmupToggle";
 import { useSetWorkoutDifficulty } from "../../../lib/queries/useSetWorkoutDifficulty";
 import { WarmupCard } from "../../../components/workout/WarmupCard";
 import { WorkoutLogger } from "../../../components/workout/WorkoutLogger";
-import { MoveWorkoutCard } from "../../../components/workout/MoveWorkoutCard";
 import { DifficultyPicker } from "../../../components/workout/DifficultyPicker";
 import { colors, fonts, radii, spacing, shadows } from "../../../theme/tokens";
 
@@ -33,7 +31,7 @@ function formatHeader(value: string): string {
 export default function WorkoutDayScreen() {
   const tabBarSpace = useTabBarSpace();
   const { date: dateParam } = useLocalSearchParams<{ date: string }>();
-  const { session, profile } = useAuth();
+  const { session } = useAuth();
   const uid = session?.user.id;
   // Through the query hook so a unit changed in settings applies immediately.
   const { data: profilePrefs } = useProfile(uid);
@@ -43,7 +41,6 @@ export default function WorkoutDayScreen() {
   const isFuture = Boolean(dateParam) && dateParam > todayStr;
 
   const { data, isPending } = useWorkoutDay(uid, dateParam);
-  const { data: pendingRequest } = usePendingChangeRequest(uid);
   const warmupToggle = useWarmupToggle();
   const setDifficulty = useSetWorkoutDifficulty();
 
@@ -203,16 +200,18 @@ export default function WorkoutDayScreen() {
           </View>
         )}
 
-        {(isToday || isFuture) && uid && profile?.invited_by && (
-          <MoveWorkoutCard
-            clientId={uid}
-            coachId={profile.invited_by}
-            fromDate={dateParam}
-            sessionId={workout.id}
-            minDate={todayStr}
-            maxDate={data.programEndDate}
-            pendingRequest={pendingRequest}
-          />
+        {/* No log yet means the day is still movable, today, ahead or missed.
+            The server decides whether it actually is (a log, a program change). */}
+        {uid && !log && (
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/(tabs)/workout/reschedule", params: { date: dateParam } })}
+            style={styles.moveLink}
+            accessibilityRole="button"
+          >
+            <Text style={styles.moveLinkText}>
+              {isToday || isFuture ? "Move this workout" : "Reschedule this missed workout"}
+            </Text>
+          </TouchableOpacity>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -220,6 +219,16 @@ export default function WorkoutDayScreen() {
 }
 
 const styles = StyleSheet.create({
+  moveLink: {
+    marginTop: spacing.lg,
+    alignItems: "center",
+  },
+  moveLinkText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.ink50,
+    textDecorationLine: "underline",
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.cream,

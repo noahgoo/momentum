@@ -104,6 +104,36 @@ export const changeRequestCreateSchema = z
 
 export type ChangeRequestCreate = z.infer<typeof changeRequestCreateSchema>;
 
+/** Most moves one submission may carry; request_schedule_moves enforces the same cap. */
+export const MAX_MOVES_PER_REQUEST = 50;
+
+/**
+ * One submission of moves, in the order they should apply. A day may appear
+ * once as a source and once as a target — a later line may target the day an
+ * earlier one vacates, but not the reverse. The server re-validates all of it
+ * against the live schedule; this only catches mistakes before the round trip.
+ */
+export const scheduleMovesRequestSchema = z
+  .array(changeRequestCreateSchema)
+  .min(1, "Pick at least one workout to move")
+  .max(MAX_MOVES_PER_REQUEST)
+  .superRefine((moves, ctx) => {
+    const froms = new Set<string>();
+    const tos = new Set<string>();
+    moves.forEach((m, i) => {
+      if (froms.has(m.fromDate)) {
+        ctx.addIssue({ code: "custom", message: "A workout can only be moved once", path: [i, "fromDate"] });
+      }
+      if (tos.has(m.toDate)) {
+        ctx.addIssue({ code: "custom", message: "Two workouts cannot move to the same day", path: [i, "toDate"] });
+      }
+      froms.add(m.fromDate);
+      tos.add(m.toDate);
+    });
+  });
+
+export type ScheduleMovesRequest = z.infer<typeof scheduleMovesRequestSchema>;
+
 // ---------------------------------------------------------------------------
 // setConfig + workoutExerciseInput
 // ---------------------------------------------------------------------------

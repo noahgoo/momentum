@@ -18,7 +18,8 @@
  *   ['workoutWeek', uid, weekNumber]
  *   ['workoutDay', uid, dateStr]
  *   ['workoutHistory', uid]
- *   ['changeRequest', uid]
+ *   ['movableDays', uid]
+ *   ['movedDays', uid, startDate]
  *   ['changeRequestHistory', uid]
  *   ['friendships', uid]
  *   ['progressPhotos', uid]
@@ -59,11 +60,17 @@ export const qk = {
       ? (["workoutWeek", uid] as const)
       : (["workoutWeek", uid, weekNumber, date] as const),
   /** Single date's workout/warmup/log/previous-log bundle ([date].tsx). */
-  workoutDay: (uid: string, dateStr: string) => ["workoutDay", uid, dateStr] as const,
+  // Date-optional like todayWorkout: qk.workoutDay(uid) is a PREFIX that
+  // invalidates every date, for writes (a schedule move) that touch two days.
+  workoutDay: (uid: string, dateStr?: string) =>
+    dateStr === undefined ? (["workoutDay", uid] as const) : (["workoutDay", uid, dateStr] as const),
   /** Completed workout_logs, most recent first (history.tsx). */
   workoutHistory: (uid: string) => ["workoutHistory", uid] as const,
-  /** This client's pending change_requests row, if any (MoveWorkoutCard). */
-  changeRequest: (uid: string) => ["changeRequest", uid] as const,
+  /** get_movable_days(): missed/upcoming workouts, free rest days and pending moves (reschedule screen, week banner). */
+  movableDays: (uid: string) => ["movableDays", uid] as const,
+  /** get_moved_days(): accepted moves touching one week, for the "Moved to…" notes on the grid. */
+  movedDays: (uid: string, startDate?: string) =>
+    startDate === undefined ? (["movedDays", uid] as const) : (["movedDays", uid, startDate] as const),
   /** This client's own change_requests, any status, most recent first (settings.tsx). */
   changeRequestHistory: (uid: string) => ["changeRequestHistory", uid] as const,
   /** All friendships (any status) this client is a member of (friends.tsx). */

@@ -6,6 +6,12 @@ import type { DayState } from "./dayState";
 
 interface WeekGridProps {
   days: WorkoutWeekDay[];
+  /**
+   * Per-date notes about a move ("Moved to Oct 28", "Move pending"). A day that
+   * was moved away resolves to rest, so without this it reads as an unexplained
+   * rest day.
+   */
+  moveNotes?: Record<string, string>;
 }
 
 const STATUS_LABEL: Partial<Record<DayState, string>> = {
@@ -79,7 +85,7 @@ function dateLabel(dateStr: string): string {
  * Same status-badge/color scheme as mindful-miya's workout page, dark tiles
  * for today/future.
  */
-function DayCell({ day }: { day: WorkoutWeekDay }) {
+function DayCell({ day, note }: { day: WorkoutWeekDay; note?: string }) {
   const { state } = day;
   const dark = state === "today" || state === "future";
   const label = dateLabel(day.dateStr);
@@ -96,7 +102,13 @@ function DayCell({ day }: { day: WorkoutWeekDay }) {
     return (
       <View style={[styles.cell, styles.restCell]}>
         <Text style={styles.restDateLabel}>{label}</Text>
-        <Text style={styles.restText}>Rest</Text>
+        {note ? (
+          <Text style={[styles.moveNote, { color: colors.blueDeep }]} numberOfLines={1}>
+            {note}
+          </Text>
+        ) : (
+          <Text style={styles.restText}>Rest</Text>
+        )}
       </View>
     );
   }
@@ -127,7 +139,12 @@ function DayCell({ day }: { day: WorkoutWeekDay }) {
         <Text style={[styles.workoutName, { color: dark ? colors.cream : colors.ink }]} numberOfLines={1}>
           {day.workout?.name}
         </Text>
-        {day.workout?.estimated_duration_minutes ? (
+        {note ? (
+          // Tiles are fixed-height, so a move note takes the duration's line.
+          <Text style={[styles.moveNote, { color: dark ? colors.blue : colors.blueDeep }]} numberOfLines={1}>
+            {note}
+          </Text>
+        ) : day.workout?.estimated_duration_minutes ? (
           <Text
             style={[
               styles.workoutDuration,
@@ -142,13 +159,13 @@ function DayCell({ day }: { day: WorkoutWeekDay }) {
   );
 }
 
-export function WeekGrid({ days }: WeekGridProps) {
+export function WeekGrid({ days, moveNotes }: WeekGridProps) {
   return (
     <View style={styles.grid}>
       {[days.slice(0, 4), days.slice(4)].map((column, i) => (
         <View key={i} style={styles.column}>
           {column.map((day) => (
-            <DayCell key={day.dateStr} day={day} />
+            <DayCell key={day.dateStr} day={day} note={moveNotes?.[day.dateStr]} />
           ))}
         </View>
       ))}
@@ -192,6 +209,11 @@ const styles = StyleSheet.create({
   workoutName: {
     fontFamily: fonts.display,
     fontSize: 13,
+  },
+  moveNote: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 10,
+    marginTop: 4,
   },
   workoutDuration: {
     fontFamily: fonts.body,

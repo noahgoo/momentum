@@ -40,7 +40,7 @@ export interface WorkoutDayResult {
   lastSetWeights: LastSetWeights;
   /** Whether `date` falls within the assignment's active window. */
   inRange: boolean;
-  /** Program window bounds, for MoveWorkoutCard's date-picker clamp. */
+  /** Program window bounds. */
   programStartDate: string;
   programEndDate: string;
 }

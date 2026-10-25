@@ -13,6 +13,7 @@ export default function WorkoutStackLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="[date]" />
       <Stack.Screen name="history" />
+      <Stack.Screen name="reschedule" />
     </Stack>
   );
 }

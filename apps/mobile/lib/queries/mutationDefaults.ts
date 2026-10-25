@@ -23,7 +23,7 @@ import {
  * flipping one, and a replayed measurement insert that collides with the row it
  * already wrote treats the duplicate as success.
  *
- * Deliberately absent: assign_program and accept_change_request. Both depend
+ * Deliberately absent: assign_program and request_schedule_moves. Both depend
  * on current server state — replaying an assign made an hour ago could
  * overwrite a newer one — so they must fail fast rather than queue.
  */

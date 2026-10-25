@@ -167,35 +167,53 @@ export type Database = {
       }
       change_requests: {
         Row: {
+          auto_applied: boolean
+          batch_id: string
           client_id: string
           coach_id: string
+          decided_by: string | null
           from_date: string
           id: string
+          position: number
           requested_at: string
           responded_at: string | null
           session_id: string | null
+          session_name: string | null
+          skip_reason: string | null
           status: Database["public"]["Enums"]["change_request_status"]
           to_date: string
         }
         Insert: {
+          auto_applied?: boolean
+          batch_id?: string
           client_id: string
           coach_id: string
+          decided_by?: string | null
           from_date: string
           id?: string
+          position?: number
           requested_at?: string
           responded_at?: string | null
           session_id?: string | null
+          session_name?: string | null
+          skip_reason?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           to_date: string
         }
         Update: {
+          auto_applied?: boolean
+          batch_id?: string
           client_id?: string
           coach_id?: string
+          decided_by?: string | null
           from_date?: string
           id?: string
+          position?: number
           requested_at?: string
           responded_at?: string | null
           session_id?: string | null
+          session_name?: string | null
+          skip_reason?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           to_date?: string
         }
@@ -705,6 +723,7 @@ export type Database = {
           id: string
           invited_by: string | null
           last_reminder_date: string | null
+          move_approval: string
           motivation_override_image_url: string | null
           motivation_override_quote: string | null
           motivation_override_until: string | null
@@ -727,6 +746,7 @@ export type Database = {
           id: string
           invited_by?: string | null
           last_reminder_date?: string | null
+          move_approval?: string
           motivation_override_image_url?: string | null
           motivation_override_quote?: string | null
           motivation_override_until?: string | null
@@ -749,6 +769,7 @@ export type Database = {
           id?: string
           invited_by?: string | null
           last_reminder_date?: string | null
+          move_approval?: string
           motivation_override_image_url?: string | null
           motivation_override_quote?: string | null
           motivation_override_until?: string | null
@@ -1383,14 +1404,11 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: undefined
       }
-      apply_change_request_swap: {
-        Args: { p_request_id: string }
-        Returns: undefined
-      }
       apply_session_to_future: {
         Args: { p_include_warmup?: boolean; p_session_id: string }
         Returns: Json
       }
+      cancel_schedule_moves: { Args: { p_ids: string[] }; Returns: number }
       assign_program: {
         Args: {
           p_client_id: string
@@ -1418,9 +1436,22 @@ export type Database = {
         Returns: string
       }
       get_my_streak: { Args: never; Returns: number }
+      decide_schedule_moves: {
+        Args: { p_decision: string; p_ids: string[] }
+        Returns: Json
+      }
+      get_moved_days: {
+        Args: { p_days?: number; p_start_date: string }
+        Returns: Json
+      }
+      get_movable_days: { Args: { p_lookback_days?: number }; Returns: Json }
       get_workout_day: { Args: { p_date: string }; Returns: Json }
       get_workout_week: {
         Args: { p_days?: number; p_start_date: string }
+        Returns: Json
+      }
+      request_schedule_moves: {
+        Args: { p_batch_id: string; p_moves: Json }
         Returns: Json
       }
       is_coach: { Args: never; Returns: boolean }
@@ -1523,7 +1554,12 @@ export type Database = {
       workout_usage_count: { Args: { p_workout_id: string }; Returns: number }
     }
     Enums: {
-      change_request_status: "pending" | "accepted" | "rejected"
+      change_request_status:
+        | "pending"
+        | "accepted"
+        | "rejected"
+        | "cancelled"
+        | "skipped"
       day_of_week:
         | "monday"
         | "tuesday"
@@ -1677,7 +1713,13 @@ export const Constants = {
   },
   public: {
     Enums: {
-      change_request_status: ["pending", "accepted", "rejected"],
+      change_request_status: [
+        "pending",
+        "accepted",
+        "rejected",
+        "cancelled",
+        "skipped",
+      ],
       day_of_week: [
         "monday",
         "tuesday",

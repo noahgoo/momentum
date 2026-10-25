@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router";
 import { ClientHeaderCard } from "../components/clients/ClientHeaderCard";
 import { GoalsPanel } from "../components/clients/GoalsPanel";
 import { MeasurementsPanel } from "../components/clients/MeasurementsPanel";
+import { MoveApprovalPanel } from "../components/clients/MoveApprovalPanel";
 import { MotivationOverridePanel } from "../components/clients/MotivationOverridePanel";
 import { ProgressPhotosStrip } from "../components/clients/ProgressPhotosStrip";
 import { RecentWorkouts } from "../components/clients/RecentWorkouts";
@@ -78,6 +79,10 @@ export function ClientDetailPage() {
 
       <SectionCard title="Dashboard motivation override">
         <MotivationOverridePanel profile={profile} todayStr={clientTodayStr} />
+      </SectionCard>
+
+      <SectionCard title="Workout moves">
+        <MoveApprovalPanel profile={profile} />
       </SectionCard>
 
       <SectionCard title="Workout history">
