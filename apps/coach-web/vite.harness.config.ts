@@ -35,6 +35,8 @@ function stubs(): Plugin {
 export default defineConfig({
   root: path.join(dir, "harness"),
   plugins: [stubs(), react(), tailwindcss()],
+  // Match the app's React resolution across hoisted workspace dependencies.
+  resolve: { dedupe: ["react", "react-dom"] },
   // fs.allow: the entry lives in harness/ but imports everything from ../src.
   server: { port: 5199, strictPort: true, fs: { allow: [dir, path.join(dir, "..", "..")] } },
   appType: "spa",
