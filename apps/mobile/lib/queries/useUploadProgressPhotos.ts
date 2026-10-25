@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImageManipulator from "expo-image-manipulator";
 import { supabase } from "../supabase";
+import { randomUuid } from "../uuid";
 import { qk } from "./keys";
 
 const FULL_MAX_EDGE = 1280;
@@ -58,7 +59,7 @@ async function uploadOne(clientId: string, photo: UploadPhotoInput): Promise<voi
     compress(photo.uri, THUMB_MAX_EDGE, THUMB_QUALITY),
   ]);
 
-  const id = crypto.randomUUID();
+  const id = randomUuid();
   const storagePath = `${clientId}/${id}.jpg`;
   const thumbPath = `${clientId}/${id}_thumb.jpg`;
 

@@ -113,5 +113,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // Recovery links come back as `?code=`, which the deep-link handler in
+    // app/_layout.tsx exchanges. The implicit default puts tokens in the URL
+    // fragment instead.
+    flowType: "pkce",
   },
 });
