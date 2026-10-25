@@ -388,22 +388,11 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                     ))}
                   </select>
                 )}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={usesIncrement}
-                  aria-label="Target from last weight"
-                  onClick={() => changeWeightDelta(usesIncrement ? undefined : 5)}
-                  className={`relative h-6 w-11 flex-none rounded-full transition-colors ${
-                    usesIncrement ? "bg-[var(--ink)]" : "bg-[var(--ink-08)]"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                      usesIncrement ? "translate-x-[22px]" : "translate-x-0.5"
-                    }`}
-                  />
-                </button>
+                <Switch
+                  checked={usesIncrement}
+                  label="Target from last weight"
+                  onChange={(on) => changeWeightDelta(on ? 5 : undefined)}
+                />
               </div>
             </div>
           )}
@@ -555,7 +544,7 @@ function Switch({
       }`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+        className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
           checked ? "translate-x-[22px]" : "translate-x-0.5"
         }`}
       />

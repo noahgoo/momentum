@@ -161,4 +161,30 @@ test.describe("exercise prescription controls", () => {
     await expect(page.getByText("PACE / KM")).toBeVisible();
     await expect(page.getByText("MILES")).toHaveCount(0);
   });
+
+  test("switch knobs sit inside their track, off at the left and on at the right", async ({ page, isMobile }) => {
+    await addAndExpandExercise(page, Boolean(isMobile));
+    const sw = page.getByRole("switch", { name: "Max effort" });
+    const box = async () => {
+      const track = (await sw.boundingBox())!;
+      const knob = (await sw.locator("span").boundingBox())!;
+      return { track, knob };
+    };
+
+    // An absolutely positioned knob with no `left` starts at the button's
+    // centre, which put it on the wrong side and then out past the track.
+    let { track, knob } = await box();
+    expect(knob.x).toBeGreaterThanOrEqual(track.x);
+    expect(knob.x + knob.width).toBeLessThan(track.x + track.width / 2 + knob.width / 2);
+
+    await sw.click();
+    // The knob slides (transition-transform), so wait for it to land.
+    await expect
+      .poll(async () => {
+        ({ track, knob } = await box());
+        return knob.x > track.x + track.width / 2 - knob.width;
+      })
+      .toBe(true);
+    expect(knob.x + knob.width).toBeLessThanOrEqual(track.x + track.width);
+  });
 });
