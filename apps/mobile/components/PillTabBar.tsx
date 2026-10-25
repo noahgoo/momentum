@@ -1,7 +1,7 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { BottomTabBarProps } from "expo-router/tabs";
+import type { ReactNode } from "react";
 import { colors, fonts, shadows, spacing } from "../theme/tokens";
 
 const BAR_HEIGHT = 68;
@@ -34,7 +34,31 @@ export function useTabBarSpace(): number {
  * The pill is translucent over a BlurView, so what sits behind it is the
  * client's own page out of focus rather than a flat panel.
  */
-export function PillTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+/**
+ * The slice of a tab navigator's bar props this bar reads. Declared here
+ * rather than borrowed from one navigator's types so it fits the swipeable
+ * top-tabs navigator (which has no `size` on its icons) as well as a bottom
+ * tabs one — the bar only ever needs route names, titles, icons and presses.
+ */
+export interface PillTabBarProps {
+  state: { index: number; routes: { key: string; name: string; params?: object }[] };
+  descriptors: Record<
+    string,
+    {
+      options: {
+        title?: string;
+        tabBarAccessibilityLabel?: string;
+        tabBarIcon?: (props: { focused: boolean; color: string; size: number }) => ReactNode;
+      };
+    }
+  >;
+  navigation: {
+    emit: (event: { type: string; target?: string; canPreventDefault?: boolean }) => { defaultPrevented?: boolean };
+    navigate: (name: string, params?: object) => void;
+  };
+}
+
+export function PillTabBar({ state, descriptors, navigation }: PillTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
