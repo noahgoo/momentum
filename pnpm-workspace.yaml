@@ -6,3 +6,6 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - expo-image-manipulator@57.0.15
   - expo-image-picker@57.0.15
+nodeLinker: hoisted
+overrides:
+  react-native-worklets: 0.10.1
