@@ -31,6 +31,13 @@ export const EDITABLE_WORKOUT_ID = "w-1";
  * schedule, so the regression check needs a fixture that is faithful about it.
  */
 export const INSTANCE_PROGRAM_ID = "p-instance";
+/**
+ * A phased client instance — its scheduled days live under `phases[].sessionSlots`,
+ * not `flatSessionSlots`. The day-list view has to read both shapes (see R9's
+ * client-instance branch in ProgramBuilderPage) or a phased client sees no days
+ * to edit at all.
+ */
+export const PHASED_INSTANCE_PROGRAM_ID = "p-instance-phased";
 /** A workout stamped with CLIENT_IDS[0] — deliberately NOT in `workouts`. */
 export const INSTANCE_WORKOUT_ID = "w-instance-1";
 /** `updated_at` on that workout; the staleness checks plant drafts either side of it. */
@@ -112,7 +119,9 @@ const exercises = [
       default_sets: 3,
       default_reps: 10,
       default_duration_seconds: 45,
-      default_miles: 1,
+      default_distance: 1,
+      default_distance_unit: "mi",
+      default_load_type: null,
       video_url: null,
     }) as unknown as Exercise
 );
@@ -195,6 +204,30 @@ const instanceProgramDetail: ProgramDetail = {
   flatActiveDays: ["monday"],
   flatWeekSchedule: { "1": { monday: INSTANCE_WORKOUT_ID } },
   flatSessionSlots: { "1": { monday: { id: "s-instance-1", sourceChanged: false } } },
+  updatedAt: "2026-09-01T10:00:00Z",
+};
+
+/** A phased client instance — see PHASED_INSTANCE_PROGRAM_ID. */
+const phasedInstanceProgramDetail: ProgramDetail = {
+  id: PHASED_INSTANCE_PROGRAM_ID,
+  name: "Base to Peak",
+  description: "Marguerite's copy",
+  weeks: 8,
+  clientId: CLIENT_IDS[0],
+  phased: true,
+  phases: [
+    {
+      id: "ph-1",
+      name: "Base",
+      weeks: 4,
+      activeDays: ["monday"],
+      weekSchedule: { "1": { monday: INSTANCE_WORKOUT_ID } },
+      sessionSlots: { "1": { monday: { id: "s-instance-phased-1", sourceChanged: false } } },
+    },
+  ],
+  flatActiveDays: [],
+  flatWeekSchedule: {},
+  flatSessionSlots: {},
   updatedAt: "2026-09-01T10:00:00Z",
 };
 
@@ -296,7 +329,10 @@ export function seed(qc: QueryClient) {
   // Seeded synchronously, unlike workoutDetail: this check is about what the
   // picker can resolve, not about hydration timing.
   qc.setQueryData(qk.programDetail(INSTANCE_PROGRAM_ID), instanceProgramDetail);
+  qc.setQueryData(qk.programDetail(PHASED_INSTANCE_PROGRAM_ID), phasedInstanceProgramDetail);
   qc.setQueryData(qk.sessionDetail("s-1"), sessionDetail);
+  // The session's client prefers kg / km, to check new rows start in them.
+  qc.setQueryData(qk.clientUnits(CLIENT_IDS[0]), { weightUnit: "kg", distanceUnit: "km" });
 
   qc.setQueryData(qk.threads(), threads);
   // useThreadMessages is a plain useQuery over a flat, oldest-first array.

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import type { Exercise, ExerciseMode } from "@momentum/shared";
+import type { DistanceUnit, Exercise, ExerciseMode, LoadType } from "@momentum/shared";
 import { useDeleteExercise, useExercises, useUpdateExercise } from "../../queries/useExercises";
 import { ExerciseCreateModal } from "./ExerciseCreateModal";
-import { formatDuration, formatMiles } from "../../lib/workoutFormat";
+import { formatDuration, formatDistance } from "../../lib/workoutFormat";
+import { DistanceUnitSelect, LoadTypeSelect } from "./ExerciseDefaultFields";
 
 const MODE_LABELS: Record<ExerciseMode, string> = { reps: "Reps", time: "Time", distance: "Distance" };
 const MODES: ExerciseMode[] = ["reps", "time", "distance"];
@@ -10,7 +11,7 @@ const MODES: ExerciseMode[] = ["reps", "time", "distance"];
 function exerciseDefaultsSummary(ex: Exercise): string {
   const mode = ex.default_mode ?? "reps";
   if (mode === "time") return `${ex.default_sets || 3} x ${formatDuration(ex.default_duration_seconds ?? 45)}`;
-  if (mode === "distance") return formatMiles(ex.default_miles ?? 1);
+  if (mode === "distance") return formatDistance(ex.default_distance ?? 1, ex.default_distance_unit ?? "mi");
   return `${ex.default_sets || 3} x ${ex.default_reps || 10}`;
 }
 
@@ -21,7 +22,9 @@ interface EditState {
   defaultReps: number;
   defaultMode: ExerciseMode;
   defaultDurationStr: string;
-  defaultMiles: number;
+  defaultDistance: number;
+  defaultDistanceUnit: DistanceUnit;
+  defaultLoadType: LoadType | null;
   videoUrl: string;
 }
 
@@ -76,7 +79,9 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
       defaultReps: ex.default_reps ?? 10,
       defaultMode: ex.default_mode ?? "reps",
       defaultDurationStr: formatDuration(ex.default_duration_seconds ?? 45) || "0:45",
-      defaultMiles: ex.default_miles ?? 1,
+      defaultDistance: ex.default_distance ?? 1,
+      defaultDistanceUnit: ex.default_distance_unit ?? "mi",
+      defaultLoadType: ex.default_load_type ?? null,
       videoUrl: ex.video_url ?? "",
     });
   }
@@ -91,7 +96,9 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
         default_sets: editState.defaultMode === "distance" ? 1 : Math.max(1, editState.defaultSets || 1),
         default_reps: editState.defaultMode === "reps" ? Math.max(1, editState.defaultReps || 1) : null,
         default_mode: editState.defaultMode,
-        default_miles: editState.defaultMode === "distance" ? Math.max(0.1, editState.defaultMiles || 1) : null,
+        default_distance: editState.defaultMode === "distance" ? Math.max(0.1, editState.defaultDistance || 1) : null,
+        default_distance_unit: editState.defaultMode === "distance" ? editState.defaultDistanceUnit : null,
+        default_load_type: editState.defaultMode === "reps" ? editState.defaultLoadType : null,
         video_url: editState.videoUrl.trim() || null,
       },
     });
@@ -276,18 +283,32 @@ export function ExerciseLibraryPanel({ coachId, onAdd }: ExerciseLibraryPanelPro
                       )}
                       {editState.defaultMode === "distance" && (
                         <div className="col-span-2">
-                          <label className="mb-1 block text-xs text-[var(--ink-50)]">Default miles</label>
-                          <input
-                            type="number"
-                            min={0.1}
-                            step="0.1"
-                            value={editState.defaultMiles}
-                            onChange={(e) =>
-                              setEditState((s) => s && { ...s, defaultMiles: Number(e.target.value) })
-                            }
-                            className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-1.5 text-sm outline-none focus:border-[var(--blue-deep)]"
-                          />
+                          <label className="mb-1 block text-xs text-[var(--ink-50)]">Default distance</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              min={0.1}
+                              step="0.1"
+                              value={editState.defaultDistance}
+                              onChange={(e) =>
+                                setEditState((s) => s && { ...s, defaultDistance: Number(e.target.value) })
+                              }
+                              className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-1.5 text-sm outline-none focus:border-[var(--blue-deep)]"
+                            />
+                            <DistanceUnitSelect
+                              value={editState.defaultDistanceUnit}
+                              onChange={(defaultDistanceUnit) =>
+                                setEditState((s) => s && { ...s, defaultDistanceUnit })
+                              }
+                            />
+                          </div>
                         </div>
+                      )}
+                      {editState.defaultMode === "reps" && (
+                        <LoadTypeSelect
+                          value={editState.defaultLoadType}
+                          onChange={(defaultLoadType) => setEditState((s) => s && { ...s, defaultLoadType })}
+                        />
                       )}
                     </div>
                     <div>

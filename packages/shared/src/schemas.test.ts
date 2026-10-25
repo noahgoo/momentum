@@ -201,6 +201,20 @@ describe("setConfigSchema", () => {
     expect(setConfigSchema.safeParse({ seconds: 0 }).success).toBe(false);
     expect(setConfigSchema.safeParse({ seconds: -30 }).success).toBe(false);
   });
+
+  it("accepts load type, per-side time, distance in km and max effort", () => {
+    expect(
+      setConfigSchema.safeParse({ reps: 10, weight: 25, weightUnit: "lbs", loadType: "each_hand" }).success
+    ).toBe(true);
+    expect(setConfigSchema.safeParse({ seconds: 30, perSide: true }).success).toBe(true);
+    expect(setConfigSchema.safeParse({ distance: 5, distanceUnit: "km", paceSeconds: 330 }).success).toBe(true);
+    expect(setConfigSchema.safeParse({ maxEffort: true }).success).toBe(true);
+  });
+
+  it("rejects an unknown load type or distance unit", () => {
+    expect(setConfigSchema.safeParse({ loadType: "heavy" }).success).toBe(false);
+    expect(setConfigSchema.safeParse({ distance: 2, distanceUnit: "furlong" }).success).toBe(false);
+  });
 });
 
 describe("workoutExerciseInputSchema", () => {

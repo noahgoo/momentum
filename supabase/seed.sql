@@ -296,22 +296,22 @@ begin
   -- EXERCISES
   -- ==========================================================================
 
-  insert into public.exercises (id, name, category, default_mode, default_sets, default_reps, default_duration_seconds, default_miles, created_by)
+  insert into public.exercises (id, name, category, default_mode, default_sets, default_reps, default_duration_seconds, default_distance, default_distance_unit, default_load_type, created_by)
   values
-    (ex1_squat, 'Bodyweight Squat', 'strength', 'reps', 3, 12, null, null, coach1),
-    (ex1_pushup, 'Push-Up', 'strength', 'reps', 3, 10, null, null, coach1),
-    (ex1_row, 'Dumbbell Row', 'strength', 'reps', 3, 10, null, null, coach1),
-    (ex1_plank, 'Plank Hold', 'strength', 'time', 3, null, 45, null, coach1),
-    (ex1_lunge, 'Walking Lunge', 'strength', 'reps', 3, 12, null, null, coach1),
-    (ex1_run, 'Easy Run', 'cardio', 'distance', 1, null, null, 2, coach1),
-    (ex1_bike, 'Stationary Bike', 'cardio', 'time', 1, null, 900, null, coach1),
-    (ex1_jump, 'Jumping Jacks', 'cardio', 'time', 3, null, 60, null, coach1),
-    (ex1_stretch_hamstring, 'Hamstring Stretch', 'flexibility', 'time', 2, null, 30, null, coach1),
-    (ex1_stretch_hip, 'Hip Flexor Stretch', 'flexibility', 'time', 2, null, 30, null, coach1),
-    (ex2_deadlift, 'Deadlift', 'strength', 'reps', 4, 8, null, null, coach2),
-    (ex2_press, 'Overhead Press', 'strength', 'reps', 4, 8, null, null, coach2),
-    (ex2_row, 'Barbell Row', 'strength', 'reps', 4, 8, null, null, coach2),
-    (ex2_run, 'Tempo Run', 'cardio', 'distance', 1, null, null, 3, coach2)
+    (ex1_squat, 'Bodyweight Squat', 'strength', 'reps', 3, 12, null, null, null, 'bodyweight', coach1),
+    (ex1_pushup, 'Push-Up', 'strength', 'reps', 3, 10, null, null, null, 'bodyweight', coach1),
+    (ex1_row, 'Dumbbell Row', 'strength', 'reps', 3, 10, null, null, null, 'each_hand', coach1),
+    (ex1_plank, 'Plank Hold', 'strength', 'time', 3, null, 45, null, null, null, coach1),
+    (ex1_lunge, 'Walking Lunge', 'strength', 'reps', 3, 12, null, null, null, 'bodyweight', coach1),
+    (ex1_run, 'Easy Run', 'cardio', 'distance', 1, null, null, 2, 'mi', null, coach1),
+    (ex1_bike, 'Stationary Bike', 'cardio', 'time', 1, null, 900, null, null, null, coach1),
+    (ex1_jump, 'Jumping Jacks', 'cardio', 'time', 3, null, 60, null, null, null, coach1),
+    (ex1_stretch_hamstring, 'Hamstring Stretch', 'flexibility', 'time', 2, null, 30, null, null, null, coach1),
+    (ex1_stretch_hip, 'Hip Flexor Stretch', 'flexibility', 'time', 2, null, 30, null, null, null, coach1),
+    (ex2_deadlift, 'Deadlift', 'strength', 'reps', 4, 8, null, null, null, 'total', coach2),
+    (ex2_press, 'Overhead Press', 'strength', 'reps', 4, 8, null, null, null, 'total', coach2),
+    (ex2_row, 'Barbell Row', 'strength', 'reps', 4, 8, null, null, null, 'total', coach2),
+    (ex2_run, 'Tempo Run', 'cardio', 'distance', 1, null, null, 3, 'mi', null, coach2)
   on conflict (id) do nothing;
 
   -- ==========================================================================
@@ -350,7 +350,7 @@ begin
   -- number, +5 lbs — blank until they have logged one (see 0027).
   insert into public.workout_exercises (workout_id, exercise_id, sort_order, mode, set_configs, rest_seconds)
   select w1_fullbody, ex1_row, 3, 'reps',
-    '[{"reps":10,"weight":20,"weight_unit":"lbs","per_side":true},{"reps":10,"weight":20,"weight_unit":"lbs","per_side":true},{"reps":10,"weight_delta":5,"weight_unit":"lbs"}]'::jsonb,
+    '[{"reps":10,"weight":20,"weight_unit":"lbs","per_side":true,"load_type":"each_hand"},{"reps":10,"weight":20,"weight_unit":"lbs","per_side":true,"load_type":"each_hand"},{"reps":10,"weight_delta":5,"weight_unit":"lbs","load_type":"each_hand"}]'::jsonb,
     60
   where not exists (select 1 from public.workout_exercises where workout_id = w1_fullbody and sort_order = 3);
 
@@ -369,7 +369,7 @@ begin
   -- Workout exercises: w1_cardio (time + distance mode mix)
   insert into public.workout_exercises (workout_id, exercise_id, sort_order, mode, set_configs, rest_seconds)
   select w1_cardio, ex1_run, 1, 'distance',
-    '[{"miles":2,"pace_seconds":540}]'::jsonb,
+    '[{"distance":2,"distance_unit":"mi","pace_seconds":540}]'::jsonb,
     120
   where not exists (select 1 from public.workout_exercises where workout_id = w1_cardio and sort_order = 1);
 
@@ -659,8 +659,8 @@ begin
     returning id into v_el;
 
     if v_el is not null then
-      insert into public.set_logs (exercise_log_id, set_number, actual_miles, actual_seconds, completed)
-      values (v_el, 1, 2.1, 1150, true);
+      insert into public.set_logs (exercise_log_id, set_number, actual_distance, distance_unit, actual_seconds, completed)
+      values (v_el, 1, 2.1, 'mi', 1150, true);
     end if;
   end if;
 

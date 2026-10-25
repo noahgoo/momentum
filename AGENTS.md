@@ -78,7 +78,9 @@ For anything touching reps, weights, durations or distances:
 - [ ] Is a set or exercise matched by array index anywhere? (P3)
 - [ ] Does rendering trust the live mode instead of the logged one? (P4)
 - [ ] Can a real `0` be swallowed into `—`, or an absent value shown as `0`? (P5)
-- [ ] Does `weight_unit` travel with every weight, including into snapshots? (P6)
+- [ ] Does `weight_unit` travel with every weight, and `distance_unit` with every distance, including into snapshots? (P6)
+- [ ] Does the number say what it means (each hand / total / bodyweight, each side, max effort)? (P7)
+- [ ] Does an empty actual stay empty, never seeded from the target? (P8)
 
 For anything dated, derived, or writable by both sides:
 

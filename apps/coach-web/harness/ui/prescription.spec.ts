@@ -91,14 +91,74 @@ test.describe("exercise prescription controls", () => {
     await expect(page.getByText("Last +10 lbs", { exact: true })).toHaveCount(setCount);
   });
 
-  test("each-side is hidden for time mode, where it has no meaning", async ({ page, isMobile }) => {
+  test("each-side carries into time mode, as a per-side hold", async ({ page, isMobile }) => {
     await addAndExpandExercise(page, Boolean(isMobile));
 
-    await expect(page.getByRole("switch", { name: "Reps are per side" })).toBeVisible();
+    const repsSide = page.getByRole("switch", { name: "Reps are per side" });
+    await repsSide.click();
     await page.getByRole("button", { name: "Time" }).click();
-    await expect(page.getByRole("switch", { name: "Reps are per side" })).toHaveCount(0);
+
+    // "30s each side" is a real prescription (side plank), so the flag
+    // survives the mode change and the time-mode switch reflects it.
+    await expect(repsSide).toHaveCount(0);
+    const timeSide = page.getByRole("switch", { name: "Time is per side" });
+    await expect(timeSide).toHaveAttribute("aria-checked", "true");
 
     // But a weight-relative target still makes sense for a weighted hold.
     await expect(page.getByRole("switch", { name: "Target from last weight" })).toBeVisible();
+  });
+
+  test("load type says what the weight means and applies to every set", async ({ page, isMobile }) => {
+    await addAndExpandExercise(page, Boolean(isMobile));
+    await page.getByRole("button", { name: "+ Add set" }).click();
+
+    await page.getByRole("combobox", { name: "Weight means" }).selectOption("each_hand");
+
+    // The collapsed summary reads off every config; "each hand" there means
+    // the value reached the sets, not only set 1.
+    await page.getByRole("button", { name: "Close" }).first().click();
+    await expect(page.getByText("each hand").first()).toBeVisible();
+  });
+
+  test("bodyweight replaces the weight input with a chip", async ({ page, isMobile }) => {
+    await addAndExpandExercise(page, Boolean(isMobile));
+    const weight = page.getByPlaceholder("-").first();
+    await weight.fill("25");
+    // NumericInput commits on blur, and selectOption does not move focus the
+    // way a real click on the select does.
+    await weight.blur();
+
+    await page.getByRole("combobox", { name: "Weight means" }).selectOption("bodyweight");
+    await expect(page.getByPlaceholder("-")).toHaveCount(0);
+    // A <span>, not the <option> of the same name in the select.
+    await expect(page.locator("span", { hasText: /^Bodyweight$/ }).first()).toBeVisible();
+
+    // Lossless, like the increment toggle: switching back restores the number.
+    await page.getByRole("combobox", { name: "Weight means" }).selectOption("total");
+    await expect(page.getByPlaceholder("-").first()).toHaveValue("25");
+  });
+
+  test("max effort swaps the target input for a Max chip and restores it", async ({ page, isMobile }) => {
+    await addAndExpandExercise(page, Boolean(isMobile));
+    const reps = page.getByPlaceholder("10").first();
+    await reps.fill("12");
+
+    const max = page.getByRole("switch", { name: "Max effort" });
+    await max.click();
+    await expect(page.getByText("Max", { exact: true }).first()).toBeVisible();
+    await expect(page.getByPlaceholder("10")).toHaveCount(0);
+
+    await max.click();
+    await expect(page.getByPlaceholder("10").first()).toHaveValue("12");
+  });
+
+  test("distance exercises are measured in the chosen unit", async ({ page, isMobile }) => {
+    await addAndExpandExercise(page, Boolean(isMobile));
+    await page.getByRole("button", { name: "Distance" }).click();
+
+    await expect(page.getByText("PACE / MI")).toBeVisible();
+    await page.getByRole("button", { name: "km", exact: true }).click();
+    await expect(page.getByText("PACE / KM")).toBeVisible();
+    await expect(page.getByText("MILES")).toHaveCount(0);
   });
 });

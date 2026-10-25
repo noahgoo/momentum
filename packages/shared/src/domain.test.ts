@@ -21,20 +21,26 @@ describe("parseSetConfig", () => {
         weight: 95,
         weight_unit: "lbs",
         seconds: 45,
-        miles: 1.5,
+        distance: 1.5,
+        distance_unit: "km",
         pace_seconds: 510,
         per_side: true,
         weight_delta: 5,
+        load_type: "each_hand",
+        max_effort: true,
       })
     ).toEqual({
       reps: 8,
       weight: 95,
       weightUnit: "lbs",
       seconds: 45,
-      miles: 1.5,
+      distance: 1.5,
+      distanceUnit: "km",
       paceSeconds: 510,
       perSide: true,
       weightDelta: 5,
+      loadType: "each_hand",
+      maxEffort: true,
     });
   });
 
@@ -42,6 +48,9 @@ describe("parseSetConfig", () => {
     expect(parseSetConfig({ reps: 10, weight: null, weight_unit: null })).toEqual({ reps: 10 });
     expect(parseSetConfig({ weight: "95", per_side: "yes", weight_delta: "5" })).toEqual({});
     expect(parseSetConfig({ weight_unit: "stone" })).toEqual({});
+    expect(parseSetConfig({ distance_unit: "furlong", load_type: "heavy", max_effort: "yes" })).toEqual({});
+    // The pre-0040 key is gone, not aliased.
+    expect(parseSetConfig({ miles: 2 })).toEqual({});
     expect(parseSetConfig({ reps: Number.NaN, weight_delta: Number.POSITIVE_INFINITY })).toEqual({});
     expect(parseSetConfig(null)).toEqual({});
     expect(parseSetConfig("nonsense")).toEqual({});
@@ -68,10 +77,13 @@ describe("serializeSetConfig", () => {
       weight: 95,
       weightUnit: "lbs",
       seconds: 45,
-      miles: 1.5,
+      distance: 1.5,
+      distanceUnit: "mi",
       paceSeconds: 510,
       perSide: true,
       weightDelta: 5,
+      loadType: "bodyweight_plus",
+      maxEffort: false,
     };
     expect(parseSetConfig(serializeSetConfig(config))).toEqual(config);
   });

@@ -14,7 +14,7 @@ type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
  */
 export type ProfileSettingsPatch = Pick<
   ProfileUpdate,
-  "display_name" | "notifications_enabled" | "notification_time" | "height_in" | "sex"
+  "display_name" | "notifications_enabled" | "notification_time" | "height_in" | "sex" | "weight_unit" | "distance_unit"
 >;
 
 interface UpdateProfileSettingsInput {

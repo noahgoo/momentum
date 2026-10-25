@@ -335,8 +335,12 @@ export type Database = {
           category: string | null
           created_at: string
           created_by: string | null
+          default_distance: number | null
+          default_distance_unit:
+            | Database["public"]["Enums"]["distance_unit"]
+            | null
           default_duration_seconds: number | null
-          default_miles: number | null
+          default_load_type: Database["public"]["Enums"]["load_type"] | null
           default_mode: Database["public"]["Enums"]["exercise_mode"] | null
           default_reps: number | null
           default_sets: number | null
@@ -350,8 +354,12 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          default_distance?: number | null
+          default_distance_unit?:
+            | Database["public"]["Enums"]["distance_unit"]
+            | null
           default_duration_seconds?: number | null
-          default_miles?: number | null
+          default_load_type?: Database["public"]["Enums"]["load_type"] | null
           default_mode?: Database["public"]["Enums"]["exercise_mode"] | null
           default_reps?: number | null
           default_sets?: number | null
@@ -365,8 +373,12 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          default_distance?: number | null
+          default_distance_unit?:
+            | Database["public"]["Enums"]["distance_unit"]
+            | null
           default_duration_seconds?: number | null
-          default_miles?: number | null
+          default_load_type?: Database["public"]["Enums"]["load_type"] | null
           default_mode?: Database["public"]["Enums"]["exercise_mode"] | null
           default_reps?: number | null
           default_sets?: number | null
@@ -686,6 +698,7 @@ export type Database = {
           created_at: string
           disabled: boolean
           display_name: string | null
+          distance_unit: Database["public"]["Enums"]["distance_unit"]
           email: string | null
           fcm_token: string | null
           height_in: number | null
@@ -701,11 +714,13 @@ export type Database = {
           sex: Database["public"]["Enums"]["sex"] | null
           timezone: string | null
           updated_at: string
+          weight_unit: Database["public"]["Enums"]["weight_unit"]
         }
         Insert: {
           created_at?: string
           disabled?: boolean
           display_name?: string | null
+          distance_unit?: Database["public"]["Enums"]["distance_unit"]
           email?: string | null
           fcm_token?: string | null
           height_in?: number | null
@@ -721,11 +736,13 @@ export type Database = {
           sex?: Database["public"]["Enums"]["sex"] | null
           timezone?: string | null
           updated_at?: string
+          weight_unit?: Database["public"]["Enums"]["weight_unit"]
         }
         Update: {
           created_at?: string
           disabled?: boolean
           display_name?: string | null
+          distance_unit?: Database["public"]["Enums"]["distance_unit"]
           email?: string | null
           fcm_token?: string | null
           height_in?: number | null
@@ -741,6 +758,7 @@ export type Database = {
           sex?: Database["public"]["Enums"]["sex"] | null
           timezone?: string | null
           updated_at?: string
+          weight_unit?: Database["public"]["Enums"]["weight_unit"]
         }
         Relationships: [
           {
@@ -1056,9 +1074,10 @@ export type Database = {
       }
       set_logs: {
         Row: {
-          actual_miles: number | null
+          actual_distance: number | null
           actual_seconds: number | null
           completed: boolean
+          distance_unit: Database["public"]["Enums"]["distance_unit"] | null
           exercise_log_id: string
           id: string
           prescribed: Json | null
@@ -1070,9 +1089,10 @@ export type Database = {
           weight_unit: Database["public"]["Enums"]["weight_unit"] | null
         }
         Insert: {
-          actual_miles?: number | null
+          actual_distance?: number | null
           actual_seconds?: number | null
           completed?: boolean
+          distance_unit?: Database["public"]["Enums"]["distance_unit"] | null
           exercise_log_id: string
           id?: string
           prescribed?: Json | null
@@ -1084,9 +1104,10 @@ export type Database = {
           weight_unit?: Database["public"]["Enums"]["weight_unit"] | null
         }
         Update: {
-          actual_miles?: number | null
+          actual_distance?: number | null
           actual_seconds?: number | null
           completed?: boolean
+          distance_unit?: Database["public"]["Enums"]["distance_unit"] | null
           exercise_log_id?: string
           id?: string
           prescribed?: Json | null
@@ -1511,8 +1532,15 @@ export type Database = {
         | "friday"
         | "saturday"
         | "sunday"
+      distance_unit: "mi" | "km"
       exercise_mode: "reps" | "time" | "distance"
       friendship_status: "pending" | "accepted"
+      load_type:
+        | "total"
+        | "each_hand"
+        | "bodyweight"
+        | "bodyweight_plus"
+        | "assisted"
       session_section: "warmup" | "main"
       sex: "male" | "female"
       user_role: "coach" | "client"
@@ -1659,8 +1687,16 @@ export const Constants = {
         "saturday",
         "sunday",
       ],
+      distance_unit: ["mi", "km"],
       exercise_mode: ["reps", "time", "distance"],
       friendship_status: ["pending", "accepted"],
+      load_type: [
+        "total",
+        "each_hand",
+        "bodyweight",
+        "bodyweight_plus",
+        "assisted",
+      ],
       session_section: ["warmup", "main"],
       sex: ["male", "female"],
       user_role: ["coach", "client"],

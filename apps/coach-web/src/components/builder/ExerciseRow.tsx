@@ -1,11 +1,11 @@
 import { useState } from "react";
-import type { ExerciseMode, SetConfig, WeightUnit } from "@momentum/shared";
+import type { DistanceUnit, ExerciseMode, LoadType, SetConfig, WeightUnit } from "@momentum/shared";
 import type { SortableDragHandleProps } from "./SortableList";
 import type { BuilderExercise } from "../../queries/useWorkoutDetail";
 import { NumericInput } from "./NumericInput";
 import { DurationInput } from "./DurationInput";
 import { convertSetConfigs, defaultSetConfig, isUntouchedRow } from "./defaultSetConfig";
-import { formatDuration, formatMiles } from "../../lib/workoutFormat";
+import { formatDuration, formatDistance } from "../../lib/workoutFormat";
 
 const MODE_LABELS: Record<ExerciseMode, string> = {
   reps: "Reps",
@@ -15,6 +15,16 @@ const MODE_LABELS: Record<ExerciseMode, string> = {
 
 const MODES: ExerciseMode[] = ["reps", "time", "distance"];
 const WEIGHT_UNITS: WeightUnit[] = ["lbs", "kg"];
+const DISTANCE_UNITS: DistanceUnit[] = ["mi", "km"];
+
+/** What a weight on this exercise means, in the words the client will see on the pill. */
+const LOAD_TYPE_OPTIONS: { value: LoadType; label: string }[] = [
+  { value: "total", label: "Total weight" },
+  { value: "each_hand", label: "Each hand (dumbbells)" },
+  { value: "bodyweight", label: "Bodyweight" },
+  { value: "bodyweight_plus", label: "Bodyweight + added" },
+  { value: "assisted", label: "Assisted" },
+];
 
 /** Increments a coach can set for a "from last weight" target. */
 const WEIGHT_DELTAS = [0, 2.5, 5, 10, 15, 20, -5, -10];
@@ -41,17 +51,25 @@ function omit<T extends object, K extends keyof T>(obj: T, key: K): Omit<T, K> {
 function prescriptionSummary(mode: ExerciseMode, configs: SetConfig[]): string {
   if (configs.length === 0) return "—";
   const format = (cfg: SetConfig) =>
-    mode === "time" ? formatDuration(cfg.seconds) : mode === "distance" ? formatMiles(cfg.miles) : String(cfg.reps ?? "-");
+    cfg.maxEffort && (mode === "time" ? cfg.seconds == null : cfg.reps == null)
+      ? "max"
+      : mode === "time"
+        ? formatDuration(cfg.seconds)
+        : mode === "distance"
+          ? formatDistance(cfg.distance, cfg.distanceUnit)
+          : String(cfg.reps ?? "-");
   const first = format(configs[0]!);
   const uniform = configs.every((cfg) => format(cfg) === first);
   const base = uniform ? `${configs.length} x ${first}` : `${configs.length} sets (mixed)`;
 
-  const perSide = mode === "reps" && configs.some((cfg) => cfg.perSide);
+  const perSide = mode !== "distance" && configs.some((cfg) => cfg.perSide);
+  const load = LOAD_TYPE_OPTIONS.find((o) => o.value === configs.find((cfg) => cfg.loadType)?.loadType);
   const delta = configs[0]?.weightDelta;
   const unit = configs[0]?.weightUnit ?? "lbs";
 
   return [
     perSide ? `${base} /side` : base,
+    load ? load.label.replace(" (dumbbells)", "").toLowerCase() : null,
     delta !== undefined ? `last ${formatDelta(delta, unit)}` : null,
   ]
     .filter(Boolean)
@@ -79,6 +97,9 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
   const [expanded, setExpanded] = useState(false);
   const configs = item.setConfigs;
   const unit: WeightUnit = configs[0]?.weightUnit ?? "lbs";
+  const distanceUnit: DistanceUnit = configs[0]?.distanceUnit ?? "mi";
+  const loadType: LoadType | undefined = configs.find((cfg) => cfg.loadType)?.loadType;
+  const maxEffort = configs.some((cfg) => cfg.maxEffort);
   const perSide = configs.some((cfg) => cfg.perSide);
   const weightDelta = configs[0]?.weightDelta;
   const usesIncrement = weightDelta !== undefined;
@@ -115,6 +136,32 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
     onChange({
       ...item,
       setConfigs: configs.map((cfg) => ({ ...cfg, weightUnit: nextUnit })),
+    });
+  }
+
+  function changeDistanceUnit(nextUnit: DistanceUnit) {
+    onChange({
+      ...item,
+      setConfigs: configs.map((cfg) => ({ ...cfg, distanceUnit: nextUnit })),
+    });
+  }
+
+  // Load type is per-exercise in the UI, per-set in storage, like the units.
+  // Switching to bodyweight keeps any entered weight underneath (lossless, the
+  // same way the increment toggle keeps the fixed weight).
+  function changeLoadType(next: LoadType | undefined) {
+    onChange({
+      ...item,
+      setConfigs: configs.map((cfg) => (next ? { ...cfg, loadType: next } : omit(cfg, "loadType"))),
+    });
+  }
+
+  // "As many as you can": the reps/seconds value is retained underneath, so
+  // turning it off restores the number the coach had typed.
+  function changeMaxEffort(next: boolean) {
+    onChange({
+      ...item,
+      setConfigs: configs.map((cfg) => (next ? { ...cfg, maxEffort: true } : omit(cfg, "maxEffort"))),
     });
   }
 
@@ -261,25 +308,63 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
             </div>
           )}
 
+          {item.mode === "distance" && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--ink-50)]">Distance unit</span>
+              <div className="flex overflow-hidden rounded-lg border border-[var(--ink-08)] bg-white">
+                {DISTANCE_UNITS.map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => changeDistanceUnit(u)}
+                    aria-pressed={distanceUnit === u}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      distanceUnit === u ? "bg-[var(--ink)] text-white" : "bg-white text-[var(--ink-50)] hover:bg-[var(--paper)]"
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {item.mode === "reps" && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-[var(--ink-50)]">Weight means</span>
+              <select
+                value={loadType ?? ""}
+                onChange={(e) => changeLoadType((e.target.value || undefined) as LoadType | undefined)}
+                aria-label="Weight means"
+                className="rounded-lg border border-[var(--ink-08)] bg-white px-2 py-1 text-xs outline-none focus:border-[var(--blue-deep)]"
+              >
+                <option value="">Not specified</option>
+                {LOAD_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {item.mode !== "distance" && (
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-[var(--ink-50)]">Each side</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={perSide}
-                aria-label="Reps are per side"
-                onClick={() => changePerSide(!perSide)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  perSide ? "bg-[var(--ink)]" : "bg-[var(--ink-08)]"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    perSide ? "translate-x-[22px]" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
+              <Switch
+                checked={perSide}
+                label={item.mode === "time" ? "Time is per side" : "Reps are per side"}
+                onChange={changePerSide}
+              />
+            </div>
+          )}
+
+          {item.mode !== "distance" && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--ink-50)]">
+                {item.mode === "time" ? "Hold as long as possible" : "As many reps as possible"}
+              </span>
+              <Switch checked={maxEffort} label="Max effort" onChange={changeMaxEffort} />
             </div>
           )}
 
@@ -334,10 +419,16 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
             <div className="mb-1.5 grid grid-cols-[32px_1fr_1fr_24px] gap-2">
               <div className="text-center text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">SET</div>
               <div className="text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">
-                {item.mode === "time" ? "TIME" : item.mode === "distance" ? "MILES" : "REPS"}
+                {item.mode === "time" ? "TIME" : item.mode === "distance" ? distanceUnit.toUpperCase() : "REPS"}
               </div>
               <div className="text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">
-                {item.mode === "distance" ? "PACE / MI" : unit.toUpperCase()}
+                {item.mode === "distance"
+                  ? `PACE / ${distanceUnit.toUpperCase()}`
+                  : loadType === "assisted"
+                    ? `ASSIST (${unit.toUpperCase()})`
+                    : loadType === "bodyweight_plus"
+                      ? `ADDED (${unit.toUpperCase()})`
+                      : unit.toUpperCase()}
               </div>
               <div />
             </div>
@@ -346,7 +437,11 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
               <div key={setIdx} className="mb-1.5 grid grid-cols-[32px_1fr_1fr_24px] items-center gap-2">
                 <div className="text-center text-xs font-medium text-[var(--ink-30)]">{setIdx + 1}</div>
 
-                {item.mode === "time" ? (
+                {maxEffort && item.mode !== "distance" ? (
+                  <span className="truncate rounded-lg border border-dashed border-[var(--ink-08)] bg-[var(--paper)] px-2 py-1.5 text-sm text-[var(--ink-50)]">
+                    Max
+                  </span>
+                ) : item.mode === "time" ? (
                   <DurationInput
                     value={cfg.seconds}
                     onChange={(n) => updateSet(setIdx, { seconds: n })}
@@ -355,8 +450,8 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                   />
                 ) : item.mode === "distance" ? (
                   <NumericInput
-                    value={cfg.miles}
-                    onChange={(n) => updateSet(setIdx, { miles: n })}
+                    value={cfg.distance}
+                    onChange={(n) => updateSet(setIdx, { distance: n, distanceUnit })}
                     placeholder="1"
                     className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-2 py-1.5 text-sm outline-none focus:border-[var(--blue-deep)]"
                   />
@@ -372,10 +467,14 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                 {item.mode === "distance" ? (
                   <DurationInput
                     value={cfg.paceSeconds}
-                    onChange={(n) => updateSet(setIdx, { paceSeconds: n })}
+                    onChange={(n) => updateSet(setIdx, { paceSeconds: n, distanceUnit })}
                     placeholder="8:30"
                     className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-2 py-1.5 text-sm outline-none focus:border-[var(--blue-deep)]"
                   />
+                ) : loadType === "bodyweight" ? (
+                  <span className="truncate rounded-lg border border-dashed border-[var(--ink-08)] bg-[var(--paper)] px-2 py-1.5 text-sm text-[var(--ink-50)]">
+                    Bodyweight
+                  </span>
                 ) : usesIncrement ? (
                   // A per-set absolute weight means nothing while the target is
                   // relative — an editable field here would invite the coach to
@@ -432,6 +531,35 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
         </div>
       )}
     </div>
+  );
+}
+
+function Switch({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-11 flex-none rounded-full transition-colors ${
+        checked ? "bg-[var(--ink)]" : "bg-[var(--ink-08)]"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-[22px]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }
 

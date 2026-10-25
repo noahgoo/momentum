@@ -3,12 +3,11 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
-import { parseSetConfig, type WorkoutDifficulty } from "@momentum/shared";
+import { describeResult, describeTarget, exerciseBadges, parseSetConfig, type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
 import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useWorkoutHistory } from "../../../lib/queries/useWorkoutHistory";
 import { DIFFICULTY_LABELS } from "../../../components/workout/DifficultyPicker";
-import { computePace, formatDuration, formatMiles, formatPace, formatTargetReps, formatTargetWeight } from "../../../components/workout/format";
 import { colors, fonts, radii, spacing, shadows } from "../../../theme/tokens";
 
 const COLLAPSED_COUNT = 15;
@@ -119,50 +118,27 @@ export default function WorkoutHistoryScreen() {
                     {log.exercise_logs.map((ex) => (
                       <View key={ex.id} style={styles.exerciseSection}>
                         <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
+                        {/* From the snapshot, so a coach editing the exercise later can't relabel what was done. */}
+                        <Text style={styles.exerciseBadges}>
+                          {exerciseBadges(ex.set_logs.map((set) => parseSetConfig(set.prescribed))).join(" · ")}
+                        </Text>
                         <View style={styles.setsHeaderRow}>
-                          <Text style={styles.setsHeaderCell}>SET</Text>
-                          <Text style={styles.setsHeaderCell}>{ex.mode === "distance" ? "DIST" : "TARGET"}</Text>
-                          <Text style={styles.setsHeaderCell}>{ex.mode === "distance" ? "TIME" : "ACTUAL"}</Text>
-                          <Text style={styles.setsHeaderCell}>
-                            {ex.mode === "time" ? "TIME" : ex.mode === "distance" ? "PACE" : "REPS"}
-                          </Text>
+                          <Text style={[styles.setsHeaderCell, styles.setNumberCell]}>SET</Text>
+                          <Text style={[styles.setsHeaderCell, styles.setWideCell]}>TARGET</Text>
+                          <Text style={[styles.setsHeaderCell, styles.setWideCell]}>RESULT</Text>
                         </View>
                         {ex.set_logs.map((set) => {
-                          const pace =
-                            ex.mode === "distance" ? computePace(set.actual_miles, set.actual_seconds) : undefined;
                           // The target this set was logged against, snapshotted
                           // on the row itself — never re-read from the live
                           // workout, which the coach may have edited since.
                           const targetCfg = parseSetConfig(set.prescribed);
                           return (
                             <View key={set.id} style={styles.setRow}>
-                              <Text style={styles.setCell}>{set.set_number}</Text>
-                              <Text style={styles.setCell}>
-                                {ex.mode === "distance" ? formatMiles(set.actual_miles) : formatTargetWeight(targetCfg)}
+                              <Text style={[styles.setCell, styles.setNumberCell]}>{set.set_number}</Text>
+                              <Text style={[styles.setCell, styles.setWideCell]}>
+                                {describeTarget(ex.mode, targetCfg)}
                               </Text>
-                              <Text style={styles.setCell}>
-                                {ex.mode === "distance"
-                                  ? formatDuration(set.actual_seconds)
-                                  : set.weight != null
-                                    ? `${set.weight}${set.weight_unit === "kg" ? " kg" : ""}`
-                                    : "—"}
-                              </Text>
-                              <Text style={styles.setCell}>
-                                {ex.mode === "time"
-                                  ? formatDuration(set.target_seconds)
-                                  : ex.mode === "distance"
-                                    ? pace != null
-                                      ? `${formatPace(pace)}/mi`
-                                      : "—"
-                                    : // "/side" qualifies what the rep count
-                                      // MEANS, so it belongs on the logged
-                                      // number too — taken from the snapshot,
-                                      // never the live workout.
-                                      formatTargetReps({
-                                        reps: set.reps ?? undefined,
-                                        perSide: targetCfg.perSide,
-                                      })}
-                              </Text>
+                              <Text style={[styles.setCell, styles.setWideCell]}>{describeResult(ex.mode, set)}</Text>
                               <Text style={{ color: set.completed ? colors.ok : colors.ink30, fontSize: 12 }}>
                                 {set.completed ? "✓" : "✗"}
                               </Text>
@@ -343,6 +319,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.ink70,
     flex: 1,
+  },
+  exerciseBadges: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: colors.ink50,
+  },
+  setNumberCell: {
+    flex: 0,
+    width: 28,
+  },
+  setWideCell: {
+    flex: 2,
   },
   showAllButton: {
     alignSelf: "center",

@@ -63,6 +63,7 @@ export const qk = {
   workoutExerciseCounts: (workoutIds: string[]) =>
     ["workouts", "exerciseCounts", [...workoutIds].sort()] as const,
   exercises: () => ["exercises"] as const,
+  clientUnits: (clientId: string) => ["clientSummaries", clientId, "units"] as const,
   exerciseUsageCounts: (exerciseIds: string[]) =>
     ["exercises", "usageCounts", [...exerciseIds].sort()] as const,
   programs: () => ["programs"] as const,

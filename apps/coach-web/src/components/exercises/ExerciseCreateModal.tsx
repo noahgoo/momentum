@@ -1,7 +1,8 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Exercise, ExerciseMode } from "@momentum/shared";
+import type { DistanceUnit, Exercise, ExerciseMode, LoadType } from "@momentum/shared";
 import { useCreateExercise } from "../../queries/useExercises";
 import { formatDuration, parseDuration } from "../../lib/workoutFormat";
+import { DistanceUnitSelect, LoadTypeSelect } from "./ExerciseDefaultFields";
 
 const MODE_OPTIONS: Array<{ value: ExerciseMode; label: string }> = [
   { value: "reps", label: "Reps" },
@@ -35,7 +36,9 @@ export function ExerciseCreateModal({
   const [defaultReps, setDefaultReps] = useState(10);
   const [defaultMode, setDefaultMode] = useState<ExerciseMode>("reps");
   const [defaultDurationStr, setDefaultDurationStr] = useState("0:45");
-  const [defaultMiles, setDefaultMiles] = useState(1);
+  const [defaultDistance, setDefaultDistance] = useState(1);
+  const [defaultDistanceUnit, setDefaultDistanceUnit] = useState<DistanceUnit>("mi");
+  const [defaultLoadType, setDefaultLoadType] = useState<LoadType | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const categoryListId = useId();
@@ -49,7 +52,9 @@ export function ExerciseCreateModal({
     setDefaultReps(10);
     setDefaultMode("reps");
     setDefaultDurationStr("0:45");
-    setDefaultMiles(1);
+    setDefaultDistance(1);
+    setDefaultDistanceUnit("mi");
+    setDefaultLoadType(null);
     setVideoUrl("");
     setSubmitted(false);
   }, [initialName, open]);
@@ -66,7 +71,9 @@ export function ExerciseCreateModal({
       default_sets: defaultMode === "distance" ? 1 : Math.max(1, defaultSets || 1),
       default_reps: defaultMode === "reps" ? Math.max(1, defaultReps || 1) : null,
       default_duration_seconds: defaultMode === "time" ? (parseDuration(defaultDurationStr) ?? 45) : null,
-      default_miles: defaultMode === "distance" ? Math.max(0.1, defaultMiles || 1) : null,
+      default_distance: defaultMode === "distance" ? Math.max(0.1, defaultDistance || 1) : null,
+      default_distance_unit: defaultMode === "distance" ? defaultDistanceUnit : null,
+      default_load_type: defaultMode === "reps" ? defaultLoadType : null,
       default_mode: defaultMode,
       video_url: videoUrl.trim() || null,
       created_by: coachId,
@@ -209,17 +216,21 @@ export function ExerciseCreateModal({
             )}
             {defaultMode === "distance" && (
               <div className="col-span-2">
-                <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Default miles</label>
-                <input
-                  type="number"
-                  min={0.1}
-                  step="0.1"
-                  value={defaultMiles}
-                  onChange={(e) => setDefaultMiles(Number(e.target.value))}
-                  className="w-full rounded-lg border border-[var(--ink-08)] px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
-                />
+                <label className="mb-1 block text-xs font-medium text-[var(--ink-70)]">Default distance</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={0.1}
+                    step="0.1"
+                    value={defaultDistance}
+                    onChange={(e) => setDefaultDistance(Number(e.target.value))}
+                    className="w-full rounded-lg border border-[var(--ink-08)] px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]"
+                  />
+                  <DistanceUnitSelect value={defaultDistanceUnit} onChange={setDefaultDistanceUnit} />
+                </div>
               </div>
             )}
+            {defaultMode === "reps" && <LoadTypeSelect value={defaultLoadType} onChange={setDefaultLoadType} />}
           </div>
 
           <div>

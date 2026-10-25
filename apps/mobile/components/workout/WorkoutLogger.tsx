@@ -1,12 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Linking, Modal } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet } from "react-native";
 import { Check, Play, X } from "lucide-react-native";
-import { parseSetConfig, type ExerciseMode, type SetConfig, type WeightUnit } from "@momentum/shared";
+import {
+  computePace,
+  describeTarget,
+  digitsFromSeconds,
+  digitsFromText,
+  distanceUnitLabel,
+  exerciseBadges,
+  formatDuration,
+  formatPace,
+  formatWeight,
+  maskDigits,
+  paceSuffix,
+  parseDecimal,
+  secondsFromDigits,
+  weightUnitLabel,
+  parseSetConfig,
+  type DistanceUnit,
+  type ExerciseMode,
+  type SetConfig,
+  type WeightUnit,
+} from "@momentum/shared";
 import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
 import type { WorkoutExerciseWithName, ExerciseLogWithSets } from "../../lib/queries/useWorkoutDay";
 import { useSaveWorkoutLog, type ExerciseLogInput, type SetLogInput } from "../../lib/queries/useSaveWorkoutLog";
 import { useWorkoutDraft } from "../../lib/useWorkoutDraft";
-import { computePace, formatDuration, formatMiles, formatPace, formatTargetReps, formatTargetWeight, parseDuration } from "./format";
+import { VideoModal } from "./VideoModal";
 import {
   lastWeightsForExercise,
   resolvedSetConfig,
@@ -27,20 +47,30 @@ interface WorkoutLoggerProps {
   previousLog: ExerciseLogWithSets[] | undefined;
   /** Per-exercise last logged weights, for resolving "+N from last" targets. */
   lastSetWeights: LastSetWeights;
+  /**
+   * The client's unit preferences. They only fill in when a set has no
+   * prescribed unit of its own; a prescription's unit always wins.
+   */
+  preferredWeightUnit?: WeightUnit;
+  preferredDistanceUnit?: DistanceUnit;
   onComplete?: () => void;
 }
 
 interface SetDraft {
   setNumber: number;
   completed: boolean;
+  /** Actual reps the client did. Empty means "not entered", never "the target" (P2). */
   reps?: number;
   weight?: number;
   /** True once the client types a weight — distinguishes a real lift from a bare check-off (P2). */
   weightEntered?: boolean;
+  /** Unit the weight is in: the prescription's, else the client's preference. */
   weightUnit?: WeightUnit;
   targetSeconds?: number;
   actualSeconds?: number;
-  actualMiles?: number;
+  actualDistance?: number;
+  /** Unit the distance is in: the prescription's, else the client's preference. */
+  distanceUnit?: DistanceUnit;
   /** This set's target at render time, snapshotted onto the log on save (P1). */
   prescribed?: SetConfig;
 }
@@ -56,7 +86,9 @@ interface ExerciseDraft {
 function buildInitialDrafts(
   exercises: WorkoutExerciseWithName[],
   existingLog: ExerciseLogWithSets[] | undefined,
-  lastSetWeights: LastSetWeights
+  lastSetWeights: LastSetWeights,
+  preferredWeightUnit: WeightUnit,
+  preferredDistanceUnit: DistanceUnit
 ): ExerciseDraft[] {
   return exercises.map((ex, exIdx) => {
     const configs = Array.isArray(ex.set_configs) ? ex.set_configs : [];
@@ -79,14 +111,15 @@ function buildInitialDrafts(
         // Never seed `weight` from the target (cfg.weight): a client who taps
         // the checkbox without typing would record the prescription as their
         // actual, making the two indistinguishable in the data. The target is
-        // shown read-only in the TARGET column instead. See rules P2.
+        // shown as ghost text in the empty input instead. See rules P2.
         weight: existingSet?.weight ?? undefined,
         weightEntered: existingSet?.weight_entered ?? false,
-        weightUnit: existingSet?.weight_unit ?? cfg.weightUnit,
+        weightUnit: existingSet?.weight_unit ?? cfg.weightUnit ?? preferredWeightUnit,
         targetSeconds: cfg.seconds,
         prescribed: cfg,
         actualSeconds: existingSet?.actual_seconds ?? undefined,
-        actualMiles: existingSet?.actual_miles ?? undefined,
+        actualDistance: existingSet?.actual_distance ?? undefined,
+        distanceUnit: existingSet?.distance_unit ?? cfg.distanceUnit ?? preferredDistanceUnit,
       };
     });
 
@@ -104,11 +137,29 @@ function getPrevSets(previousLog: ExerciseLogWithSets[] | undefined, exerciseId:
   return previousLog?.find((e) => e.exercise_id === exerciseId)?.set_logs ?? [];
 }
 
+/** "10 × 25 lb" / "0:45" / "3 mi in 24:30" for the last time this set was done. Undefined when there is nothing to show. */
+function describeLast(
+  mode: ExerciseMode,
+  prev: ExerciseLogWithSets["set_logs"][number] | undefined
+): string | undefined {
+  if (!prev) return undefined;
+  if (mode === "time") return prev.actual_seconds != null ? formatDuration(prev.actual_seconds) : undefined;
+  if (mode === "distance") {
+    if (prev.actual_distance == null) return undefined;
+    const dist = `${prev.actual_distance} ${distanceUnitLabel(prev.distance_unit)}`;
+    return prev.actual_seconds != null ? `${dist} in ${formatDuration(prev.actual_seconds)}` : dist;
+  }
+  if (prev.reps == null && prev.weight == null) return undefined;
+  const reps = prev.reps != null ? `${prev.reps}` : "—";
+  return prev.weight != null ? `${reps} × ${formatWeight(prev.weight, prev.weight_unit)}` : `${reps} reps`;
+}
+
 /**
- * Per-exercise set logger. Ported from mindful-miya's WorkoutLogger.tsx:
- * complete-all toggle per exercise, target/last-time/actual columns for
- * reps+weight mode, a distance-mode two-line layout with derived pace, and
- * Save progress / Complete ✓ actions. Writes go through useSaveWorkoutLog's
+ * Per-exercise set logger. Each exercise shows what its numbers MEAN up top
+ * (each hand / total / bodyweight, each side, max effort, the coach's cue and
+ * rest), then one row per set: the target in plain words, last time's result,
+ * and inputs for what the client actually did. Targets only ever appear as
+ * ghost text — inputs start empty (P2). Writes go through useSaveWorkoutLog's
  * delete+reinsert-children upsert (plan finding #5).
  */
 export function WorkoutLogger({
@@ -120,10 +171,12 @@ export function WorkoutLogger({
   logUpdatedAt,
   previousLog,
   lastSetWeights,
+  preferredWeightUnit = "lbs",
+  preferredDistanceUnit = "mi",
   onComplete,
 }: WorkoutLoggerProps) {
   const [drafts, setDrafts] = useState<ExerciseDraft[]>(() =>
-    buildInitialDrafts(exercises, existingLog, lastSetWeights)
+    buildInitialDrafts(exercises, existingLog, lastSetWeights, preferredWeightUnit, preferredDistanceUnit)
   );
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const [dismissedRestore, setDismissedRestore] = useState(false);
@@ -221,7 +274,9 @@ export function WorkoutLogger({
         weightUnit: s.weightUnit,
         targetSeconds: s.targetSeconds,
         actualSeconds: s.actualSeconds,
-        actualMiles: s.actualMiles,
+        actualDistance: s.actualDistance,
+        // A distance is meaningless without its unit (P6); the DB refuses one without.
+        distanceUnit: s.actualDistance != null ? s.distanceUnit : undefined,
         prescribed: s.prescribed,
       })),
     }));
@@ -270,10 +325,17 @@ export function WorkoutLogger({
           const prevSets = getPrevSets(previousLog, ex.exerciseId);
           const allDone = ex.sets.every((s) => s.completed);
           const videoUrl = workoutEx?.exercises?.video_url ?? null;
-          const configs = Array.isArray(workoutEx?.set_configs) ? workoutEx.set_configs : [];
-          // Per-side is authored per exercise, so one badge in the header
-          // carries it; the REPS column is too narrow for the whole message.
-          const perSide = ex.sets.some((s) => s.prescribed?.perSide);
+          const badges = exerciseBadges(ex.sets.map((s) => s.prescribed));
+          const note = workoutEx?.notes?.trim();
+          const rest = workoutEx?.rest_seconds;
+          // Bodyweight work has no load to enter; everything else does.
+          const showWeight =
+            mode === "reps" && !ex.sets.every((s) => s.prescribed?.loadType === "bodyweight");
+          const weightCaption = ex.sets.some((s) => s.prescribed?.loadType === "assisted")
+            ? "ASSIST"
+            : ex.sets.some((s) => s.prescribed?.loadType === "bodyweight_plus")
+              ? "+ ADDED"
+              : "WEIGHT";
 
           return (
             <View
@@ -296,11 +358,6 @@ export function WorkoutLogger({
                     {allDone && <Check color="#fff" size={13} strokeWidth={3} />}
                   </TouchableOpacity>
                   <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
-                  {perSide && (
-                    <View style={styles.perSideBadge}>
-                      <Text style={styles.perSideBadgeText}>EACH SIDE</Text>
-                    </View>
-                  )}
                 </View>
                 {videoUrl && (
                   <TouchableOpacity
@@ -313,13 +370,27 @@ export function WorkoutLogger({
                 )}
               </View>
 
+              {(badges.length > 0 || rest != null) && (
+                <View style={styles.badgeRow}>
+                  {badges.map((b) => (
+                    <View key={b} style={styles.badge}>
+                      <Text style={styles.badgeText}>{b}</Text>
+                    </View>
+                  ))}
+                  {rest != null && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>REST {formatDuration(rest).toUpperCase()}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {note ? <Text style={styles.cue}>{note}</Text> : null}
+
               {mode !== "distance" && (
-                <View style={styles.columnHeaderRow}>
-                  <View style={styles.checkboxColumnWidth} />
-                  <Text style={styles.columnLabel}>{mode === "time" ? "TIME" : "REPS"}</Text>
-                  <Text style={styles.columnLabel}>TARGET</Text>
-                  <Text style={styles.columnLabel}>LAST</Text>
-                  <Text style={styles.columnLabel}>ACTUAL</Text>
+                <View style={styles.captionRow}>
+                  {mode === "reps" && <Text style={[styles.caption, styles.repsInputWidth]}>REPS</Text>}
+                  {showWeight && <Text style={[styles.caption, styles.weightInputWidth]}>{weightCaption}</Text>}
+                  {mode === "time" && <Text style={[styles.caption, styles.timeInputWidth]}>TIME</Text>}
                 </View>
               )}
 
@@ -331,7 +402,10 @@ export function WorkoutLogger({
                 // The draft's own snapshot, already resolved in
                 // buildInitialDrafts — NOT a fresh parse of the live config,
                 // which would show "+5" as a blank instead of a number.
-                const targetCfg: SetConfig = set.prescribed ?? parseSetConfig(configs[setIdx]);
+                const targetCfg: SetConfig = set.prescribed ?? {};
+                const last = describeLast(mode, prevSet);
+                const distanceUnit = set.distanceUnit ?? preferredDistanceUnit;
+                const weightUnit = set.weightUnit ?? preferredWeightUnit;
 
                 const checkbox = (
                   <TouchableOpacity
@@ -349,9 +423,16 @@ export function WorkoutLogger({
                   </TouchableOpacity>
                 );
 
+                const targetBlock = (
+                  <View style={styles.targetBlock}>
+                    <Text style={styles.setLabel}>SET {setIdx + 1}</Text>
+                    <Text style={styles.setTargetText}>{describeTarget(mode, targetCfg)}</Text>
+                    {last ? <Text style={styles.setLastText}>Last: {last}</Text> : null}
+                  </View>
+                );
+
                 if (mode === "distance") {
-                  const prevPace = computePace(prevSet?.actual_miles, prevSet?.actual_seconds);
-                  const livePace = computePace(set.actualMiles, set.actualSeconds);
+                  const livePace = computePace(set.actualDistance, set.actualSeconds);
                   return (
                     <View
                       key={setIdx}
@@ -359,39 +440,29 @@ export function WorkoutLogger({
                     >
                       <View style={styles.distanceHeaderRow}>
                         {checkbox}
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={styles.distanceTarget}>
-                            {formatMiles(targetCfg.miles)}
-                            {targetCfg.paceSeconds != null ? ` · target ${formatPace(targetCfg.paceSeconds)}/mi` : ""}
-                          </Text>
-                          {prevPace != null && (
-                            <Text style={styles.distanceLast}>last {formatPace(prevPace)}/mi</Text>
-                          )}
-                        </View>
+                        {targetBlock}
                       </View>
                       <View style={styles.distanceInputsRow}>
                         <View style={styles.distanceInputColumn}>
-                          <Text style={styles.columnLabel}>MILES</Text>
-                          <TextInput
-                            keyboardType="decimal-pad"
-                            placeholder="—"
-                            placeholderTextColor={colors.ink30}
-                            value={set.actualMiles != null ? String(set.actualMiles) : ""}
-                            onChangeText={(text) =>
-                              updateSet(exIdx, setIdx, { actualMiles: text === "" ? undefined : Number(text) })
-                            }
-                            style={styles.textInput}
+                          <Text style={styles.caption}>DISTANCE</Text>
+                          <NumberField
+                            value={set.actualDistance}
+                            onChange={(actualDistance) => updateSet(exIdx, setIdx, { actualDistance })}
+                            unit={distanceUnitLabel(distanceUnit)}
+                            placeholder={targetCfg.distance != null ? String(targetCfg.distance) : "—"}
+                            accessibilityLabel={`Distance for set ${setIdx + 1}`}
                           />
                         </View>
                         <View style={styles.distanceInputColumn}>
-                          <Text style={styles.columnLabel}>TIME</Text>
-                          <TimeInput
+                          <Text style={styles.caption}>TIME</Text>
+                          <TimeField
                             value={set.actualSeconds}
                             onChange={(actualSeconds) => updateSet(exIdx, setIdx, { actualSeconds })}
+                            accessibilityLabel={`Time for set ${setIdx + 1}`}
                           />
                         </View>
                         <Text style={styles.distancePace}>
-                          {livePace != null ? `→ ${formatPace(livePace)}/mi` : "—"}
+                          {livePace != null ? `→ ${formatPace(livePace)}${paceSuffix(distanceUnit)}` : "—"}
                         </Text>
                       </View>
                     </View>
@@ -401,35 +472,39 @@ export function WorkoutLogger({
                 return (
                   <View key={setIdx} style={styles.setRow}>
                     {checkbox}
-                    <Text style={styles.setTargetText}>
-                      {mode === "time"
-                        ? formatDuration(set.targetSeconds)
-                        : set.reps != null
-                          ? `${set.reps}`
-                          : formatTargetReps(targetCfg)}
-                    </Text>
-                    <Text style={styles.setTargetText}>{formatTargetWeight(targetCfg)}</Text>
-                    <Text style={styles.setLastText}>{prevSet?.weight != null ? `${prevSet.weight}` : "—"}</Text>
+                    {targetBlock}
                     {mode === "time" ? (
-                      <TimeInput
+                      <TimeField
                         value={set.actualSeconds}
                         onChange={(actualSeconds) => updateSet(exIdx, setIdx, { actualSeconds })}
+                        placeholder={targetCfg.seconds != null ? maskDigits(digitsFromSeconds(targetCfg.seconds)) : undefined}
+                        style={styles.timeInputWidth}
+                        accessibilityLabel={`Time for set ${setIdx + 1}`}
                       />
                     ) : (
-                      <TextInput
-                        keyboardType="number-pad"
-                        placeholder="—"
-                        placeholderTextColor={colors.ink30}
-                        value={set.weight != null ? String(set.weight) : ""}
-                        onChangeText={(text) =>
-                          updateSet(exIdx, setIdx, {
-                            weight: text === "" ? undefined : Number(text),
-                            // Typing is what makes a weight the client's own.
-                            weightEntered: text !== "",
-                          })
-                        }
-                        style={styles.textInput}
-                      />
+                      <>
+                        <NumberField
+                          integer
+                          value={set.reps}
+                          onChange={(reps) => updateSet(exIdx, setIdx, { reps })}
+                          placeholder={targetCfg.reps != null ? String(targetCfg.reps) : "—"}
+                          style={styles.repsInputWidth}
+                          accessibilityLabel={`Reps for set ${setIdx + 1}`}
+                        />
+                        {showWeight && (
+                          <NumberField
+                            value={set.weight}
+                            onChange={(weight) =>
+                              // Typing is what makes a weight the client's own.
+                              updateSet(exIdx, setIdx, { weight, weightEntered: weight !== undefined })
+                            }
+                            unit={weightUnitLabel(weightUnit)}
+                            placeholder={targetCfg.weight != null ? String(targetCfg.weight) : "—"}
+                            style={styles.weightInputWidth}
+                            accessibilityLabel={`Weight for set ${setIdx + 1}`}
+                          />
+                        )}
+                      </>
                     )}
                   </View>
                 );
@@ -467,56 +542,107 @@ export function WorkoutLogger({
         </TouchableOpacity>
       </View>
 
-      <Modal visible={videoModal != null} animationType="slide" onRequestClose={() => setVideoModal(null)}>
-        <View style={styles.videoModalContainer}>
-          <TouchableOpacity style={styles.videoModalClose} onPress={() => setVideoModal(null)}>
-            <X color={colors.ink} size={22} />
-          </TouchableOpacity>
-          <Text style={styles.videoModalTitle}>{videoModal?.title}</Text>
-          <TouchableOpacity
-            style={styles.videoModalOpenButton}
-            onPress={() => {
-              if (videoModal?.url) void Linking.openURL(videoModal.url);
-            }}
-          >
-            <Text style={styles.videoModalOpenButtonText}>Open video</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
+      <VideoModal video={videoModal} onClose={() => setVideoModal(null)} />
     </View>
   );
 }
 
 /**
- * Elapsed-time entry accepting "24:30" or bare seconds. Holds the raw string
- * while typing so a half-entered "24:" isn't clobbered; normalizes on blur.
+ * Decimal/integer entry that keeps what the client is typing. The raw text
+ * lives here so "22." on the way to "22.5" isn't snapped back to "22"; the
+ * parsed number goes up only when it is a real one (never NaN — P5). A change
+ * from outside (a restored draft) replaces the text.
  */
-function TimeInput({
+function NumberField({
   value,
   onChange,
+  unit,
+  placeholder,
+  integer,
+  style,
+  accessibilityLabel,
+}: {
+  value: number | undefined;
+  onChange: (value: number | undefined) => void;
+  unit?: string;
+  placeholder?: string;
+  integer?: boolean;
+  style?: object;
+  accessibilityLabel?: string;
+}) {
+  const [raw, setRaw] = useState(value != null ? String(value) : "");
+
+  useEffect(() => {
+    if (parseDecimal(raw) !== value) setRaw(value != null ? String(value) : "");
+    // Deliberately keyed on `value` alone: only an outside change should reset the text.
+  }, [value]);
+
+  return (
+    <View style={[styles.fieldWrap, style]}>
+      <TextInput
+        keyboardType={integer ? "number-pad" : "decimal-pad"}
+        placeholder={placeholder}
+        placeholderTextColor={colors.ink30}
+        value={raw}
+        onChangeText={(text) => {
+          const cleaned = integer ? text.replace(/\D/g, "") : text;
+          setRaw(cleaned);
+          onChange(cleaned === "" ? undefined : parseDecimal(cleaned));
+        }}
+        accessibilityLabel={accessibilityLabel}
+        style={[styles.textInput, unit ? styles.textInputWithUnit : undefined]}
+      />
+      {unit ? (
+        <Text pointerEvents="none" style={styles.unitText}>
+          {unit}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Elapsed-time entry that fills in from the right like a timer: type 2-4-3-0
+ * and it reads 24:30. "30" is always 0:30 and half an hour is 3-0-0-0, so
+ * there is no guessing whether a bare number means seconds or minutes. The
+ * field is controlled, so backspacing to empty really clears it.
+ */
+function TimeField({
+  value,
+  onChange,
+  placeholder,
+  style,
+  accessibilityLabel,
 }: {
   value: number | undefined;
   onChange: (seconds: number | undefined) => void;
+  placeholder?: string;
+  style?: object;
+  accessibilityLabel?: string;
 }) {
-  const [raw, setRaw] = useState(value != null ? formatDuration(value) : "");
+  const [digits, setDigits] = useState(digitsFromSeconds(value));
 
-  const displayValue = useMemo(() => (value != null ? formatDuration(value) : ""), [value]);
+  useEffect(() => {
+    if (secondsFromDigits(digits) !== value) setDigits(digitsFromSeconds(value));
+    // Deliberately keyed on `value` alone: only an outside change should reset the digits.
+  }, [value]);
 
   return (
-    <TextInput
-      keyboardType="numbers-and-punctuation"
-      placeholder="24:30"
-      placeholderTextColor={colors.ink30}
-      value={raw || displayValue}
-      onChangeText={setRaw}
-      onFocus={() => setRaw(displayValue)}
-      onBlur={() => {
-        const parsed = parseDuration(raw.replace(/s$/i, ""));
-        onChange(parsed);
-        setRaw("");
-      }}
-      style={styles.textInput}
-    />
+    <View style={[styles.fieldWrap, style]}>
+      <TextInput
+        keyboardType="number-pad"
+        placeholder={placeholder ?? "0:00"}
+        placeholderTextColor={colors.ink30}
+        value={maskDigits(digits)}
+        onChangeText={(text) => {
+          const next = digitsFromText(text);
+          setDigits(next);
+          onChange(secondsFromDigits(next));
+        }}
+        accessibilityLabel={accessibilityLabel}
+        style={styles.textInput}
+      />
+    </View>
   );
 }
 
@@ -553,17 +679,75 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  perSideBadge: {
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  badge: {
     borderRadius: 999,
     backgroundColor: colors.creamDeep,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
-  perSideBadgeText: {
+  badgeText: {
     fontFamily: fonts.bodySemiBold,
-    fontSize: 9,
+    fontSize: 10,
     letterSpacing: 0.8,
     color: colors.ink70,
+  },
+  cue: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    fontStyle: "italic",
+    color: colors.ink70,
+    lineHeight: 17,
+    marginTop: spacing.sm,
+  },
+  captionRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  caption: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 9,
+    color: colors.ink50,
+    letterSpacing: 1,
+  },
+  repsInputWidth: {
+    width: 56,
+  },
+  weightInputWidth: {
+    width: 92,
+  },
+  timeInputWidth: {
+    width: 96,
+  },
+  targetBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  setLabel: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 9,
+    color: colors.ink50,
+    letterSpacing: 1,
+  },
+  fieldWrap: {
+    justifyContent: "center",
+  },
+  textInputWithUnit: {
+    paddingRight: 30,
+  },
+  unitText: {
+    position: "absolute",
+    right: 8,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.ink50,
   },
   exerciseName: {
     fontFamily: fonts.display,
@@ -582,27 +766,11 @@ const styles = StyleSheet.create({
     color: colors.blueDeep,
     letterSpacing: 0.6,
   },
-  columnHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  checkboxColumnWidth: {
-    width: 34,
-  },
-  columnLabel: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 9,
-    color: colors.ink50,
-    letterSpacing: 1,
-    flex: 1,
-  },
   setRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    marginTop: 7,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   setCheckbox: {
     width: 30,
@@ -615,15 +783,15 @@ const styles = StyleSheet.create({
   setTargetText: {
     fontFamily: fonts.body,
     fontSize: 13,
-    color: colors.ink70,
-    flex: 1,
+    color: colors.ink,
+    marginTop: 1,
   },
   setLastText: {
     fontFamily: fonts.body,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.ink50,
     fontStyle: "italic",
-    flex: 1,
+    marginTop: 1,
   },
   textInput: {
     height: 36,
@@ -635,7 +803,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fonts.display,
     color: colors.ink,
-    flex: 1,
   },
   distanceRow: {
     marginTop: 10,
@@ -734,34 +901,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.4,
-  },
-  videoModalContainer: {
-    flex: 1,
-    backgroundColor: colors.cream,
-    padding: spacing.xl,
-    paddingTop: 64,
-  },
-  videoModalClose: {
-    alignSelf: "flex-end",
-    padding: spacing.sm,
-  },
-  videoModalTitle: {
-    fontFamily: fonts.display,
-    fontSize: 22,
-    color: colors.ink,
-    marginTop: spacing.lg,
-  },
-  videoModalOpenButton: {
-    marginTop: spacing.xl,
-    height: 50,
-    borderRadius: 18,
-    backgroundColor: colors.ink,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  videoModalOpenButtonText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 14,
-    color: "#fff",
   },
 });

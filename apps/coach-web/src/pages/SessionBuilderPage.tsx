@@ -3,11 +3,13 @@ import { useNavigate, useParams } from "react-router";
 import type { Exercise, SessionSection } from "@momentum/shared";
 import { SortableList } from "../components/builder/SortableList";
 import { ExerciseRow } from "../components/builder/ExerciseRow";
+import { exerciseToBuilderRow } from "../components/builder/exerciseToBuilderRow";
 import { ExerciseLibraryPanel } from "../components/exercises/ExerciseLibraryPanel";
 import { MobileSheet } from "../components/MobileSheet";
 import { ApplyToFutureDialog } from "../components/sessions/ApplyToFutureDialog";
 import { SaveAsWorkoutDialog } from "../components/sessions/SaveAsWorkoutDialog";
 import type { BuilderExercise } from "../queries/useWorkoutDetail";
+import { useClientUnits } from "../queries/useClientUnits";
 import {
   describeSaveSessionError,
   useSaveSession,
@@ -62,6 +64,8 @@ export function SessionBuilderPage() {
   const { profile } = useAuth();
   const { data: detail, isLoading } = useSessionDetail(sessionId);
   const saveSession = useSaveSession();
+  // New exercises start in the units this client prefers.
+  const { data: clientUnits } = useClientUnits(detail?.clientId);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -155,15 +159,7 @@ export function SessionBuilderPage() {
   function addExercise(exercise: Exercise) {
     setExercises((prev) => [
       ...prev,
-      {
-        id: `new-${crypto.randomUUID()}`,
-        exerciseId: exercise.id,
-        exerciseName: exercise.name,
-        mode: exercise.default_mode ?? "reps",
-        setConfigs: [{}],
-        restSeconds: null,
-        notes: null,
-      },
+      exerciseToBuilderRow(exercise, `new-${crypto.randomUUID()}`, clientUnits),
     ]);
     setDirty(true);
   }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import type { Exercise, SetConfig, WorkoutType } from "@momentum/shared";
+import type { Exercise, WorkoutType } from "@momentum/shared";
 import { workoutCreateSchema } from "@momentum/shared";
 import { useAuth } from "../lib/auth";
 import { draftKey, useDraft } from "../lib/useDraft";
@@ -8,7 +8,7 @@ import { useUnsavedChangesGuard } from "../lib/useUnsavedChangesGuard";
 import { SortableList } from "../components/builder/SortableList";
 import { RestoreBanner } from "../components/builder/RestoreBanner";
 import { ExerciseRow } from "../components/builder/ExerciseRow";
-import { defaultSetConfig } from "../components/builder/defaultSetConfig";
+import { exerciseToBuilderRow } from "../components/builder/exerciseToBuilderRow";
 import { ExerciseLibraryPanel } from "../components/exercises/ExerciseLibraryPanel";
 import { MobileSheet } from "../components/MobileSheet";
 import { useExercises } from "../queries/useExercises";
@@ -57,27 +57,6 @@ function newClientId(): string {
     : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function exerciseToBuilderRow(ex: Exercise): BuilderExercise {
-  const mode = ex.default_mode ?? "reps";
-  const setCount = mode === "distance" ? 1 : Math.max(ex.default_sets || 3, 1);
-  const config: SetConfig =
-    mode === "time"
-      ? { ...defaultSetConfig(mode), seconds: ex.default_duration_seconds ?? 45 }
-      : mode === "distance"
-        ? { ...defaultSetConfig(mode), miles: ex.default_miles ?? 1 }
-        : { ...defaultSetConfig(mode), reps: ex.default_reps ?? 10 };
-
-  return {
-    id: newClientId(),
-    exerciseId: ex.id,
-    exerciseName: ex.name,
-    mode,
-    setConfigs: Array.from({ length: setCount }, () => ({ ...config })),
-    restSeconds: 60,
-    notes: null,
-  };
-}
-
 /**
  * Workout builder (new + edit). Left panel: sortable exercise list. Right
  * panel: exercise library. Sticky bottom bar shows live exercise
@@ -93,7 +72,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
   const workoutId = params.id;
   const isEditing = !!workoutId;
 
-  const { data: detail, isLoading: detailLoading } = useWorkoutDetail(workoutId);
+  const { data: detail, isLoading: detailLoading, isError: detailError } = useWorkoutDetail(workoutId);
   const { data: warmupOptions = [] } = useWorkouts("warmup");
   // Facet values come from the rows the coach already has, not a fixed list.
   const { data: allWorkouts = [] } = useWorkouts(isWarmup ? "warmup" : "workout");
@@ -221,7 +200,7 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
 
   function addExercise(ex: Exercise) {
     setDirty(true);
-    setExercises((prev) => [...prev, exerciseToBuilderRow(ex)]);
+    setExercises((prev) => [...prev, exerciseToBuilderRow(ex, newClientId())]);
     // No-op on desktop, where the library is a permanent rail.
     setLibraryOpen(false);
   }
@@ -299,6 +278,24 @@ export function WorkoutBuilderPage({ type = "workout" }: WorkoutBuilderPageProps
 
   if (isEditing && (detailLoading || !hydrated)) {
     return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
+  }
+
+  if (isEditing && detailError) {
+    return (
+      <div className="admin-card p-6">
+        <p className="text-sm text-red-600">
+          This {isWarmup ? "warmup" : "workout"} couldn&apos;t be loaded. It may have been
+          deleted, or something went wrong — try reloading the page.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate(basePath)}
+          className="mt-4 text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
+        >
+          &larr; Back
+        </button>
+      </div>
+    );
   }
 
   return (

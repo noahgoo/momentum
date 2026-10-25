@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { type WorkoutLogWithSets } from "../../queries/useClientDetail";
-import { parseSetConfig } from "@momentum/shared";
-import { DIFFICULTY_LABELS, DIFFICULTY_STYLES, computePace, formatLogDate, formatLogDuration, formatLogMiles, formatPace, formatTargetReps, formatTargetWeight } from "./logFormat";
+import { describeResult, describeTarget, exerciseBadges, parseSetConfig } from "@momentum/shared";
+import { DIFFICULTY_LABELS, DIFFICULTY_STYLES, formatLogDate } from "./logFormat";
 
 interface Props {
   logs: WorkoutLogWithSets[];
@@ -83,21 +83,25 @@ export function RecentWorkouts({ logs }: Props) {
 
                   return (
                     <div key={ex.id}>
-                      <div className="mb-1 text-xs font-semibold text-[var(--ink-70)]">{ex.exercise_name}</div>
+                      <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-xs font-semibold text-[var(--ink-70)]">{ex.exercise_name}</span>
+                        {/* From each set's own snapshot, so a later edit can't relabel what was done. */}
+                        {exerciseBadges(sets.map((set) => parseSetConfig(set.prescribed))).map((badge) => (
+                          <span
+                            key={badge}
+                            className="rounded-full bg-[var(--cream)] px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-[var(--ink-50)]"
+                          >
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[19rem] text-xs text-[var(--ink-70)] sm:max-w-sm sm:min-w-0">
+                        <table className="w-full min-w-[19rem] text-xs text-[var(--ink-70)] sm:max-w-md sm:min-w-0">
                           <thead>
                             <tr className="text-left text-[10px] tracking-wide text-[var(--ink-30)] uppercase">
                               <th className="py-0.5 pr-3 font-medium">Set</th>
-                              <th className="py-0.5 pr-3 font-medium">
-                                {mode === "distance" ? "Distance" : "Target"}
-                              </th>
-                              <th className="py-0.5 pr-3 font-medium">
-                                {mode === "distance" ? "Time" : "Actual"}
-                              </th>
-                              <th className="py-0.5 pr-3 font-medium">
-                                {mode === "time" ? "Time" : mode === "distance" ? "Pace" : "Reps"}
-                              </th>
+                              <th className="py-0.5 pr-3 font-medium">Target</th>
+                              <th className="py-0.5 pr-3 font-medium">Result</th>
                               <th className="py-0.5 font-medium" />
                             </tr>
                           </thead>
@@ -105,31 +109,8 @@ export function RecentWorkouts({ logs }: Props) {
                             {sets.map((set) => (
                               <tr key={set.id}>
                                 <td className="py-0.5 pr-3">{set.set_number}</td>
-                                <td className="py-0.5 pr-3">
-                                  {mode === "distance"
-                                    ? formatLogMiles(set.actual_miles)
-                                    : formatTargetWeight(parseSetConfig(set.prescribed))}
-                                </td>
-                                <td className="py-0.5 pr-3">
-                                  {mode === "distance"
-                                    ? formatLogDuration(set.actual_seconds)
-                                    : set.weight != null
-                                      ? `${set.weight}${set.weight_unit === "kg" ? " kg" : ""}`
-                                      : "—"}
-                                </td>
-                                <td className="py-0.5 pr-3">
-                                  {mode === "time"
-                                    ? formatLogDuration(set.target_seconds)
-                                    : mode === "distance"
-                                      ? (() => {
-                                          const pace = computePace(set.actual_miles, set.actual_seconds);
-                                          return pace != null ? `${formatPace(pace)}/mi` : "—";
-                                        })()
-                                      : formatTargetReps({
-                                          reps: set.reps ?? undefined,
-                                          perSide: parseSetConfig(set.prescribed).perSide,
-                                        })}
-                                </td>
+                                <td className="py-0.5 pr-3">{describeTarget(mode, parseSetConfig(set.prescribed))}</td>
+                                <td className="py-0.5 pr-3">{describeResult(mode, set)}</td>
                                 <td className={`py-0.5 ${set.completed ? "text-[var(--ok)]" : "text-[var(--ink-15)]"}`}>
                                   {set.completed ? "✓" : "✗"}
                                 </td>

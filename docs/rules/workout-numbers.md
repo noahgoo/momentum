@@ -38,13 +38,16 @@ exercise_logs
   prescribed     jsonb    -- the exercise's SetConfig[] as of log time
 
 set_logs
-  set_number     int      -- display order within the exercise
-  prescribed     jsonb    -- this set's target: {reps, weight, weight_unit,
-                          --   seconds, miles, pace_seconds}
-  reps           int      -- actual, client-entered
-  weight         numeric  -- actual, client-entered
-  actual_seconds int
-  actual_miles   numeric
+  set_number       int      -- display order within the exercise
+  prescribed       jsonb    -- this set's target: {reps, weight, weight_unit,
+                            --   seconds, distance, distance_unit, pace_seconds,
+                            --   per_side, load_type, max_effort, weight_delta}
+  reps             int      -- actual, client-entered
+  weight           numeric  -- actual, client-entered
+  weight_unit      enum     -- unit `weight` was entered in
+  actual_seconds   int
+  actual_distance  numeric
+  distance_unit    enum     -- unit `actual_distance` was entered in (required with it)
 ```
 
 A history or past-date view must not join `workout_exercises` to fill in a
@@ -117,3 +120,37 @@ their units match first.
 
 ---
 
+## P7. What a number means travels with it
+
+A weight of 25 is ambiguous: per dumbbell, total, or added to bodyweight? Reps
+of 10 may be per side. Neither the reader nor the coach can recover this from
+the number alone, so it is part of the prescription and is snapshotted with it:
+
+- `load_type` (`total | each_hand | bodyweight | bodyweight_plus | assisted`)
+  says what `weight` means. `bodyweight` carries no weight; that is not a
+  missing value (P5), and the logger shows "BW", not "—".
+- `per_side` is legal in reps **and** time mode ("30s each side").
+- `max_effort` means "as many as you can" / "hold as long as you can". `reps`
+  or `seconds` may then be absent, and **absence means max, not missing**.
+- `distance` always travels with `distance_unit` (`mi | km`), and
+  `pace_seconds` is per that unit — the database refuses either without it, the
+  same as a weight without `weight_unit` (P6). Logs record `distance_unit`
+  beside `actual_distance`.
+
+Rendering reads these from the snapshot (`set_logs.prescribed`), never from the
+live workout. `describeTarget`, `describeResult` and `exerciseBadges` in
+`packages/shared/src/workoutFormat.ts` are the only places that turn a config
+into words, for the client app and the coach's view alike — add a new key
+there, not in a screen.
+
+Client unit preferences (`profiles.weight_unit`, `distance_unit`) only seed a
+new prescription or an entry on a set with no prescribed unit. They never
+rewrite a stored number.
+
+## P8. The client logs actuals; empty means "not entered"
+
+`set_logs.reps` is the number the client typed, exactly like `weight`. Inputs
+start empty and show the target only as ghost text (P2). Checking a set off with
+nothing typed records `completed = true` with null reps/weight — "did it as
+prescribed" is read from the snapshot beside it, never invented into the actual.
+Time entry is digit-shift (type 2430 → 24:30) so "30" can only mean 0:30.

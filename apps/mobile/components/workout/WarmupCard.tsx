@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { ChevronDown, Check } from "lucide-react-native";
-import { parseSetConfig, type Workout } from "@momentum/shared";
+import { parseSetConfig, type Workout, describeTarget } from "@momentum/shared";
 import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
-import { formatPrescription } from "./format";
 import type { WorkoutExerciseWithName } from "../../lib/queries/useWorkoutDay";
 
 interface WarmupCardProps {
@@ -77,7 +76,7 @@ export function WarmupCard({ warmup, exercises, completed, readOnly = false, onT
             const configs = Array.isArray(ex.set_configs) ? ex.set_configs : [];
             const setCount = configs.length || 1;
             const firstConfig = configs.length > 0 ? parseSetConfig(configs[0]) : undefined;
-            const prescription = formatPrescription(ex.mode, firstConfig);
+            const prescription = describeTarget(ex.mode, firstConfig);
 
             return (
               <View

@@ -1,5 +1,5 @@
-import { DRAFT_DEBOUNCE_MS, test, expect, visit } from "./fixtures";
-import { INSTANCE_PROGRAM_ID } from "../fixtures";
+import { DRAFT_DEBOUNCE_MS, addFirstExercise, test, expect, visit } from "./fixtures";
+import { INSTANCE_PROGRAM_ID, PHASED_INSTANCE_PROGRAM_ID } from "../fixtures";
 
 /**
  * Checks for the review findings on this branch. Each one failed against the
@@ -195,6 +195,16 @@ test.describe("per-client program editing", () => {
     ).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Edit day" }).first()).toBeVisible();
   });
+
+  test("a phased client instance still lists its days", async ({ page }) => {
+    // useProgramDetail puts a phased program's schedule under phases[].sessionSlots,
+    // never flatSessionSlots. The day-list view read only flatSessionSlots, so a
+    // phased client's "Edit days" page rendered as if there were nothing to edit.
+    await visit(page, `/library/programs/${PHASED_INSTANCE_PROGRAM_ID}`);
+
+    await expect(page.getByRole("link", { name: "Edit day" }).first()).toBeVisible();
+    await expect(page.getByText("Base · Week 1 · monday")).toBeVisible();
+  });
 });
 
 test.describe("workout picker", () => {
@@ -247,5 +257,19 @@ test.describe("session editor", () => {
     // to them.
     await expect(dialog.getByRole("radio").first()).toBeChecked();
     await expect(dialog.getByText("Every client")).toBeVisible();
+  });
+
+  test("an exercise added to a client's day starts in that client's units", async ({ page, isMobile }) => {
+    await visit(page, "/library/programs/p-1/days/s-1");
+    await addFirstExercise(page, Boolean(isMobile));
+    // exact: the library panel's rows are "Edit <exercise name>".
+    await page.getByRole("button", { name: "Edit", exact: true }).last().click();
+
+    // The library exercise has no unit of its own; the client's preference
+    // (seeded as kg) is what the new row's weight unit is set to.
+    await expect(page.getByRole("button", { name: "kg", exact: true }).last()).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
   });
 });

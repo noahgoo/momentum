@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ExerciseMode, SetConfig, WeightUnit } from "@momentum/shared";
+import type { DistanceUnit, ExerciseMode, SetConfig, WeightUnit } from "@momentum/shared";
 import { serializeSetConfig, serializeSetConfigs } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
@@ -12,7 +12,9 @@ export interface SetLogInput {
   weightUnit?: WeightUnit;
   targetSeconds?: number;
   actualSeconds?: number;
-  actualMiles?: number;
+  actualDistance?: number;
+  /** Required whenever `actualDistance` is set — a distance is meaningless without its unit (P6). */
+  distanceUnit?: DistanceUnit;
   /** True only when the client actually typed a weight — see P2. */
   weightEntered?: boolean;
   /** This set's target as it stood right now; snapshotted onto the log. */
@@ -80,7 +82,8 @@ export function buildSaveWorkoutLogArgs(input: SaveWorkoutLogInput) {
         weight_unit: set.weightUnit ?? null,
         target_seconds: set.targetSeconds ?? null,
         actual_seconds: set.actualSeconds ?? null,
-        actual_miles: set.actualMiles ?? null,
+        actual_distance: set.actualDistance ?? null,
+        distance_unit: set.distanceUnit ?? null,
         weight_entered: set.weightEntered ?? false,
         prescribed: set.prescribed ? serializeSetConfig(set.prescribed) : null,
       })),

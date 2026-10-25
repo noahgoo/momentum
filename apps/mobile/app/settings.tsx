@@ -9,6 +9,7 @@ import { useChangeRequestHistory } from "../lib/queries/useChangeRequestHistory"
 import { ProfileCard } from "../components/settings/ProfileCard";
 import { NotificationsCard } from "../components/settings/NotificationsCard";
 import { BodyCard } from "../components/settings/BodyCard";
+import { UnitsCard } from "../components/settings/UnitsCard";
 import { TimezoneRow } from "../components/settings/TimezoneRow";
 import { RequestsCard } from "../components/settings/RequestsCard";
 import { AccountCard } from "../components/settings/AccountCard";
@@ -54,6 +55,7 @@ export default function Settings() {
             <ProfileCard profile={profile} />
             <NotificationsCard profile={profile} />
             <BodyCard profile={profile} />
+            <UnitsCard profile={profile} />
             <TimezoneRow timezone={profile.timezone} />
           </>
         ) : (

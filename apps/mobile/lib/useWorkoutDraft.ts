@@ -7,7 +7,8 @@ import { useDraft, type DraftState } from "./useDraft";
  * See docs/rules/offline-perf.md S1.
  */
 
-const DRAFT_PREFIX = "workoutDraft";
+// v2: the draft shape gained reps, units and distance (renamed from miles).
+const DRAFT_PREFIX = "workoutDraft2";
 
 function draftKey(clientId: string, date: string, workoutId: string): string {
   return `${DRAFT_PREFIX}:${clientId}:${date}:${workoutId}`;

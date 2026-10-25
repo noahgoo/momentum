@@ -7,6 +7,7 @@ import { useTabBarSpace } from "../../../components/PillTabBar";
 import { ChevronLeft, Check } from "lucide-react-native";
 import { type WorkoutDifficulty } from "@momentum/shared";
 import { useAuth } from "../../../lib/auth";
+import { useProfile } from "../../../lib/queries/useProfile";
 import { useClientDate } from "../../../lib/useClientDate";
 import { useWorkoutDay } from "../../../lib/queries/useWorkoutDay";
 import { usePendingChangeRequest } from "../../../lib/queries/useChangeRequest";
@@ -34,6 +35,8 @@ export default function WorkoutDayScreen() {
   const { date: dateParam } = useLocalSearchParams<{ date: string }>();
   const { session, profile } = useAuth();
   const uid = session?.user.id;
+  // Through the query hook so a unit changed in settings applies immediately.
+  const { data: profilePrefs } = useProfile(uid);
 
   const { today: todayStr } = useClientDate();
   const isToday = dateParam === todayStr;
@@ -193,6 +196,8 @@ export default function WorkoutDayScreen() {
               logUpdatedAt={log?.updated_at}
               previousLog={data.previousLog?.exercise_logs}
               lastSetWeights={data.lastSetWeights}
+              preferredWeightUnit={profilePrefs?.weight_unit}
+              preferredDistanceUnit={profilePrefs?.distance_unit}
               onComplete={() => setViewingCompletedLog(false)}
             />
           </View>

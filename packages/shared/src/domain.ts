@@ -18,9 +18,11 @@ type Enums = Database["public"]["Enums"];
 
 export type ChangeRequestStatus = Database["public"]["Enums"]["change_request_status"];
 export type DbDayOfWeek = Database["public"]["Enums"]["day_of_week"];
+export type DistanceUnit = Database["public"]["Enums"]["distance_unit"];
 export type ExerciseMode = Database["public"]["Enums"]["exercise_mode"];
 export type FriendshipStatus = Database["public"]["Enums"]["friendship_status"];
 export type DbSex = Database["public"]["Enums"]["sex"];
+export type LoadType = Database["public"]["Enums"]["load_type"];
 export type UserRole = Database["public"]["Enums"]["user_role"];
 export type WeightUnit = Database["public"]["Enums"]["weight_unit"];
 export type WorkoutDifficulty = Database["public"]["Enums"]["workout_difficulty"];
@@ -115,8 +117,8 @@ export type ClientSummary = Tables["client_summaries"]["Row"];
 /**
  * A single set's configuration, camelCase in TS. Mirrors the jsonb shape
  * documented on workout_exercises.set_configs:
- * {reps, weight, weight_unit, seconds, miles, pace_seconds, per_side,
- * weight_delta}.
+ * {reps, weight, weight_unit, seconds, distance, distance_unit, pace_seconds,
+ * per_side, weight_delta, load_type, max_effort}.
  *
  * Adding a field here is a FIVE-part change — this interface, RawSetConfig,
  * parseSetConfig, serializeSetConfig, and setConfigSchema in schemas.ts. Miss
@@ -130,13 +132,26 @@ export interface SetConfig {
   weight?: number;
   weightUnit?: WeightUnit;
   seconds?: number;
-  miles?: number;
+  distance?: number;
+  /** Unit of `distance` and of `paceSeconds` (seconds per this unit). Travels with the number (P6). */
+  distanceUnit?: DistanceUnit;
   paceSeconds?: number;
   /**
-   * "Do this many reps on EACH side" (lunges, single-arm rows). Reps mode only
-   * — dropped when a coach converts the exercise to time or distance.
+   * "Do this much on EACH side" (lunges, single-arm rows, side planks). Reps
+   * or time mode — dropped when a coach converts the exercise to distance.
    */
   perSide?: boolean;
+  /**
+   * What `weight` means: each dumbbell/hand, the total, bodyweight (no
+   * weight), bodyweight plus added load, or assisted (weight is help, not load).
+   */
+  loadType?: LoadType;
+  /**
+   * "As many reps as you can" (reps mode) or "hold as long as you can" (time
+   * mode). `reps` / `seconds` may then be absent, and absence means max —
+   * not missing data (P5).
+   */
+  maxEffort?: boolean;
   /**
    * Signed increment off the client's last logged weight for this exercise and
    * set number, e.g. 5 for "+5 lb from last". Its PRESENCE is what selects the
@@ -155,10 +170,13 @@ interface RawSetConfig {
   weight?: unknown;
   weight_unit?: unknown;
   seconds?: unknown;
-  miles?: unknown;
+  distance?: unknown;
+  distance_unit?: unknown;
   pace_seconds?: unknown;
   per_side?: unknown;
   weight_delta?: unknown;
+  load_type?: unknown;
+  max_effort?: unknown;
 }
 
 function isFiniteNumber(v: unknown): v is number {
@@ -167,6 +185,16 @@ function isFiniteNumber(v: unknown): v is number {
 
 function isWeightUnit(v: unknown): v is WeightUnit {
   return v === "lbs" || v === "kg";
+}
+
+function isDistanceUnit(v: unknown): v is DistanceUnit {
+  return v === "mi" || v === "km";
+}
+
+const LOAD_TYPES: readonly LoadType[] = ["total", "each_hand", "bodyweight", "bodyweight_plus", "assisted"];
+
+function isLoadType(v: unknown): v is LoadType {
+  return typeof v === "string" && (LOAD_TYPES as readonly string[]).includes(v);
 }
 
 /**
@@ -182,9 +210,12 @@ export function parseSetConfig(raw: unknown): SetConfig {
   if (isFiniteNumber(r.weight)) out.weight = r.weight;
   if (isWeightUnit(r.weight_unit)) out.weightUnit = r.weight_unit;
   if (isFiniteNumber(r.seconds)) out.seconds = r.seconds;
-  if (isFiniteNumber(r.miles)) out.miles = r.miles;
+  if (isFiniteNumber(r.distance)) out.distance = r.distance;
+  if (isDistanceUnit(r.distance_unit)) out.distanceUnit = r.distance_unit;
   if (isFiniteNumber(r.pace_seconds)) out.paceSeconds = r.pace_seconds;
   if (typeof r.per_side === "boolean") out.perSide = r.per_side;
+  if (isLoadType(r.load_type)) out.loadType = r.load_type;
+  if (typeof r.max_effort === "boolean") out.maxEffort = r.max_effort;
   // isFiniteNumber, not a truthiness check: a 0 delta ("hold last week's
   // weight") and a negative one (a deload) are both real prescriptions.
   if (isFiniteNumber(r.weight_delta)) out.weightDelta = r.weight_delta;
@@ -204,9 +235,12 @@ export function serializeSetConfig(config: SetConfig): Json {
   if (config.weight !== undefined) out.weight = config.weight;
   if (config.weightUnit !== undefined) out.weight_unit = config.weightUnit;
   if (config.seconds !== undefined) out.seconds = config.seconds;
-  if (config.miles !== undefined) out.miles = config.miles;
+  if (config.distance !== undefined) out.distance = config.distance;
+  if (config.distanceUnit !== undefined) out.distance_unit = config.distanceUnit;
   if (config.paceSeconds !== undefined) out.pace_seconds = config.paceSeconds;
   if (config.perSide !== undefined) out.per_side = config.perSide;
+  if (config.loadType !== undefined) out.load_type = config.loadType;
+  if (config.maxEffort !== undefined) out.max_effort = config.maxEffort;
   if (config.weightDelta !== undefined) out.weight_delta = config.weightDelta;
   return out;
 }

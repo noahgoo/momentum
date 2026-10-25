@@ -26,6 +26,10 @@ export const sexSchema = z.enum(["male", "female"]);
 
 export const weightUnitSchema = z.enum(["lbs", "kg"]);
 
+export const distanceUnitSchema = z.enum(["mi", "km"]);
+
+export const loadTypeSchema = z.enum(["total", "each_hand", "bodyweight", "bodyweight_plus", "assisted"]);
+
 export const exerciseModeSchema = z.enum(["reps", "time", "distance"]);
 
 export const workoutTypeSchema = z.enum(["workout", "warmup"]);
@@ -109,9 +113,12 @@ export const setConfigSchema = z.object({
   weight: z.number().nonnegative().finite().optional(),
   weightUnit: weightUnitSchema.optional(),
   seconds: z.number().positive().finite().optional(),
-  miles: z.number().positive().finite().optional(),
+  distance: z.number().positive().finite().optional(),
+  distanceUnit: distanceUnitSchema.optional(),
   paceSeconds: z.number().positive().finite().optional(),
   perSide: z.boolean().optional(),
+  loadType: loadTypeSchema.optional(),
+  maxEffort: z.boolean().optional(),
   // Signed, unlike `weight`: "-5 from last" is a deload, a real prescription.
   // The resolved target it produces is clamped at 0 so it still satisfies
   // `weight`'s nonnegative rule above.

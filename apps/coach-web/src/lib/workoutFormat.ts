@@ -1,3 +1,5 @@
+import type { DistanceUnit } from "@momentum/shared";
+
 /**
  * Free-text duration parsing/formatting for the workout builder's time
  * inputs (per-set seconds, rest seconds, estimated duration). Ported from
@@ -42,11 +44,11 @@ export function formatDuration(totalSeconds: number | undefined): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-/** Formats a miles value compactly, e.g. `formatMiles(3)` -> "3 mi", `formatMiles(1.5)` -> "1.5 mi". */
-export function formatMiles(miles: number | undefined): string {
-  if (miles == null || !Number.isFinite(miles)) return "";
-  const rounded = Math.round(miles * 100) / 100;
-  return `${rounded} mi`;
+/** Formats a distance compactly with its unit, e.g. `formatDistance(3, "mi")` -> "3 mi", `formatDistance(5, "km")` -> "5 km". */
+export function formatDistance(distance: number | undefined, unit: DistanceUnit | undefined): string {
+  if (distance == null || !Number.isFinite(distance)) return "";
+  const rounded = Math.round(distance * 100) / 100;
+  return `${rounded} ${unit ?? "mi"}`;
 }
 
 /**
