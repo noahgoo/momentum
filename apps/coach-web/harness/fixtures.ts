@@ -5,6 +5,7 @@ import type { WorkoutDetail } from "../src/queries/useWorkoutDetail";
 import type { ProgramDetail } from "../src/queries/usePrograms";
 import type { ChangeRequestRow, ChangeRequestsData } from "../src/queries/useChangeRequests";
 import type { SessionDetail } from "../src/queries/useSessionDetail";
+import type { ClientProgram } from "../src/queries/useClientProgram";
 import type { ThreadWithClient } from "../src/queries/useThreads";
 import { HARNESS_COACH_ID } from "./stub-auth";
 
@@ -232,6 +233,41 @@ const phasedInstanceProgramDetail: ProgramDetail = {
   updatedAt: "2026-09-01T10:00:00Z",
 };
 
+/**
+ * The same two copies as ClientProgramEditor reads them: days by session id.
+ * The flat one also has a day with no library source (a migrated/blank day),
+ * which the old library-shaped view could not show at all.
+ */
+const instanceClientProgram: ClientProgram = {
+  id: INSTANCE_PROGRAM_ID,
+  name: "12-Week Strength Base",
+  description: "Marguerite's copy",
+  clientId: CLIENT_IDS[0],
+  // A Wednesday: week 1 runs Wed Oct 21 .. Tue Oct 27, so Monday falls on Oct 26.
+  startDate: "2026-10-21",
+  weeks: 2,
+  phased: false,
+  phases: [],
+  days: [
+    { sessionId: "s-instance-1", phaseId: null, week: 1, day: "monday", name: "Upper Body Push A" },
+    { sessionId: "s-instance-2", phaseId: null, week: 1, day: "wednesday", name: "Imported Legs" },
+  ],
+  updatedAt: "2026-09-01T10:00:00Z",
+};
+
+const phasedInstanceClientProgram: ClientProgram = {
+  id: PHASED_INSTANCE_PROGRAM_ID,
+  name: "Base to Peak",
+  description: "Marguerite's copy",
+  clientId: CLIENT_IDS[0],
+  startDate: "2026-10-21",
+  weeks: 2,
+  phased: true,
+  phases: [{ id: "ph-1", name: "Base", weeks: 2 }],
+  days: [{ sessionId: "s-instance-phased-1", phaseId: "ph-1", week: 1, day: "monday", name: "Upper Body Push A" }],
+  updatedAt: "2026-09-01T10:00:00Z",
+};
+
 /** One scheduled day, for the session editor route. */
 const sessionDetail: SessionDetail = {
   id: "s-1",
@@ -331,6 +367,10 @@ export function seed(qc: QueryClient) {
   // picker can resolve, not about hydration timing.
   qc.setQueryData(qk.programDetail(INSTANCE_PROGRAM_ID), instanceProgramDetail);
   qc.setQueryData(qk.programDetail(PHASED_INSTANCE_PROGRAM_ID), phasedInstanceProgramDetail);
+  qc.setQueryData(qk.clientProgram(INSTANCE_PROGRAM_ID), instanceClientProgram);
+  qc.setQueryData(qk.clientProgram(PHASED_INSTANCE_PROGRAM_ID), phasedInstanceClientProgram);
+  // The client program editor's picker lists the library plus this client's shelf.
+  qc.setQueryData(qk.workouts(CLIENT_IDS[0]), workouts);
   qc.setQueryData(qk.sessionDetail("s-1"), sessionDetail);
   // The session's client prefers kg / km, to check new rows start in them.
   qc.setQueryData(qk.clientUnits(CLIENT_IDS[0]), { weightUnit: "kg", distanceUnit: "km" });

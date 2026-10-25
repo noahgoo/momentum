@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import type { DayOfWeek, ProgramPreview, WeekSchedule } from "@momentum/shared";
 import { programCreateSchema } from "@momentum/shared";
 import { useAuth } from "../lib/auth";
@@ -17,6 +17,7 @@ import { PhaseListPanel } from "../components/programs/PhaseListPanel";
 import { PhaseEditor } from "../components/programs/PhaseEditor";
 import { WeekScheduleEditor } from "../components/programs/WeekScheduleEditor";
 import { SchedulePreview } from "../components/programs/SchedulePreview";
+import { ClientProgramEditor } from "../components/programs/ClientProgramEditor";
 
 /**
  * What is persisted locally between visits — the whole builder state, since a
@@ -400,77 +401,14 @@ export function ProgramBuilderPage() {
     );
   }
 
-  // A client's own copy cannot be restructured here: this builder's picker
-  // lists library workouts, and save_program reconciles slots by (scope, week,
-  // day), so one interaction with it would delete the client's schedule or
-  // repoint it at rows shared with every other assigned client. save_program
-  // refuses an instance program server-side too.
-  //
-  // Individual DAYS are a different matter — a session owns its exercises, so
-  // editing one touches one client on one day. List them rather than leaving
-  // the coach at a dead end.
-  if (detail?.clientId) {
-    // Week numbers are phase-LOCAL (see useProgramDetail), so "Week 1" repeats
-    // once per phase — the phase name disambiguates which one.
-    const days = detail.phased
-      ? detail.phases.flatMap((phase) =>
-          Object.entries(phase.sessionSlots).flatMap(([week, byDay]) =>
-            Object.entries(byDay).map(([day, slot]) => ({
-              phaseName: phase.name,
-              week,
-              day,
-              slot: slot!,
-            }))
-          )
-        )
-      : Object.entries(detail.flatSessionSlots).flatMap(([week, byDay]) =>
-          Object.entries(byDay).map(([day, slot]) => ({
-            phaseName: null as string | null,
-            week,
-            day,
-            slot: slot!,
-          }))
-        );
-    return (
-      <div className="admin-card p-6">
-        <h1 className="text-lg font-semibold text-[var(--ink)]">{detail.name}</h1>
-        <p className="mt-2 max-w-prose text-sm text-[var(--ink-50)]">
-          This is one client's copy. Its shape — weeks, phases, which days are
-          training days — comes from the template it was assigned from, so
-          change that and re-assign. You can edit any individual day here, and
-          that reaches only this client, only on that day.
-        </p>
-        {days.length > 0 && (
-          <ul className="mt-4 divide-y divide-[var(--ink-08)] border-y border-[var(--ink-08)]">
-            {days.map(({ phaseName, week, day, slot }) => (
-              <li key={slot.id} className="flex items-center gap-3 py-2 text-sm">
-                <span className="text-[var(--ink-50)]">
-                  {phaseName ? `${phaseName} · ` : ""}Week {week} · {day}
-                </span>
-                {slot.sourceChanged && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                    source changed
-                  </span>
-                )}
-                <Link
-                  to={`/library/programs/${programId}/days/${slot.id}`}
-                  className="ml-auto font-medium text-[var(--ink-50)] underline hover:text-[var(--ink)]"
-                >
-                  Edit day
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="mt-4 text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
-        >
-          &larr; Back
-        </button>
-      </div>
-    );
+  // A client's own copy is not edited by this builder: its grid describes a
+  // day only as "the library workout in this slot", so a day edited, built
+  // blank, or migrated without a library source would render blank and be
+  // deleted on save (save_program refuses an instance server-side too).
+  // ClientProgramEditor holds days by session id and saves through
+  // save_client_program instead.
+  if (detail?.clientId && programId) {
+    return <ClientProgramEditor programId={programId} />;
   }
 
   if (isEditing && !hydrated) {
@@ -548,8 +486,8 @@ export function ProgramBuilderPage() {
               }`}
             >
               <span
-                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  phased ? "translate-x-5" : "translate-x-0.5"
+                className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                  phased ? "translate-x-[1.375rem]" : "translate-x-0.5"
                 }`}
               />
             </button>

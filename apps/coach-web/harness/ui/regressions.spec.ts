@@ -174,36 +174,77 @@ test.describe("draft validation", () => {
 });
 
 test.describe("per-client program editing", () => {
-  test("a client's own program is not opened by the library builder", async ({ page }) => {
-    // ClientHeaderCard linked a client's instance program at
-    // /library/programs/:id. That builder's picker is useWorkouts(), which
-    // filters `client_id IS NULL`, so the instance's client-stamped workout has
-    // no matching <option> and the day select falls back to "Rest". The schedule
-    // is intact in the database at that point — but save_program reconciles
-    // slots by (scope, week_number, day_of_week), so one interaction with a
-    // control the UI renders blank writes that belief back and deletes the row.
+  test("a client's own program opens the client editor, not the library builder", async ({ page }) => {
+    // The library builder describes a day only as "the library workout in this
+    // slot". A client's day may have none (edited, blank, migrated), so that
+    // builder rendered it as Rest and one save deleted it. The client editor
+    // holds days by session id, so every day shows — including one with no
+    // library source.
     await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
 
-    // Before the guard this rendered the full builder with every day select
-    // blank, and one interaction wrote that back as a deleted schedule. The
-    // route stays reachable by URL, so the page itself has to refuse — it
-    // lists the client's days for editing instead of offering the structure
-    // form.
-    await expect(
-      page.locator("select"),
-      "no editable schedule control may render for a client's copy"
-    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Edit client program" })).toBeVisible();
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Upper Body Push A");
+    await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Imported Legs");
+    await expect(page.getByRole("button", { name: "Save program" })).toBeDisabled();
+  });
+
+  test("each day shows its calendar date, counted from the assignment start", async ({ page }) => {
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
+
+    await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Oct 21");
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Oct 26");
+    await expect(page.getByTestId("day-0-2-wednesday")).toContainText("Oct 28");
+  });
+
+  test("a phased client instance lists its days under its phase", async ({ page }) => {
+    await visit(page, `/library/programs/${PHASED_INSTANCE_PROGRAM_ID}`);
+
+    await expect(page.getByLabel("Phase 1")).toHaveValue("Base");
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Upper Body Push A");
     await expect(page.getByRole("link", { name: "Edit day" }).first()).toBeVisible();
   });
 
-  test("a phased client instance still lists its days", async ({ page }) => {
-    // useProgramDetail puts a phased program's schedule under phases[].sessionSlots,
-    // never flatSessionSlots. The day-list view read only flatSessionSlots, so a
-    // phased client's "Edit days" page rendered as if there were nothing to edit.
-    await visit(page, `/library/programs/${PHASED_INSTANCE_PROGRAM_ID}`);
+  test("a coach can add, swap and remove days, then save", async ({ page }) => {
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
 
-    await expect(page.getByRole("link", { name: "Edit day" }).first()).toBeVisible();
-    await expect(page.getByText("Base · Week 1 · monday")).toBeVisible();
+    // Add a library workout on a rest day.
+    const tuesday = page.getByTestId("day-0-1-tuesday");
+    await tuesday.getByRole("button", { name: "+ Add workout" }).click();
+    await tuesday.getByLabel("Workout").selectOption({ label: "Conditioning — Intervals & Accessory Circuit" });
+    await tuesday.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(tuesday).toContainText("Conditioning — Intervals & Accessory Circuit");
+    await expect(tuesday).toContainText("unsaved");
+
+    // Moving Monday onto Wednesday swaps the two, contents and all.
+    const monday = page.getByTestId("day-0-1-monday");
+    await monday.getByRole("button", { name: "Move", exact: true }).click();
+    await monday.getByLabel("Day").selectOption("wednesday");
+    await monday.getByRole("button", { name: "Swap" }).click();
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Imported Legs");
+    await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Upper Body Push A");
+
+    // Removing turns the day back into rest.
+    await page.getByTestId("day-0-1-monday").getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Rest");
+
+    const save = page.getByRole("button", { name: "Save program" });
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(save).toBeDisabled();
+  });
+
+  test("a failed client program save keeps the edits and says why", async ({ page }) => {
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
+    await page.evaluate(() => {
+      (window as unknown as { __harness: { failWrites: boolean } }).__harness.failWrites = true;
+    });
+
+    await page.getByTestId("day-0-1-monday").getByRole("button", { name: "Remove", exact: true }).click();
+    await page.getByRole("button", { name: "Save program" }).click();
+
+    await expect(page.getByText("network unreachable")).toBeVisible();
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Rest");
+    await expect(page.getByRole("button", { name: "Save program" })).toBeEnabled();
   });
 });
 
@@ -286,6 +327,17 @@ test.describe("session editor", () => {
     await expect(apply).toBeEnabled();
     await page.getByPlaceholder("e.g. Upper body strength").fill("Edited name");
     await expect(apply).toBeDisabled();
+  });
+
+  test("shows each exercise's name, not a placeholder", async ({ page }) => {
+    // session_exercises stores only exercise_id. Hydration set every row's
+    // name to "", so a saved day rendered as a list of "Untitled exercise".
+    await visit(page, "/library/programs/p-1/days/s-1");
+
+    // Headings are the day's rows; the library panel lists the same names.
+    await expect(page.getByRole("heading", { name: "Plank" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Barbell Bench Press" })).toBeVisible();
+    await expect(page.getByText("Untitled exercise")).toHaveCount(0);
   });
 
   test("saving as a workout offers this client or everyone", async ({ page }) => {

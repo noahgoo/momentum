@@ -10,6 +10,7 @@ import { ApplyToFutureDialog } from "../components/sessions/ApplyToFutureDialog"
 import { SaveAsWorkoutDialog } from "../components/sessions/SaveAsWorkoutDialog";
 import type { BuilderExercise } from "../queries/useWorkoutDetail";
 import { useClientUnits } from "../queries/useClientUnits";
+import { useExercises } from "../queries/useExercises";
 import {
   describeSaveSessionError,
   useSaveSession,
@@ -63,6 +64,9 @@ export function SessionBuilderPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { data: detail, isLoading } = useSessionDetail(sessionId);
+  // session_exercises stores only the exercise FK, so names resolve through
+  // the library — the same way WorkoutBuilderPage hydrates.
+  const { data: libraryExercises, isSuccess: libraryLoaded } = useExercises();
   const saveSession = useSaveSession();
   // New exercises start in the units this client prefers.
   const { data: clientUnits } = useClientUnits(detail?.clientId);
@@ -91,8 +95,15 @@ export function SessionBuilderPage() {
     isSessionDraft
   );
 
+  const nameById = useMemo(
+    () => new Map((libraryExercises ?? []).map((ex) => [ex.id, ex.name])),
+    [libraryExercises]
+  );
+  const exerciseNameFor = (exerciseId: string | null) =>
+    (exerciseId && nameById.get(exerciseId)) || "Deleted exercise";
+
   useEffect(() => {
-    if (!detail || hydrated) return;
+    if (!detail || hydrated || !libraryLoaded) return;
     setName(detail.name);
     setDescription(detail.description ?? "");
     const toBuilder = (section: SessionSection) =>
@@ -101,7 +112,7 @@ export function SessionBuilderPage() {
         .map((e) => ({
           id: e.id,
           exerciseId: e.exerciseId,
-          exerciseName: "",
+          exerciseName: exerciseNameFor(e.exerciseId),
           mode: e.mode,
           setConfigs: e.setConfigs,
           restSeconds: e.restSeconds,
@@ -110,7 +121,7 @@ export function SessionBuilderPage() {
     setExercises(toBuilder("main"));
     setWarmupExercises(toBuilder("warmup"));
     setHydrated(true);
-  }, [detail, hydrated]);
+  }, [detail, hydrated, libraryLoaded, nameById]);
 
   // Applied *after* the server hydration above, or it would be overwritten the
   // moment the detail query resolves.
@@ -119,10 +130,13 @@ export function SessionBuilderPage() {
     if (!hydrated || appliedDraft.current || !draft.restored) return;
     appliedDraft.current = true;
     const d = draft.restored;
+    // Drafts saved before names were hydrated carry "" — fill those in.
+    const named = (rows: BuilderExercise[]) =>
+      rows.map((r) => (r.exerciseName ? r : { ...r, exerciseName: exerciseNameFor(r.exerciseId) }));
     setName(d.name);
     setDescription(d.description);
-    setExercises(d.exercises);
-    setWarmupExercises(d.warmupExercises);
+    setExercises(named(d.exercises));
+    setWarmupExercises(named(d.warmupExercises));
     setDirty(true);
   }, [hydrated, draft.restored]);
 
@@ -201,7 +215,9 @@ export function SessionBuilderPage() {
     }
   }
 
-  if (isLoading) return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
+  if (isLoading || (detail && !hydrated)) {
+    return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
+  }
   if (!detail) return <p className="text-sm text-[var(--ink-30)]">This day no longer exists.</p>;
 
   return (

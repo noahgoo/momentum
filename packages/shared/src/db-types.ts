@@ -1501,6 +1501,14 @@ export type Database = {
       run_daily_maintenance: { Args: never; Returns: undefined }
       run_hourly_reminders: { Args: never; Returns: undefined }
       run_reminders: { Args: never; Returns: undefined }
+      save_client_program: {
+        Args: {
+          p_expected_updated_at?: string
+          p_payload: Json
+          p_program_id: string
+        }
+        Returns: string
+      }
       save_program: {
         Args: {
           p_expected_updated_at?: string

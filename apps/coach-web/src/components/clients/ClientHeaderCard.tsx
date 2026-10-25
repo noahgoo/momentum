@@ -182,7 +182,7 @@ export function ClientHeaderCard({ profile, streak, programStatus, onToggleDisab
             to={`/library/programs/${editableProgram.id}`}
             className="admin-secondary px-4 py-2 text-sm"
           >
-            Edit days
+            Edit program
           </Link>
         )}
         <button

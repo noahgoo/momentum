@@ -22,6 +22,7 @@
  *   ['exercises', 'usageCounts', sortedIds[]]     <- library-page count of workouts referencing each exercise
  *   ['programs']
  *   ['programs', programId]   <- programDetail nests under the list (9.4 builder edit mode)
+ *   ['programs', programId, 'client']   <- clientProgram: a client's copy, for ClientProgramEditor
  *   ['changeRequests']
  *
  * Keep every segment a plain string/primitive (no objects) so React Query's
@@ -68,6 +69,8 @@ export const qk = {
     ["exercises", "usageCounts", [...exerciseIds].sort()] as const,
   programs: () => ["programs"] as const,
   programDetail: (id: string) => ["programs", id] as const,
+  /** A client's program copy, shaped for ClientProgramEditor; nests under programDetail. */
+  clientProgram: (id: string) => ["programs", id, "client"] as const,
   changeRequests: () => ["changeRequests"] as const,
   motivationEntries: () => ["motivationEntries"] as const,
 };

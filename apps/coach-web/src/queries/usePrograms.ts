@@ -217,23 +217,28 @@ export function useProgramDetail(programId: string | undefined) {
 
         // The builder's grid holds the LIBRARY workout a coach picked for each
         // slot, which is the session's source_workout_id. A session built
-        // freehand has none and cannot be shown in this grid.
+        // freehand (or migrated from the old app) has none and cannot be shown
+        // in this grid — but it is still a day, so it always gets a slot.
         const sourceUpdatedAt = await sourceChangedById(sessions ?? []);
         const scheduleByPhase = new Map<string, WeekSchedule>();
         const slotsByPhase = new Map<string, SessionSlots>();
         for (const row of sessions ?? []) {
-          if (!row.phase_id || !row.source_workout_id) continue;
-          const schedule = scheduleByPhase.get(row.phase_id) ?? {};
-          const week = schedule[String(row.week_number)] ?? {};
-          week[row.day_of_week] = row.source_workout_id;
-          schedule[String(row.week_number)] = week;
-          scheduleByPhase.set(row.phase_id, schedule);
+          if (!row.phase_id) continue;
+          if (row.source_workout_id) {
+            const schedule = scheduleByPhase.get(row.phase_id) ?? {};
+            const week = schedule[String(row.week_number)] ?? {};
+            week[row.day_of_week] = row.source_workout_id;
+            schedule[String(row.week_number)] = week;
+            scheduleByPhase.set(row.phase_id, schedule);
+          }
 
           const slots = slotsByPhase.get(row.phase_id) ?? {};
           const slotWeek = slots[String(row.week_number)] ?? {};
           slotWeek[row.day_of_week] = {
             id: row.id,
-            sourceChanged: (sourceUpdatedAt.get(row.source_workout_id) ?? "") > row.updated_at,
+            sourceChanged: row.source_workout_id
+              ? (sourceUpdatedAt.get(row.source_workout_id) ?? "") > row.updated_at
+              : false,
           };
           slots[String(row.week_number)] = slotWeek;
           slotsByPhase.set(row.phase_id, slots);
@@ -272,13 +277,15 @@ export function useProgramDetail(programId: string | undefined) {
       const flatSessionSlots: SessionSlots = {};
       const activeDaySet = new Set<DayOfWeek>();
       for (const row of sessions ?? []) {
-        if (!row.source_workout_id) continue;
         const slotWeek = flatSessionSlots[String(row.week_number)] ?? {};
         slotWeek[row.day_of_week] = {
           id: row.id,
-          sourceChanged: (sourceUpdatedAt.get(row.source_workout_id) ?? "") > row.updated_at,
+          sourceChanged: row.source_workout_id
+            ? (sourceUpdatedAt.get(row.source_workout_id) ?? "") > row.updated_at
+            : false,
         };
         flatSessionSlots[String(row.week_number)] = slotWeek;
+        if (!row.source_workout_id) continue;
         const week = flatWeekSchedule[String(row.week_number)] ?? {};
         week[row.day_of_week] = row.source_workout_id;
         flatWeekSchedule[String(row.week_number)] = week;
