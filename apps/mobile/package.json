@@ -10,6 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "check:ios-bundle": "node ./node_modules/expo/bin/cli export:embed --entry-file ./node_modules/expo-router/entry.js --platform ios --dev false --reset-cache --minify false --bundle-output .expo/ios-bundle-check/main.jsbundle --assets-dest .expo/ios-bundle-check/assets",
     "lint": "expo lint",
     "test": "vitest run"
   },

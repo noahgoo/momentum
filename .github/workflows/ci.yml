@@ -34,6 +34,10 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Match the JS bundle step used by Xcode archives, with a cold Metro cache.
+      - name: Check iOS archive bundle
+        run: pnpm -F mobile check:ios-bundle
+
       - name: Lint
         run: pnpm lint
 

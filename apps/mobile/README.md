@@ -55,6 +55,12 @@ SDK 57's supported versions, and Metro to the installed React Native version.
 Update these together when upgrading the SDK. Before an EAS build, run
 `pnpm dlx expo-doctor` from this directory and resolve native dependency errors.
 
+Run `pnpm -F mobile check:ios-bundle` from the workspace root to check the
+JavaScript bundle command used by Xcode archives with a cold Metro cache.
+CI runs this check; it does not compile native code or start an EAS build.
+The Babel config resolves Expo's own preset explicitly so this check also works
+after a clean isolated install, without relying on an undeclared preset.
+
 ## Architecture notes
 
 - **`lib/supabase.ts`** — `createClient<Database>` (from `@momentum/shared`,
