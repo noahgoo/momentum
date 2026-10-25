@@ -17,6 +17,73 @@
 -- created_by, created_at or client_id off them.
 -- ---------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- The three pointers that hold what resolve_scheduled_workout returned
+--
+-- workout_logs.workout_id, change_requests.workout_id and
+-- assignment_date_overrides.workout_id are all written from
+-- resolve_scheduled_workout, so the moment it returns a session id they point
+-- at the wrong table. This cannot wait for the drop of week_schedules — the
+-- seed fails on workout_logs_workout_id_fkey without it.
+--
+-- Two of the three were bare `references` with no on-delete clause (0003:159,
+-- 0002:164), which fails a delete late and opaquely; R4's taxonomy is applied
+-- to both here. workout_logs was already `set null` (0019:46).
+--
+-- Existing values point at workouts rows and have no session equivalent, so
+-- they are nulled rather than translated. Provenance, not dependency: no
+-- history is lost, and there is no production data.
+--
+-- Runs BEFORE the function redefinitions below, not after: nulling
+-- workout_logs.workout_id fires refresh_client_summary_on_workout_logs
+-- synchronously, and on a database with real rows that trigger actually
+-- executes mid-migration. If refresh_client_summary had already been
+-- replaced to read assignment_date_overrides.session_id at that point, it
+-- would fail with "column ado.session_id does not exist" — that column does
+-- not exist until the rename a few statements down. Doing the null-and-rename
+-- first means the trigger still runs against the OLD (0012) function body,
+-- which reads columns that already exist.
+-- ---------------------------------------------------------------------------
+
+update public.workout_logs set workout_id = null;
+update public.change_requests set workout_id = null;
+update public.assignment_date_overrides set workout_id = null;
+
+alter table public.workout_logs drop constraint workout_logs_workout_id_fkey;
+alter table public.workout_logs rename column workout_id to session_id;
+alter table public.workout_logs
+  add constraint workout_logs_session_id_fkey
+    foreign key (session_id) references public.sessions (id) on delete set null;
+alter index public.workout_logs_workout_id_idx rename to workout_logs_session_id_idx;
+
+alter table public.workout_logs add column session_name text;
+
+comment on column public.workout_logs.session_id is
+  'Provenance: the session this log was recorded against. `on delete set null` — history survives the session being rescheduled away or its program rebuilt (R4). Never joined for display; session_name is the snapshot.';
+
+comment on column public.workout_logs.session_name is
+  'Snapshot of sessions.name at log time. History renders the name the client was actually given rather than whatever the session is called now, and still renders it once the session is gone (R8) — the same reason exercise_logs.exercise_name exists.';
+
+alter table public.change_requests drop constraint change_requests_workout_id_fkey;
+alter table public.change_requests rename column workout_id to session_id;
+alter table public.change_requests
+  add constraint change_requests_session_id_fkey
+    foreign key (session_id) references public.sessions (id) on delete set null;
+alter index public.change_requests_workout_id_idx rename to change_requests_session_id_idx;
+
+comment on column public.change_requests.session_id is
+  'What was scheduled when the request was FILED, for display only. accept_change_request re-resolves live and never trusts it (C5). `on delete set null`; was a bare reference (NO ACTION) before, which raised a raw 23503 that nothing counted.';
+
+alter table public.assignment_date_overrides drop constraint assignment_date_overrides_workout_id_fkey;
+alter table public.assignment_date_overrides rename column workout_id to session_id;
+alter table public.assignment_date_overrides
+  add constraint assignment_date_overrides_session_id_fkey
+    foreign key (session_id) references public.sessions (id) on delete cascade;
+alter index public.assignment_date_overrides_workout_id_idx rename to assignment_date_overrides_session_id_idx;
+
+comment on column public.assignment_date_overrides.session_id is
+  'The session moved onto this date; NULL means an explicit rest day. `on delete cascade`, not `set null`: an override pointing at a deleted session is meaningless, and silently turning it into a rest day would hide the deletion from the client — cascading restores the computed schedule for that date instead. Note the asymmetry — accept_change_request writes a PAIR of overrides, so deleting one session leaves the other half standing as a rest day on the source date.';
+
 create or replace function public.resolve_scheduled_workout(p_client_id uuid, p_date date)
 returns uuid
 language plpgsql
@@ -427,64 +494,6 @@ comment on function public.refresh_client_summary(uuid) is
   'Recomputes and upserts one client''s client_summaries row from current data; deletes the row if the profile is gone or is no longer a client. today_workout_name comes off the scheduled session, which snapshots its own name. Trigger- and cron-driven only — never called by application code directly.';
 
 revoke execute on function public.refresh_client_summary(uuid) from public, anon, authenticated;
-
-
--- ---------------------------------------------------------------------------
--- The three pointers that hold what resolve_scheduled_workout returned
---
--- workout_logs.workout_id, change_requests.workout_id and
--- assignment_date_overrides.workout_id are all written from
--- resolve_scheduled_workout, so the moment it returns a session id they point
--- at the wrong table. This cannot wait for the drop of week_schedules — the
--- seed fails on workout_logs_workout_id_fkey without it.
---
--- Two of the three were bare `references` with no on-delete clause (0003:159,
--- 0002:164), which fails a delete late and opaquely; R4's taxonomy is applied
--- to both here. workout_logs was already `set null` (0019:46).
---
--- Existing values point at workouts rows and have no session equivalent, so
--- they are nulled rather than translated. Provenance, not dependency: no
--- history is lost, and there is no production data.
--- ---------------------------------------------------------------------------
-
-update public.workout_logs set workout_id = null;
-update public.change_requests set workout_id = null;
-update public.assignment_date_overrides set workout_id = null;
-
-alter table public.workout_logs drop constraint workout_logs_workout_id_fkey;
-alter table public.workout_logs rename column workout_id to session_id;
-alter table public.workout_logs
-  add constraint workout_logs_session_id_fkey
-    foreign key (session_id) references public.sessions (id) on delete set null;
-alter index public.workout_logs_workout_id_idx rename to workout_logs_session_id_idx;
-
-alter table public.workout_logs add column session_name text;
-
-comment on column public.workout_logs.session_id is
-  'Provenance: the session this log was recorded against. `on delete set null` — history survives the session being rescheduled away or its program rebuilt (R4). Never joined for display; session_name is the snapshot.';
-
-comment on column public.workout_logs.session_name is
-  'Snapshot of sessions.name at log time. History renders the name the client was actually given rather than whatever the session is called now, and still renders it once the session is gone (R8) — the same reason exercise_logs.exercise_name exists.';
-
-alter table public.change_requests drop constraint change_requests_workout_id_fkey;
-alter table public.change_requests rename column workout_id to session_id;
-alter table public.change_requests
-  add constraint change_requests_session_id_fkey
-    foreign key (session_id) references public.sessions (id) on delete set null;
-alter index public.change_requests_workout_id_idx rename to change_requests_session_id_idx;
-
-comment on column public.change_requests.session_id is
-  'What was scheduled when the request was FILED, for display only. accept_change_request re-resolves live and never trusts it (C5). `on delete set null`; was a bare reference (NO ACTION) before, which raised a raw 23503 that nothing counted.';
-
-alter table public.assignment_date_overrides drop constraint assignment_date_overrides_workout_id_fkey;
-alter table public.assignment_date_overrides rename column workout_id to session_id;
-alter table public.assignment_date_overrides
-  add constraint assignment_date_overrides_session_id_fkey
-    foreign key (session_id) references public.sessions (id) on delete cascade;
-alter index public.assignment_date_overrides_workout_id_idx rename to assignment_date_overrides_session_id_idx;
-
-comment on column public.assignment_date_overrides.session_id is
-  'The session moved onto this date; NULL means an explicit rest day. `on delete cascade`, not `set null`: an override pointing at a deleted session is meaningless, and silently turning it into a rest day would hide the deletion from the client — cascading restores the computed schedule for that date instead. Note the asymmetry — accept_change_request writes a PAIR of overrides, so deleting one session leaves the other half standing as a rest day on the source date.';
 
 -- ---------------------------------------------------------------------------
 -- The writers that store what resolve returned. Bodies are verbatim apart

@@ -85,7 +85,7 @@ export function ProgramBuilderPage() {
   const programId = params.id;
   const isEditing = !!programId;
 
-  const { data: detail, isLoading: detailLoading } = useProgramDetail(programId);
+  const { data: detail, isLoading: detailLoading, isError: detailError } = useProgramDetail(programId);
   const { data: workouts = [] } = useWorkouts("workout");
   const saveProgram = useSaveProgram();
 
@@ -382,6 +382,24 @@ export function ProgramBuilderPage() {
     return <p className="text-sm text-[var(--ink-30)]">Loading…</p>;
   }
 
+  if (isEditing && detailError) {
+    return (
+      <div className="admin-card p-6">
+        <p className="text-sm text-red-600">
+          This program couldn&apos;t be loaded. It may have been deleted, or something went
+          wrong — try reloading the page.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="mt-4 text-xs font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
+        >
+          &larr; Back
+        </button>
+      </div>
+    );
+  }
+
   // A client's own copy cannot be restructured here: this builder's picker
   // lists library workouts, and save_program reconciles slots by (scope, week,
   // day), so one interaction with it would delete the client's schedule or
@@ -392,9 +410,27 @@ export function ProgramBuilderPage() {
   // editing one touches one client on one day. List them rather than leaving
   // the coach at a dead end.
   if (detail?.clientId) {
-    const days = Object.entries(detail.flatSessionSlots).flatMap(([week, byDay]) =>
-      Object.entries(byDay).map(([day, slot]) => ({ week, day, slot: slot! }))
-    );
+    // Week numbers are phase-LOCAL (see useProgramDetail), so "Week 1" repeats
+    // once per phase — the phase name disambiguates which one.
+    const days = detail.phased
+      ? detail.phases.flatMap((phase) =>
+          Object.entries(phase.sessionSlots).flatMap(([week, byDay]) =>
+            Object.entries(byDay).map(([day, slot]) => ({
+              phaseName: phase.name,
+              week,
+              day,
+              slot: slot!,
+            }))
+          )
+        )
+      : Object.entries(detail.flatSessionSlots).flatMap(([week, byDay]) =>
+          Object.entries(byDay).map(([day, slot]) => ({
+            phaseName: null as string | null,
+            week,
+            day,
+            slot: slot!,
+          }))
+        );
     return (
       <div className="admin-card p-6">
         <h1 className="text-lg font-semibold text-[var(--ink)]">{detail.name}</h1>
@@ -406,10 +442,10 @@ export function ProgramBuilderPage() {
         </p>
         {days.length > 0 && (
           <ul className="mt-4 divide-y divide-[var(--ink-08)] border-y border-[var(--ink-08)]">
-            {days.map(({ week, day, slot }) => (
+            {days.map(({ phaseName, week, day, slot }) => (
               <li key={slot.id} className="flex items-center gap-3 py-2 text-sm">
                 <span className="text-[var(--ink-50)]">
-                  Week {week} · {day}
+                  {phaseName ? `${phaseName} · ` : ""}Week {week} · {day}
                 </span>
                 {slot.sourceChanged && (
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">

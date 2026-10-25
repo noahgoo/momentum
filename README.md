@@ -18,3 +18,11 @@ UI harness (coach-web, no auth/network needed):
 pnpm -F coach-web harness     # localhost:5199
 pnpm -F coach-web test:ui     # UI checks, 1440px + 390px
 ```
+
+## Mobile app build
+
+```bash
+cd apps/mobile
+eas build --platform ios --profile production
+eas submit --platform ios --profile production
+```
