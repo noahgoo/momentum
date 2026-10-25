@@ -39,30 +39,21 @@ EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxx
 client bundle at build time (Expo's convention for public runtime config)
 — never put a secret/service-role key behind an `EXPO_PUBLIC_` name.
 
-## pnpm + Expo/Metro: hoisted node_modules
+## pnpm + Expo/Metro: isolated dependencies
 
-**The workspace root `.npmrc` sets `node-linker=hoisted`.** This affects
-the whole monorepo, not just this app — flagging it here since other
-agents/contributors share that file.
+**The workspace root `pnpm-workspace.yaml` sets `nodeLinker: isolated`.**
+This preserves separate React peer contexts for mobile and coach-web. With
+the hoisted layout, shared React Query could resolve coach-web's React copy
+inside the mobile bundle and fail with an invalid hook call.
 
-Why: Metro's module resolver does not reliably follow pnpm's default
-strict, symlinked `node_modules/.pnpm` layout. Several Expo/RN packages
-reach into transitive dependencies that pnpm keeps isolated from a
-package that doesn't declare them directly (e.g. `expo-router` needs
-`standard-navigation`; `react-native-web` needs
-`@react-native/normalize-colors`). With the default linker, `expo export`
-and `expo start` fail with "Unable to resolve module X" for each of these
-in turn. Hoisting flattens `node_modules` so Metro can find them, matching
-the layout Expo's tooling assumes (npm/yarn-style).
+Expo's default Metro config handles workspace discovery and native
+module resolution; `metro.config.js` only adds the NodeNext `.js`-to-TypeScript
+source remapping needed by `@momentum/shared`.
 
-This was confirmed to only work from the **workspace root** `.npmrc` — a
-`node-linker` setting in `apps/mobile/.npmrc` alone is silently ignored by
-pnpm; the setting is install-wide.
-
-`metro.config.js` additionally sets `watchFolders`/`nodeModulesPaths` to
-the workspace root and enables `unstable_enablePackageExports` so Metro
-can resolve the `@momentum/shared` workspace package (symlinked in via
-pnpm) and follow its subpath exports correctly.
+The workspace overrides pin Reanimated, Worklets and Gesture Handler to Expo
+SDK 57's supported versions, and Metro to the installed React Native version.
+Update these together when upgrading the SDK. Before an EAS build, run
+`pnpm dlx expo-doctor` from this directory and resolve native dependency errors.
 
 ## Architecture notes
 
