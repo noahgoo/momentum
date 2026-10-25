@@ -14,8 +14,8 @@ import { colors, fonts, spacing } from "../../../theme/tokens";
 /**
  * Workout tab week view. Ported from mindful-miya's
  * src/app/workout/page.tsx: program-name header + progress ring, a
- * horizontal week-pill selector, and a single-column 7-day list (always
- * Monday-to-Sunday; see useWorkoutWeek).
+ * horizontal week-pill selector, and a two-column 7-day grid (Mon-Thu
+ * left, Fri-Sun right; see useWorkoutWeek).
  */
 export default function WorkoutWeekScreen() {
   const tabBarSpace = useTabBarSpace();
