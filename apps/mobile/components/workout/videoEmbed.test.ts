@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { videoFileHtml, videoSource } from "./videoEmbed";
+import { embedHtml, videoFileHtml, videoSource } from "./videoEmbed";
 
 const yt = (id: string) => `https://www.youtube-nocookie.com/embed/${id}?playsinline=1&rel=0&modestbranding=1`;
 
@@ -52,5 +52,13 @@ describe("videoFileHtml", () => {
     const html = videoFileHtml('https://x.test/a.mp4"><script>alert(1)</script>');
     expect(html).not.toContain("<script>");
     expect(html).toContain("&quot;");
+  });
+});
+
+describe("embedHtml", () => {
+  it("frames the player with a referrer policy and escapes the URL", () => {
+    const html = embedHtml('https://www.youtube-nocookie.com/embed/x?a=1&b="2"');
+    expect(html).toContain('src="https://www.youtube-nocookie.com/embed/x?a=1&amp;b=&quot;2&quot;"');
+    expect(html).toContain("referrerpolicy");
   });
 });

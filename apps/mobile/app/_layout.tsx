@@ -25,6 +25,12 @@ void SplashScreen.preventAutoHideAsync();
 // URL to parse in React Native), so a password-recovery deep link has to be
 // caught here and traded for a session by hand. Once exchanged, auth.tsx's
 // onAuthStateChange fires PASSWORD_RECOVERY and routes to /reset-password.
+//
+// Only PKCE `?code=` links are accepted: a code is useless without the
+// verifier stored on the device that requested the reset. Raw
+// `#access_token=` fragments are deliberately ignored — any app or web page
+// can open a momentum:// URL, and honoring one would sign this device into
+// whatever account the tokens belong to.
 function handleAuthDeepLink(url: string | null) {
   if (!url) return;
   const { queryParams } = Linking.parse(url);

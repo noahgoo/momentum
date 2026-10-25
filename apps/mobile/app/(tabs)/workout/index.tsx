@@ -51,7 +51,11 @@ export default function WorkoutWeekScreen() {
     }
     return notes;
   }, [movedDays, movable?.pending]);
-  const missedCount = movable?.missed.length ?? 0;
+  // The banner is only for the week on screen, so a workout missed a fortnight
+  // ago does not nag forever. Older ones stay movable from the Reschedule link
+  // and from their own day.
+  const weekDates = new Set((data?.days ?? []).map((d) => d.dateStr));
+  const missedCount = (movable?.missed ?? []).filter((m) => weekDates.has(m.date)).length;
 
   const weekPills = useMemo(
     () => Array.from({ length: data?.totalWeeks ?? 0 }, (_, i) => i + 1),

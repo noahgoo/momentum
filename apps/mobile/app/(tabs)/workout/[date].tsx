@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Pressable,
+  Keyboard,
+  StyleSheet,
+} from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { OfflineBanner } from "../../../components/OfflineBanner";
@@ -116,7 +124,10 @@ export default function WorkoutDayScreen() {
 
           <DifficultyPicker value={log?.difficulty ?? null} onChange={handleDifficultyChange} />
 
-          <TouchableOpacity onPress={() => setViewingCompletedLog(true)} style={styles.viewEditLink}>
+          <TouchableOpacity
+            onPress={() => setViewingCompletedLog(true)}
+            style={styles.viewEditLink}
+          >
             <Text style={styles.viewEditLinkText}>View / edit log</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -126,93 +137,109 @@ export default function WorkoutDayScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}>
-        {BackHeader}
+      {/* Taps on empty space (and drags) drop the keyboard so no field keeps a blinking cursor;
+          "handled" lets a tap on a checkbox still register while the keyboard is up. */}
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <Pressable
+          accessible={false}
+          onPress={Keyboard.dismiss}
+          style={[styles.content, { paddingBottom: tabBarSpace, flexGrow: 1 }]}
+        >
+          {BackHeader}
 
-        <View style={[styles.headerCard]}>
-          <Text style={styles.headerEyebrow}>
-            {isToday ? "TODAY" : formatHeader(dateParam)}
-            {workout.estimated_duration_minutes ? ` · ${workout.estimated_duration_minutes} MIN` : ""}
-          </Text>
-          <Text style={styles.headerTitle}>{workout.name}</Text>
-          <View style={styles.headerMetaRow}>
-            <Text style={styles.headerMeta}>
-              {data.exercises.length} exercise{data.exercises.length !== 1 ? "s" : ""}
+          <View style={[styles.headerCard]}>
+            <Text style={styles.headerEyebrow}>
+              {isToday ? "TODAY" : formatHeader(dateParam)}
+              {workout.estimated_duration_minutes
+                ? ` · ${workout.estimated_duration_minutes} MIN`
+                : ""}
             </Text>
-            {workout.estimated_duration_minutes ? (
-              <>
-                <Text style={styles.headerMeta}>·</Text>
-                <Text style={styles.headerMeta}>{workout.estimated_duration_minutes} min</Text>
-              </>
-            ) : null}
+            <Text style={styles.headerTitle}>{workout.name}</Text>
+            <View style={styles.headerMetaRow}>
+              <Text style={styles.headerMeta}>
+                {data.exercises.length} exercise{data.exercises.length !== 1 ? "s" : ""}
+              </Text>
+              {workout.estimated_duration_minutes ? (
+                <>
+                  <Text style={styles.headerMeta}>·</Text>
+                  <Text style={styles.headerMeta}>{workout.estimated_duration_minutes} min</Text>
+                </>
+              ) : null}
+            </View>
           </View>
-        </View>
 
-        {workout.equipment && workout.equipment.length > 0 && (
-          <View style={styles.equipmentRow}>
-            {workout.equipment.map((item) => (
-              <View key={item} style={styles.equipmentPill}>
-                <Text style={styles.equipmentPillText}>{item}</Text>
-              </View>
-            ))}
-          </View>
-        )}
+          {workout.equipment && workout.equipment.length > 0 && (
+            <View style={styles.equipmentRow}>
+              {workout.equipment.map((item) => (
+                <View key={item} style={styles.equipmentPill}>
+                  <Text style={styles.equipmentPillText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-        {isFuture && (
-          <View style={styles.futureNotice}>
-            <Text style={styles.futureNoticeText}>
-              Scheduled for{" "}
-              {parseDateParam(dateParam).toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
-              . Come back on the day to log it.
-            </Text>
-          </View>
-        )}
+          {isFuture && (
+            <View style={styles.futureNotice}>
+              <Text style={styles.futureNoticeText}>
+                Scheduled for{" "}
+                {parseDateParam(dateParam).toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
+                . Come back on the day to log it.
+              </Text>
+            </View>
+          )}
 
-        {data.warmup && (
-          <WarmupCard
-            warmup={data.warmup}
-            exercises={data.warmupExercises}
-            completed={log?.warmup_completed ?? false}
-            readOnly={isFuture}
-            onToggle={handleWarmupToggle}
-          />
-        )}
-
-        {!isFuture && uid && (
-          <View style={styles.loggerSpacing}>
-            <WorkoutLogger
-              clientId={uid}
-              date={dateParam}
-              sessionId={workout.id}
-              exercises={data.exercises}
-              existingLog={log?.exercise_logs}
-              logUpdatedAt={log?.updated_at}
-              previousLog={data.previousLog?.exercise_logs}
-              lastSetWeights={data.lastSetWeights}
-              preferredWeightUnit={profilePrefs?.weight_unit}
-              preferredDistanceUnit={profilePrefs?.distance_unit}
-              onComplete={() => setViewingCompletedLog(false)}
+          {data.warmup && (
+            <WarmupCard
+              warmup={data.warmup}
+              exercises={data.warmupExercises}
+              completed={log?.warmup_completed ?? false}
+              readOnly={isFuture}
+              onToggle={handleWarmupToggle}
             />
-          </View>
-        )}
+          )}
 
-        {/* No log yet means the day is still movable, today, ahead or missed.
+          {!isFuture && uid && (
+            <View style={styles.loggerSpacing}>
+              <WorkoutLogger
+                clientId={uid}
+                date={dateParam}
+                sessionId={workout.id}
+                exercises={data.exercises}
+                existingLog={log?.exercise_logs}
+                logUpdatedAt={log?.updated_at}
+                previousLog={data.previousLog?.exercise_logs}
+                lastSetWeights={data.lastSetWeights}
+                preferredWeightUnit={profilePrefs?.weight_unit}
+                preferredDistanceUnit={profilePrefs?.distance_unit}
+                onComplete={() => setViewingCompletedLog(false)}
+              />
+            </View>
+          )}
+
+          {/* No log yet means the day is still movable, today, ahead or missed.
             The server decides whether it actually is (a log, a program change). */}
-        {uid && !log && (
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/(tabs)/workout/reschedule", params: { date: dateParam } })}
-            style={styles.moveLink}
-            accessibilityRole="button"
-          >
-            <Text style={styles.moveLinkText}>
-              {isToday || isFuture ? "Move this workout" : "Reschedule this missed workout"}
-            </Text>
-          </TouchableOpacity>
-        )}
+          {uid && !log && (
+            <TouchableOpacity
+              onPress={() =>
+                router.push({ pathname: "/(tabs)/workout/reschedule", params: { date: dateParam } })
+              }
+              style={styles.moveLink}
+              accessibilityRole="button"
+            >
+              <Text style={styles.moveLinkText}>
+                {isToday || isFuture ? "Move this workout" : "Reschedule this missed workout"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

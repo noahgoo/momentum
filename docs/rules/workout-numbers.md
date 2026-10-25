@@ -150,7 +150,10 @@ rewrite a stored number.
 ## P8. The client logs actuals; empty means "not entered"
 
 `set_logs.reps` is the number the client typed, exactly like `weight`. Inputs
-start empty and show the target only as ghost text (P2). Checking a set off with
-nothing typed records `completed = true` with null reps/weight — "did it as
-prescribed" is read from the snapshot beside it, never invented into the actual.
+start empty and show the target only as ghost text (P2). Checking a set (or a whole
+exercise) off with a field still empty copies that field's target into the
+actual — a deliberate product decision, made in `fillEmptyFromTarget` in
+`WorkoutLogger.tsx`. It only fills fields that are empty and never sets
+`weight_entered`, so a typed weight is still told apart from an autofilled one.
+Autofilled fields are tracked on the draft (`autofilled`); un-checking clears them, while anything the client typed is kept.
 Time entry is digit-shift (type 2430 → 24:30) so "30" can only mean 0:30.

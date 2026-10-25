@@ -13,6 +13,7 @@ import { useAuth } from "../../../lib/auth";
 import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useDraft } from "../../../lib/useDraft";
 import { suggestTargets } from "../../../lib/moveSuggestions";
+import { randomUuid } from "../../../lib/uuid";
 import {
   useCancelScheduleMoves,
   useMovableDays,
@@ -61,7 +62,7 @@ export default function RescheduleScreen() {
   const [restoredNote, setRestoredNote] = useState(false);
   // One id per submission attempt, kept across retries so the server can
   // recognise a double tap or a retry (C4). Reset only once a request lands.
-  const batchId = useRef<string>(crypto.randomUUID());
+  const batchId = useRef<string>(randomUuid());
   const seeded = useRef(false);
 
   const missed = data?.missed ?? [];
@@ -129,7 +130,7 @@ export default function RescheduleScreen() {
       setOutcome(result);
       draft.clear();
       setTargets({});
-      batchId.current = crypto.randomUUID();
+      batchId.current = randomUuid();
     } catch {
       // The error is shown from request.error; the draft and batch id stay so
       // the client can fix the selection and send again.

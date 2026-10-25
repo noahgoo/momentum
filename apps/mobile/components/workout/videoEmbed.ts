@@ -81,3 +81,16 @@ export function videoFileHtml(fileUrl: string): string {
 <style>html,body{margin:0;height:100%;background:#000}video{width:100%;height:100%;object-fit:contain}</style></head>
 <body><video src="${safe}" controls playsinline autoplay></video></body></html>`;
 }
+
+/**
+ * A page that frames an embed player. Loading the embed URL directly sends no
+ * Referer, which YouTube rejects as "Error 153: Video player configuration
+ * error"; framing it inside a page served from the player's own origin (see
+ * VideoModal's `baseUrl`) gives the player the referrer it checks for.
+ */
+export function embedHtml(embedUrl: string): string {
+  const safe = embedUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style></head>
+<body><iframe src="${safe}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>`;
+}

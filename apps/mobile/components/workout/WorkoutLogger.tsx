@@ -56,6 +56,8 @@ interface WorkoutLoggerProps {
   onComplete?: () => void;
 }
 
+type AutofillField = "reps" | "weight" | "actualSeconds" | "actualDistance";
+
 interface SetDraft {
   setNumber: number;
   completed: boolean;
@@ -71,6 +73,8 @@ interface SetDraft {
   actualDistance?: number;
   /** Unit the distance is in: the prescription's, else the client's preference. */
   distanceUnit?: DistanceUnit;
+  /** Fields filled from the target on check-off and not touched since; un-checking clears them. */
+  autofilled?: AutofillField[];
   /** This set's target at render time, snapshotted onto the log on save (P1). */
   prescribed?: SetConfig;
 }
@@ -131,6 +135,40 @@ function buildInitialDrafts(
       sets,
     };
   });
+}
+
+/**
+ * Checking a set off with a field left empty means "did it as prescribed", so
+ * the target becomes the actual. `weightEntered` is deliberately left alone: it
+ * stays false for a filled-in weight, which is how a typed lift is still told
+ * apart from a check-off (P2).
+ */
+function fillEmptyFromTarget(set: SetDraft, mode: ExerciseMode): SetDraft {
+  const t = set.prescribed;
+  if (!t) return set;
+  const wanted: [AutofillField, number | undefined][] = [
+    ["reps", mode === "reps" ? t.reps : undefined],
+    ["actualSeconds", mode === "time" || mode === "distance" ? t.seconds : undefined],
+    ["actualDistance", mode === "distance" ? t.distance : undefined],
+    ["weight", mode !== "distance" ? t.weight : undefined],
+  ];
+  const next = { ...set };
+  const filled = new Set(set.autofilled);
+  for (const [field, value] of wanted) {
+    if (next[field] == null && value != null) {
+      next[field] = value;
+      filled.add(field);
+    }
+  }
+  return filled.size > 0 ? { ...next, autofilled: [...filled] } : next;
+}
+
+/** Undoes fillEmptyFromTarget: fields the client never touched go back to empty. */
+function clearAutofilled(set: SetDraft): SetDraft {
+  if (!set.autofilled?.length) return set;
+  const next = { ...set, autofilled: undefined };
+  for (const field of set.autofilled) next[field] = undefined;
+  return next;
 }
 
 function getPrevSets(previousLog: ExerciseLogWithSets[] | undefined, exerciseId: string | null) {
@@ -231,7 +269,11 @@ export function WorkoutLogger({
           ? ex
           : {
               ...ex,
-              sets: ex.sets.map((s, si) => (si !== setIdx ? s : { ...s, completed: !s.completed })),
+              sets: ex.sets.map((s, si) => {
+                if (si !== setIdx) return s;
+                const completed = !s.completed;
+                return { ...(completed ? fillEmptyFromTarget(s, ex.mode) : clearAutofilled(s)), completed };
+              }),
             }
       ),
       { syncToServer: true }
@@ -243,7 +285,13 @@ export function WorkoutLogger({
       drafts.map((ex, ei) => {
         if (ei !== exIdx) return ex;
         const shouldComplete = !ex.sets.every((s) => s.completed);
-        return { ...ex, sets: ex.sets.map((s) => ({ ...s, completed: shouldComplete })) };
+        return {
+          ...ex,
+          sets: ex.sets.map((s) => ({
+            ...(shouldComplete ? (s.completed ? s : fillEmptyFromTarget(s, ex.mode)) : clearAutofilled(s)),
+            completed: shouldComplete,
+          })),
+        };
       }),
       { syncToServer: true }
     );
@@ -253,7 +301,17 @@ export function WorkoutLogger({
     // Local draft only — typing must not hit the network mid-keystroke.
     updateDrafts(
       drafts.map((ex, ei) =>
-        ei !== exIdx ? ex : { ...ex, sets: ex.sets.map((s, si) => (si !== setIdx ? s : { ...s, ...patch })) }
+        ei !== exIdx
+          ? ex
+          : {
+              ...ex,
+              sets: ex.sets.map((s, si) => {
+                if (si !== setIdx) return s;
+                // Typing over an autofilled field makes it the client's own.
+                const autofilled = s.autofilled?.filter((f) => !(f in patch));
+                return { ...s, ...patch, autofilled: autofilled?.length ? autofilled : undefined };
+              }),
+            }
       )
     );
   }
