@@ -1,13 +1,20 @@
 import { SortableList, type SortableDragHandleProps } from "../builder/SortableList";
-import type { BuilderPhase } from "../../queries/usePrograms";
 
-export interface PhaseListPanelProps {
-  phases: BuilderPhase[];
+/** The least a row needs: the library builder's and the client editor's phases both fit. */
+export interface PhaseListItem {
+  id: string;
+  name: string;
+}
+
+export interface PhaseListPanelProps<T extends PhaseListItem> {
+  phases: T[];
   selectedId: string | null;
-  onReorder: (next: BuilderPhase[]) => void;
+  onReorder: (next: T[]) => void;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
+  /** False greys out every remove button, e.g. when only one phase is left. */
+  canRemove?: boolean;
 }
 
 function PhaseRow({
@@ -15,12 +22,14 @@ function PhaseRow({
   isSelected,
   onSelect,
   onRemove,
+  canRemove,
   dragHandleProps,
 }: {
-  phase: BuilderPhase;
+  phase: PhaseListItem;
   isSelected: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  canRemove: boolean;
   dragHandleProps: SortableDragHandleProps;
 }) {
   return (
@@ -48,11 +57,12 @@ function PhaseRow({
       <span className="flex-1 truncate text-sm font-medium">{phase.name || "Unnamed phase"}</span>
       <button
         type="button"
+        disabled={!canRemove}
         onClick={(e) => {
           e.stopPropagation();
           onRemove();
         }}
-        className={`-my-2 flex h-10 w-8 shrink-0 items-center justify-center text-xs transition-colors lg:my-0 lg:h-auto lg:w-auto ${
+        className={`-my-2 flex h-10 w-8 shrink-0 items-center justify-center text-xs transition-colors disabled:opacity-30 lg:my-0 lg:h-auto lg:w-auto ${
           isSelected ? "text-white/70 hover:text-white" : "text-[var(--ink-30)] hover:text-[var(--bad)]"
         }`}
         aria-label="Remove phase"
@@ -69,7 +79,15 @@ function PhaseRow({
  * per its JSDoc contract — see that file for the drag-handle-props wiring
  * rule (spread onto the handle only, never the whole row).
  */
-export function PhaseListPanel({ phases, selectedId, onReorder, onSelect, onAdd, onRemove }: PhaseListPanelProps) {
+export function PhaseListPanel<T extends PhaseListItem>({
+  phases,
+  selectedId,
+  onReorder,
+  onSelect,
+  onAdd,
+  onRemove,
+  canRemove = true,
+}: PhaseListPanelProps<T>) {
   return (
     <div className="space-y-3">
       {phases.length === 0 ? (
@@ -86,6 +104,7 @@ export function PhaseListPanel({ phases, selectedId, onReorder, onSelect, onAdd,
               isSelected={phase.id === selectedId}
               onSelect={() => onSelect(phase.id)}
               onRemove={() => onRemove(phase.id)}
+              canRemove={canRemove}
               dragHandleProps={dragHandleProps}
             />
           )}

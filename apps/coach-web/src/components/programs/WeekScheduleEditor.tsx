@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { DayOfWeek, WeekSchedule, Workout } from "@momentum/shared";
 import { Link } from "react-router";
 import { DAYS, DAY_LABELS } from "./dayConstants";
+import { DayPills, WeekCard } from "./ScheduleParts";
 import type { SessionSlots } from "../../queries/usePrograms";
 
 export interface WeekScheduleEditorProps {
@@ -90,22 +91,7 @@ export function WeekScheduleEditor({
     <div className="space-y-6">
       <div>
         <label className="mb-2 block text-xs font-medium text-[var(--ink-70)]">Active days</label>
-        <div className="flex flex-wrap gap-2">
-          {DAYS.map((day) => (
-            <button
-              key={day}
-              type="button"
-              onClick={() => onToggleDay(day)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeDays.includes(day)
-                  ? "bg-[var(--blue-deep)] text-white"
-                  : "border border-[var(--ink-08)] bg-white text-[var(--ink-70)] hover:border-[var(--blue)]"
-              }`}
-            >
-              {DAY_LABELS[day]}
-            </button>
-          ))}
-        </div>
+        <DayPills active={activeDays} onToggle={onToggleDay} />
       </div>
 
       {orderedActiveDays.length === 0 ? (
@@ -133,10 +119,7 @@ export function WeekScheduleEditor({
             )}
           </div>
           {Array.from({ length: Math.max(weeks, 0) }, (_, i) => i + 1).map((week) => (
-            <div key={week} className="rounded-xl border border-[var(--ink-08)] bg-[var(--paper)] p-4">
-              <p className="mb-3 text-xs font-semibold text-[var(--ink-50)]">
-                {weekLabel} {week}
-              </p>
+            <WeekCard key={week} title={`${weekLabel} ${week}`}>
               <div className="space-y-2">
                 {orderedActiveDays.map((day) => (
                   <div key={day} className="flex items-center gap-3">
@@ -182,7 +165,7 @@ export function WeekScheduleEditor({
                   </div>
                 ))}
               </div>
-            </div>
+            </WeekCard>
           ))}
         </div>
       )}

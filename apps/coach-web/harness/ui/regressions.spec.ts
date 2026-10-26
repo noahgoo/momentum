@@ -182,9 +182,14 @@ test.describe("per-client program editing", () => {
     // library source.
     await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
 
-    await expect(page.getByRole("heading", { name: "Edit client program" })).toBeVisible();
-    await expect(page.getByTestId("day-0-1-monday")).toContainText("Upper Body Push A");
-    await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Imported Legs");
+    await expect(page.getByText("This is this client's own copy")).toBeVisible();
+    // The dropdown holds the day itself, not a library id, so a day with no
+    // library source reads as what it is instead of Rest.
+    const legs = page.getByTestId("day-0-1-wednesday").getByRole("combobox");
+    await expect(legs.locator("option:checked")).toHaveText("Imported Legs");
+    await expect(page.getByTestId("day-0-1-monday").getByRole("combobox").locator("option:checked")).toHaveText(
+      "Upper Body Push A"
+    );
     await expect(page.getByRole("button", { name: "Save program" })).toBeDisabled();
   });
 
@@ -194,8 +199,11 @@ test.describe("per-client program editing", () => {
     // Mon Oct 19 start: every week is a calendar week, so dates ascend
     // Mon..Sun inside it (a midweek start used to list Mon Oct 26 above
     // Tue Oct 20).
+    await expect(page.getByRole("paragraph").filter({ hasText: "Week 1" })).toContainText("Oct 19 – Oct 25");
     await expect(page.getByTestId("day-0-1-monday")).toContainText("Oct 19");
     await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Oct 21");
+    // Only the weekdays in use show to start with; the pill brings one back.
+    await page.getByRole("button", { name: "Sun", exact: true }).click();
     await expect(page.getByTestId("day-0-1-sunday")).toContainText("Oct 25");
     await expect(page.getByTestId("day-0-2-monday")).toContainText("Oct 26");
     await expect(page.getByTestId("day-0-2-wednesday")).toContainText("Oct 28");
@@ -204,33 +212,41 @@ test.describe("per-client program editing", () => {
   test("a phased client instance lists its days under its phase", async ({ page }) => {
     await visit(page, `/library/programs/${PHASED_INSTANCE_PROGRAM_ID}`);
 
-    await expect(page.getByLabel("Phase 1")).toHaveValue("Base");
+    await expect(page.getByLabel("Phase name")).toHaveValue("Base");
     await expect(page.getByTestId("day-0-1-monday")).toContainText("Upper Body Push A");
-    await expect(page.getByRole("link", { name: "Edit day" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Edit", exact: true }).first()).toBeVisible();
   });
 
   test("a coach can add, swap and remove days, then save", async ({ page }) => {
     await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
 
-    // Add a library workout on a rest day.
+    // Add a library workout on a rest day: bring the weekday back, then pick.
+    await page.getByRole("button", { name: "Tue", exact: true }).click();
     const tuesday = page.getByTestId("day-0-1-tuesday");
-    await tuesday.getByRole("button", { name: "+ Add workout" }).click();
-    await tuesday.getByLabel("Workout").selectOption({ label: "Conditioning — Intervals & Accessory Circuit" });
-    await tuesday.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(tuesday).toContainText("Conditioning — Intervals & Accessory Circuit");
+    await tuesday.getByRole("combobox").selectOption({ label: "Conditioning — Intervals & Accessory Circuit" });
+    await expect(tuesday.getByRole("combobox").locator("option:checked")).toHaveText(
+      "Conditioning — Intervals & Accessory Circuit"
+    );
     await expect(tuesday).toContainText("unsaved");
 
     // Moving Monday onto Wednesday swaps the two, contents and all.
     const monday = page.getByTestId("day-0-1-monday");
-    await monday.getByRole("button", { name: "Move", exact: true }).click();
-    await monday.getByLabel("Day").selectOption("wednesday");
+    await monday.getByRole("button", { name: "Day actions" }).click();
+    await monday.getByRole("menuitem", { name: "Move", exact: true }).click();
+    await monday.getByLabel("Day", { exact: true }).selectOption("wednesday");
     await monday.getByRole("button", { name: "Swap" }).click();
-    await expect(page.getByTestId("day-0-1-monday")).toContainText("Imported Legs");
-    await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Upper Body Push A");
+    await expect(page.getByTestId("day-0-1-monday").getByRole("combobox").locator("option:checked")).toHaveText(
+      "Imported Legs"
+    );
+    await expect(page.getByTestId("day-0-1-wednesday").getByRole("combobox").locator("option:checked")).toHaveText(
+      "Upper Body Push A"
+    );
 
     // Removing turns the day back into rest.
-    await page.getByTestId("day-0-1-monday").getByRole("button", { name: "Remove", exact: true }).click();
-    await expect(page.getByTestId("day-0-1-monday")).toContainText("Rest");
+    page.once("dialog", (d) => void d.accept());
+    await page.getByTestId("day-0-1-monday").getByRole("button", { name: "Day actions" }).click();
+    await page.getByTestId("day-0-1-monday").getByRole("menuitem", { name: "Remove" }).click();
+    await expect(page.getByTestId("day-0-1-monday").getByRole("combobox")).toHaveValue("");
 
     const save = page.getByRole("button", { name: "Save program" });
     await expect(save).toBeEnabled();
@@ -244,12 +260,78 @@ test.describe("per-client program editing", () => {
       (window as unknown as { __harness: { failWrites: boolean } }).__harness.failWrites = true;
     });
 
-    await page.getByTestId("day-0-1-monday").getByRole("button", { name: "Remove", exact: true }).click();
+    page.once("dialog", (d) => void d.accept());
+    await page.getByTestId("day-0-1-monday").getByRole("button", { name: "Day actions" }).click();
+    await page.getByTestId("day-0-1-monday").getByRole("menuitem", { name: "Remove" }).click();
     await page.getByRole("button", { name: "Save program" }).click();
 
     await expect(page.getByText("network unreachable")).toBeVisible();
-    await expect(page.getByTestId("day-0-1-monday")).toContainText("Rest");
+    await expect(page.getByTestId("day-0-1-monday").getByRole("combobox")).toHaveValue("");
     await expect(page.getByRole("button", { name: "Save program" })).toBeEnabled();
+  });
+});
+
+test.describe("client program editor layout", () => {
+  test("replacing a saved day through its dropdown asks first, and declining keeps it", async ({ page }) => {
+    // The dropdown is shaped like the library builder's, where picking a
+    // workout is harmless. Here it REPLACES the client's own copy and drops its
+    // edits, so a saved day must confirm.
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
+    const messages: string[] = [];
+    page.on("dialog", (d) => {
+      messages.push(d.message());
+      void d.dismiss();
+    });
+
+    const monday = page.getByTestId("day-0-1-monday").getByRole("combobox");
+    await monday.selectOption({ label: "Conditioning — Intervals & Accessory Circuit" });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("Upper Body Push A");
+    await expect(monday.locator("option:checked")).toHaveText("Upper Body Push A");
+    await expect(page.getByRole("button", { name: "Save program" })).toBeDisabled();
+  });
+
+  test("a day added this edit can be opened for editing, which saves the program first", async ({ page }) => {
+    // A new day has no session until the program is saved, so Edit used to be
+    // missing on exactly the days a coach most wants to tailor.
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
+    await page.getByRole("button", { name: "Tue", exact: true }).click();
+    const tuesday = page.getByTestId("day-0-1-tuesday");
+    await tuesday.getByRole("combobox").selectOption({ label: "Conditioning — Intervals & Accessory Circuit" });
+    await expect(tuesday).toContainText("unsaved");
+    await expect(page.getByRole("button", { name: "Save program" })).toBeEnabled();
+
+    await tuesday.getByRole("button", { name: "Edit", exact: true }).click();
+
+    // Edit saved the program (nothing is left to save). The harness holds reads
+    // open, so the re-read that would hand back the new session to navigate to
+    // never lands here: following the link is not covered by this check.
+    await expect(page.getByRole("button", { name: "Save program" })).toBeDisabled();
+  });
+
+  test("a weekday holding a workout can't be hidden by its pill", async ({ page }) => {
+    await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
+
+    await expect(page.getByRole("button", { name: "Mon", exact: true })).toBeDisabled();
+    // An empty weekday toggles its rows off and on.
+    await page.getByRole("button", { name: "Fri", exact: true }).click();
+    await expect(page.getByTestId("day-0-1-friday")).toBeVisible();
+    await page.getByRole("button", { name: "Fri", exact: true }).click();
+    await expect(page.getByTestId("day-0-1-friday")).toHaveCount(0);
+  });
+
+  test("the phase list switches which phase's schedule is shown", async ({ page }) => {
+    await visit(page, `/library/programs/${PHASED_INSTANCE_PROGRAM_ID}`);
+
+    await page.getByRole("button", { name: "+ Add phase" }).click();
+    await expect(page.getByLabel("Phase name")).toHaveValue("Phase 2");
+    await page.getByText("Base", { exact: true }).click();
+    await expect(page.getByLabel("Phase name")).toHaveValue("Base");
+    // Removing the empty new phase needs no confirm; the last one left can't go.
+    await page.getByRole("button", { name: "Remove phase" }).nth(1).click();
+    await expect(page.getByRole("button", { name: "Remove phase" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Remove phase" })).toBeDisabled();
   });
 });
 

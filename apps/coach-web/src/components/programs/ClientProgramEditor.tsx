@@ -1,28 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { addDaysStr, type DayOfWeek } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
 import { draftKey, useDraft } from "../../lib/useDraft";
 import { useUnsavedChangesGuard } from "../../lib/useUnsavedChangesGuard";
 import { RestoreBanner } from "../builder/RestoreBanner";
+import { SaveAsWorkoutDialog } from "../sessions/SaveAsWorkoutDialog";
+import { useClientSummaries } from "../../queries/useClientSummaries";
 import { useWorkouts } from "../../queries/useWorkouts";
+import { ClientDayRow } from "./ClientDayRow";
+import { PhaseListPanel } from "./PhaseListPanel";
+import { DAYS, DAY_LABELS as DAY_LABEL } from "./dayConstants";
+import { DayPills, WeekCard } from "./ScheduleParts";
 import {
   describeSaveClientProgramError,
   useClientProgram,
   useSaveClientProgram,
+  type ClientProgram,
   type EditorDayContent,
 } from "../../queries/useClientProgram";
 
-const DAYS: DayOfWeek[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-const DAY_LABEL: Record<DayOfWeek, string> = {
-  monday: "Mon",
-  tuesday: "Tue",
-  wednesday: "Wed",
-  thursday: "Thu",
-  friday: "Fri",
-  saturday: "Sat",
-  sunday: "Sun",
-};
 
 interface EditorPhase {
   /** Stable within this editor; equals the row id for a saved phase. */
@@ -97,10 +94,17 @@ function slotDate(start: string, globalWeek: number, day: DayOfWeek): string {
   return DATE_FORMAT.format(parseDate(addDaysStr(start, (globalWeek - 1) * 7 + DAYS.indexOf(day))));
 }
 
-/** Which inline form, if any, is open under a row. */
-type OpenForm =
-  | { kind: "pick"; slot: Slot; replacing: string | null }
-  | { kind: "move"; dayKey: string };
+/** The inline form open under a row. Only Move has one; add/replace live in the row's dropdown. */
+type OpenForm = { kind: "move"; dayKey: string };
+
+/** "Aug 25 – Aug 31" for a program week (global week number). */
+function weekRange(start: string, globalWeek: number): string {
+  const first = addDaysStr(start, (globalWeek - 1) * 7);
+  return `${DATE_FORMAT.format(parseDate(first))} – ${DATE_FORMAT.format(parseDate(addDaysStr(first, 6)))}`;
+}
+
+/** Key of the one scope a flat program has, in the pill-visibility map. */
+const FLAT_SCOPE = "flat";
 
 /**
  * Editor for ONE CLIENT'S copy of a program. Assigning deep-copies a program
@@ -121,6 +125,7 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
   const { data: program, isLoading, isError, refetch } = useClientProgram(programId);
   const { data: workouts = [] } = useWorkouts("workout", program?.clientId);
   const save = useSaveClientProgram();
+  const { data: clients = [] } = useClientSummaries();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -134,6 +139,10 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [dismissedRestore, setDismissedRestore] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  /** Per scope, the weekdays whose rows are shown. A view filter only: never saved. */
+  const [shownDays, setShownDays] = useState<Record<string, DayOfWeek[]>>({});
+  const [saveAs, setSaveAs] = useState<{ sessionId: string; name: string } | null>(null);
 
   // Key withheld until the server copy is known; see ProgramBuilderPage.
   const draft = useDraft<ClientProgramDraft>(
@@ -158,6 +167,11 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
         content: { kind: "session", sessionId: d.sessionId, name: d.name },
       }))
     );
+    // Start with the weekdays this program already uses, so a Mon/Wed/Fri
+    // client opens to three rows a week rather than seven.
+    const used: Record<string, Set<DayOfWeek>> = {};
+    for (const d of program.days) (used[d.phaseId ?? FLAT_SCOPE] ??= new Set()).add(d.day);
+    setShownDays(Object.fromEntries(Object.entries(used).map(([k, v]) => [k, DAYS.filter((day) => v.has(day))])));
     setHydrated(true);
   }, [program, hydrated]);
 
@@ -250,26 +264,14 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
     if (dropped.length > 0) setDays((prev) => prev.filter((d) => !dropped.includes(d)));
   }
 
-  function addPhase() {
-    edit(setPhases)([...phases, { key: newKey(), id: null, name: `Phase ${phases.length + 1}`, weeks: 4 }]);
-  }
-
   function removePhase(key: string) {
     const dropped = days.filter((d) => d.phaseKey === key);
     if (phases.length === 1) return;
     if (!confirmDrop(dropped, "Removing this phase")) return;
     edit(setPhases)(phases.filter((p) => p.key !== key));
     setDays((prev) => prev.filter((d) => d.phaseKey !== key));
+    if (selectedKey === key) setSelectedKey(null);
     setOpenForm(null);
-  }
-
-  function movePhase(key: string, by: -1 | 1) {
-    const i = phases.findIndex((p) => p.key === key);
-    const j = i + by;
-    if (j < 0 || j >= phases.length) return;
-    const next = [...phases];
-    [next[i], next[j]] = [next[j]!, next[i]!];
-    edit(setPhases)(next);
   }
 
   // ---- Days ----------------------------------------------------------------
@@ -313,8 +315,9 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
         ? "Weeks must be at least 1."
         : null;
 
-  async function handleSave() {
-    if (!program || validationError) return;
+  /** Saves the program. Returns the re-read server copy, or null if it didn't save. */
+  async function handleSave(): Promise<ClientProgram | null> {
+    if (!program || validationError) return null;
     const phaseIndex = new Map(phases.map((p, i) => [p.key, i]));
     try {
       await save.mutateAsync({
@@ -335,7 +338,7 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
     } catch (error) {
       // The draft stays: a failed save is when the local copy matters most.
       setSaveError(describeSaveClientProgramError(error));
-      return;
+      return null;
     }
     setSaveError(null);
     draft.clear();
@@ -344,9 +347,29 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
     // Re-read the server copy so new days get their session ids (and so an
     // Edit link for them appears). Awaited: re-hydrating from the cached copy
     // before the refetch lands would put the pre-save program back on screen.
-    await refetch();
+    const fresh = await refetch();
     setHydrated(false);
     setSavedAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    return fresh.data ?? null;
+  }
+
+  /**
+   * Opens the day editor for a day that exists only in this edit. A day has no
+   * session (so nothing to open) until the program is saved, so this saves
+   * first — every pending change goes with it — then follows the new session.
+   */
+  async function saveThenEditDay(slot: Slot) {
+    const phaseIndex = phases.findIndex((p) => p.key === slot.phaseKey);
+    const fresh = await handleSave();
+    if (!fresh) return;
+    const created = fresh.days.find(
+      (d) =>
+        d.week === slot.week &&
+        d.day === slot.day &&
+        (slot.phaseKey === null ? d.phaseId === null : d.phaseId === (fresh.phases[phaseIndex]?.id ?? null))
+    );
+    if (created) navigate(`/library/programs/${programId}/days/${created.sessionId}`);
+    else setSaveError("Saved, but that day couldn't be opened — reload the page and try Edit again.");
   }
 
   // ---- Render --------------------------------------------------------------
@@ -378,8 +401,26 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
 
   const libraryWorkouts = workouts.filter((w) => !w.client_id);
   const shelfWorkouts = workouts.filter((w) => w.client_id);
+  const clientName = clients.find((c) => c.client_id === program.clientId)?.display_name ?? null;
   const inputClass =
     "w-full rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--blue-deep)]";
+
+  const activeScope = scopes.find((s) => s.phaseKey === selectedKey) ?? scopes[0]!;
+  const scopeKey = activeScope.phaseKey ?? FLAT_SCOPE;
+  // Weekdays holding a workout always show (and can't be hidden); the pills
+  // only add or remove EMPTY rows. A scope with no saved choice yet (a phase
+  // just added, or flat <-> phased) starts with every weekday.
+  const withContent = new Set(days.filter((d) => d.phaseKey === activeScope.phaseKey).map((d) => d.day));
+  const chosen = shownDays[scopeKey] ?? DAYS;
+  const visibleDays = DAYS.filter((d) => withContent.has(d) || chosen.includes(d));
+
+  function toggleWeekday(day: DayOfWeek) {
+    if (withContent.has(day)) return;
+    const next = visibleDays.includes(day) ? visibleDays.filter((d) => d !== day) : [...visibleDays, day];
+    setShownDays((prev) => ({ ...prev, [scopeKey]: DAYS.filter((d) => next.includes(d)) }));
+  }
+
+  const phaseItems = phases.map((p) => ({ id: p.key, name: p.name, weeks: p.weeks }));
 
   return (
     <div className="pb-36 lg:pb-28">
@@ -393,7 +434,10 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
         >
           &larr; Back
         </button>
-        <h1 className="mt-2 font-display text-2xl text-[var(--ink)]">Edit client program</h1>
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-3">
+          <h1 className="font-display text-2xl text-[var(--ink)]">Edit program</h1>
+          {clientName && <span className="text-sm text-[var(--ink-50)]">{clientName}</span>}
+        </div>
         <p className="mt-1 max-w-prose text-sm text-[var(--ink-50)]">
           This is this client&apos;s own copy. Changes here reach only them — never the template or anyone else on
           it. Past workout logs are always kept.
@@ -404,230 +448,180 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
         <RestoreBanner onDiscard={discardDraft} onDismiss={() => setDismissedRestore(true)} />
       )}
 
-      <div className="space-y-6">
-        <div className="admin-card space-y-4 p-5">
-          <div>
-            <label htmlFor="cp-name" className="mb-1 block text-xs font-medium text-[var(--ink-70)]">
-              Name
-            </label>
-            <input id="cp-name" value={name} onChange={(e) => edit(setName)(e.target.value)} className={inputClass} />
-          </div>
-          <div>
-            <label htmlFor="cp-description" className="mb-1 block text-xs font-medium text-[var(--ink-70)]">
-              Description
-            </label>
-            <textarea
-              id="cp-description"
-              rows={2}
-              value={description}
-              onChange={(e) => edit(setDescription)(e.target.value)}
-              placeholder="Optional"
-              className={inputClass}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--ink-08)] bg-[var(--paper)] px-3 py-2.5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
+        <div className="min-w-0 space-y-6">
+          <div className="admin-card space-y-4 p-5">
             <div>
-              <p className="text-sm font-medium text-[var(--ink-70)]">Phased program</p>
-              <p className="text-xs text-[var(--ink-30)]">
-                {phased ? "Sequential phases, each with its own weeks." : "One week-by-week schedule."} Switching
-                keeps every day.
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={phased}
-              aria-label="Phased program"
-              onClick={togglePhased}
-              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                phased ? "bg-[var(--blue-deep)]" : "bg-[var(--ink-08)]"
-              }`}
-            >
-              <span
-                className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                  phased ? "translate-x-[1.375rem]" : "translate-x-0.5"
-                }`}
-              />
-            </button>
-          </div>
-          {!phased && (
-            <div className="max-w-[160px]">
-              <label htmlFor="cp-weeks" className="mb-1 block text-xs font-medium text-[var(--ink-70)]">
-                Weeks
+              <label htmlFor="cp-name" className="mb-1 block text-xs font-medium text-[var(--ink-70)]">
+                Program name
               </label>
-              <input
-                id="cp-weeks"
-                type="number"
-                min={1}
-                max={52}
-                value={flatWeeks > 0 ? flatWeeks : ""}
-                onChange={(e) => setScopeWeeks(null, e.target.value)}
+              <input id="cp-name" value={name} onChange={(e) => edit(setName)(e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor="cp-description" className="mb-1 block text-xs font-medium text-[var(--ink-70)]">
+                Description (optional)
+              </label>
+              <textarea
+                id="cp-description"
+                rows={2}
+                value={description}
+                onChange={(e) => edit(setDescription)(e.target.value)}
+                placeholder="Brief description"
                 className={inputClass}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--ink-08)] bg-[var(--paper)] px-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium text-[var(--ink-70)]">Phased program</p>
+                <p className="text-xs text-[var(--ink-30)]">
+                  {phased ? "Sequential phases, each with its own weeks." : "One week-by-week schedule."} Switching
+                  keeps every day.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={phased}
+                aria-label="Phased program"
+                onClick={togglePhased}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                  phased ? "bg-[var(--blue-deep)]" : "bg-[var(--ink-08)]"
+                }`}
+              >
+                <span
+                  className={`absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                    phased ? "translate-x-[1.375rem]" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {phased && (
+            <div>
+              <div className="mb-2 flex items-baseline justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--ink-50)]">Phases</h2>
+                <span className="text-xs text-[var(--ink-30)]">{totalWeeks} wks total</span>
+              </div>
+              <PhaseListPanel
+                phases={phaseItems}
+                selectedId={activeScope.phaseKey}
+                canRemove={phases.length > 1}
+                onReorder={(next) => {
+                  const byKey = new Map(phases.map((p) => [p.key, p]));
+                  edit(setPhases)(next.map((item) => byKey.get(item.id)!));
+                }}
+                onSelect={setSelectedKey}
+                onAdd={() => {
+                  const key = newKey();
+                  edit(setPhases)([...phases, { key, id: null, name: `Phase ${phases.length + 1}`, weeks: 4 }]);
+                  setSelectedKey(key);
+                }}
+                onRemove={removePhase}
               />
             </div>
           )}
         </div>
 
-        {scopes.map(({ phaseKey, phase, index, weeks, weekOffset }) => (
-          <section key={phaseKey ?? "flat"} className="admin-card p-5">
-            {phase && (
-              <div className="mb-4 flex flex-wrap items-end gap-3">
-                <div className="min-w-0 flex-1 basis-48">
-                  <label
-                    htmlFor={`cp-phase-${phase.key}`}
-                    className="mb-1 block text-xs font-medium text-[var(--ink-70)]"
-                  >
-                    Phase {index + 1}
-                  </label>
-                  <input
-                    id={`cp-phase-${phase.key}`}
-                    value={phase.name}
-                    onChange={(e) =>
-                      edit(setPhases)(phases.map((p) => (p.key === phase.key ? { ...p, name: e.target.value } : p)))
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div className="w-24">
-                  <label
-                    htmlFor={`cp-phase-weeks-${phase.key}`}
-                    className="mb-1 block text-xs font-medium text-[var(--ink-70)]"
-                  >
-                    Weeks
-                  </label>
-                  <input
-                    id={`cp-phase-weeks-${phase.key}`}
-                    type="number"
-                    min={1}
-                    max={52}
-                    value={phase.weeks > 0 ? phase.weeks : ""}
-                    onChange={(e) => setScopeWeeks(phase.key, e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => movePhase(phase.key, -1)}
-                    aria-label="Move phase earlier"
-                    className="admin-secondary px-3 py-2 text-xs disabled:opacity-40"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === phases.length - 1}
-                    onClick={() => movePhase(phase.key, 1)}
-                    aria-label="Move phase later"
-                    className="admin-secondary px-3 py-2 text-xs disabled:opacity-40"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    disabled={phases.length === 1}
-                    onClick={() => removePhase(phase.key)}
-                    className="admin-secondary px-3 py-2 text-xs text-[var(--bad)] disabled:opacity-40"
-                  >
-                    Remove phase
-                  </button>
-                </div>
+        <div className="admin-card min-w-0 space-y-6 p-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {activeScope.phase && (
+              <div className="min-w-0 sm:col-span-2">
+                <label
+                  htmlFor={`cp-phase-${activeScope.phase.key}`}
+                  className="mb-1 block text-xs font-medium text-[var(--ink-70)]"
+                >
+                  Phase name
+                </label>
+                <input
+                  id={`cp-phase-${activeScope.phase.key}`}
+                  value={activeScope.phase.name}
+                  onChange={(e) =>
+                    edit(setPhases)(
+                      phases.map((p) => (p.key === activeScope.phase!.key ? { ...p, name: e.target.value } : p))
+                    )
+                  }
+                  className={inputClass}
+                />
               </div>
             )}
+            <div className="max-w-[160px]">
+              <label
+                htmlFor={activeScope.phase ? `cp-phase-weeks-${activeScope.phase.key}` : "cp-weeks"}
+                className="mb-1 block text-xs font-medium text-[var(--ink-70)]"
+              >
+                Weeks
+              </label>
+              <input
+                id={activeScope.phase ? `cp-phase-weeks-${activeScope.phase.key}` : "cp-weeks"}
+                type="number"
+                min={1}
+                max={52}
+                value={activeScope.weeks > 0 ? activeScope.weeks : ""}
+                onChange={(e) => setScopeWeeks(activeScope.phaseKey, e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          </div>
 
-            <div className="space-y-4">
-              {Array.from({ length: weeks }, (_, w) => w + 1).map((week) => (
-                <div key={week}>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--ink-50)]">
+          <div>
+            <p className="mb-2 text-xs font-medium text-[var(--ink-70)]">Training days</p>
+            <DayPills active={visibleDays} locked={withContent} onToggle={toggleWeekday} />
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-[var(--ink-70)]">Workout schedule</p>
+            {Array.from({ length: activeScope.weeks }, (_, w) => w + 1).map((week) => (
+              <WeekCard
+                key={week}
+                title={
+                  <>
                     Week {week}
-                  </h3>
-                  <ul className="divide-y divide-[var(--ink-08)] rounded-lg border border-[var(--ink-08)]">
-                    {DAYS.map((day) => {
-                      const slot: Slot = { phaseKey, week, day };
-                      const entry = dayAt(slot);
-                      const pickOpen =
-                        openForm?.kind === "pick" &&
-                        sameSlot(openForm.slot, slot);
-                      const moveOpen = openForm?.kind === "move" && entry && openForm.dayKey === entry.key;
-                      return (
-                        <li key={day} className="px-3 py-2" data-testid={`day-${index}-${week}-${day}`}>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                            <span className="w-9 shrink-0 text-xs font-medium text-[var(--ink-50)]">
-                              {DAY_LABEL[day]}
-                            </span>
-                            {program.startDate && (
-                              <span className="w-12 shrink-0 text-[11px] text-[var(--ink-30)]">
-                                {slotDate(program.startDate, weekOffset + week, day)}
-                              </span>
-                            )}
-                            {entry ? (
-                              <span className="min-w-0 flex-1 truncate font-medium text-[var(--ink)]">
-                                {entry.content.name}
-                                {entry.content.kind !== "session" && (
-                                  <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                                    unsaved
-                                  </span>
-                                )}
-                              </span>
-                            ) : (
-                              <span className="flex-1 text-[var(--ink-30)]">Rest</span>
-                            )}
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                              {entry ? (
-                                <>
-                                  {entry.content.kind === "session" ? (
-                                    <Link
-                                      to={`/library/programs/${programId}/days/${entry.content.sessionId}`}
-                                      className="font-medium text-[var(--ink-50)] underline hover:text-[var(--ink)]"
-                                    >
-                                      Edit day
-                                    </Link>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => setOpenForm({ kind: "move", dayKey: entry.key })}
-                                    className="font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
-                                  >
-                                    Move
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setOpenForm({ kind: "pick", slot, replacing: entry.key })}
-                                    className="font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
-                                  >
-                                    Replace
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeDay(entry.key)}
-                                    className="font-medium text-[var(--bad)]"
-                                  >
-                                    Remove
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenForm({ kind: "pick", slot, replacing: null })}
-                                  className="font-medium text-[var(--ink-50)] hover:text-[var(--ink)]"
-                                >
-                                  + Add workout
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {pickOpen && openForm?.kind === "pick" && (
-                            <WorkoutPicker
-                              library={libraryWorkouts}
-                              shelf={shelfWorkouts}
-                              replacing={openForm.replacing !== null}
-                              onCancel={() => setOpenForm(null)}
-                              onPick={(content) => placeDay(slot, content, openForm.replacing)}
-                            />
-                          )}
-                          {moveOpen && entry && (
+                    {program.startDate && (
+                      <span className="font-normal text-[var(--ink-30)]">
+                        {" "}
+                        · {weekRange(program.startDate, activeScope.weekOffset + week)}
+                      </span>
+                    )}
+                  </>
+                }
+              >
+                <div className="space-y-2">
+                  {visibleDays.map((day) => {
+                    const slot: Slot = { phaseKey: activeScope.phaseKey, week, day };
+                    const entry = dayAt(slot);
+                    const moveOpen = openForm?.kind === "move" && entry && openForm.dayKey === entry.key;
+                    const date = program.startDate ? slotDate(program.startDate, activeScope.weekOffset + week, day) : null;
+                    const content = entry?.content;
+                    return (
+                      <ClientDayRow
+                        key={day}
+                        testId={`day-${activeScope.index}-${week}-${day}`}
+                        label={date ? `${DAY_LABEL[day]} · ${date}` : DAY_LABEL[day]}
+                        entry={content ? { name: content.name, kind: content.kind } : null}
+                        library={libraryWorkouts}
+                        shelf={shelfWorkouts}
+                        editHref={
+                          content?.kind === "session"
+                            ? `/library/programs/${programId}/days/${content.sessionId}`
+                            : null
+                        }
+                        onEditUnsaved={
+                          content && content.kind !== "session" && !validationError
+                            ? () => void saveThenEditDay(slot)
+                            : null
+                        }
+                        saving={save.isPending}
+                        onChoose={(next) => placeDay(slot, next, entry?.key ?? null)}
+                        onRest={() => entry && removeDay(entry.key)}
+                        onMove={() => entry && setOpenForm({ kind: "move", dayKey: entry.key })}
+                        onSaveAsWorkout={
+                          content?.kind === "session"
+                            ? () => setSaveAs({ sessionId: content.sessionId, name: content.name })
+                            : null
+                        }
+                        below={
+                          moveOpen && entry ? (
                             <MoveForm
                               from={slot}
                               scopes={scopes.map((s) => ({
@@ -642,22 +636,16 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
                               onCancel={() => setOpenForm(null)}
                               onMove={(target) => moveDay(entry.key, target)}
                             />
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                          ) : null
+                        }
+                      />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </section>
-        ))}
-
-        {phased && (
-          <button type="button" onClick={addPhase} className="admin-secondary px-4 py-2 text-sm">
-            + Add phase
-          </button>
-        )}
+              </WeekCard>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--ink-08)] bg-white/95 backdrop-blur lg:left-64">
@@ -684,97 +672,15 @@ export function ClientProgramEditor({ programId }: { programId: string }) {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-interface PickableWorkout {
-  id: string;
-  name: string;
-}
-
-function WorkoutPicker({
-  library,
-  shelf,
-  replacing,
-  onPick,
-  onCancel,
-}: {
-  library: PickableWorkout[];
-  shelf: PickableWorkout[];
-  replacing: boolean;
-  onPick: (content: EditorDayContent) => void;
-  onCancel: () => void;
-}) {
-  const [choice, setChoice] = useState("");
-  const [blankName, setBlankName] = useState("");
-  const byId = new Map([...library, ...shelf].map((w) => [w.id, w]));
-  const canAdd = choice === "__blank__" ? blankName.trim() !== "" : byId.has(choice);
-
-  function submit() {
-    if (choice === "__blank__") onPick({ kind: "blank", name: blankName.trim() });
-    else {
-      const w = byId.get(choice);
-      if (w) onPick({ kind: "workout", workoutId: w.id, name: w.name });
-    }
-  }
-
-  return (
-    <div className="mt-2 space-y-2 rounded-lg bg-[var(--paper)] p-3">
-      {replacing && (
-        <p className="text-xs text-[var(--ink-50)]">
-          Replacing swaps in a fresh copy — this day&apos;s current exercises and edits are discarded on save.
-        </p>
+      {saveAs && (
+        <SaveAsWorkoutDialog
+          sessionId={saveAs.sessionId}
+          defaultName={saveAs.name}
+          clientId={program.clientId}
+          onClose={() => setSaveAs(null)}
+        />
       )}
-      <div className="flex flex-wrap gap-2">
-        <select
-          aria-label="Workout"
-          value={choice}
-          onChange={(e) => setChoice(e.target.value)}
-          className="min-w-0 flex-1 basis-56 rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm"
-        >
-          <option value="">Choose a workout…</option>
-          <option value="__blank__">Blank day (build it in the day editor)</option>
-          {shelf.length > 0 && (
-            <optgroup label="This client's workouts">
-              {shelf.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          <optgroup label="Library">
-            {library.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </optgroup>
-        </select>
-        {choice === "__blank__" && (
-          <input
-            aria-label="Day name"
-            value={blankName}
-            onChange={(e) => setBlankName(e.target.value)}
-            placeholder="e.g. Mobility"
-            className="min-w-0 flex-1 basis-40 rounded-lg border border-[var(--ink-08)] bg-white px-3 py-2 text-sm"
-          />
-        )}
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={!canAdd}
-          onClick={submit}
-          className="admin-primary px-3 py-1.5 text-xs disabled:opacity-40"
-        >
-          {replacing ? "Replace" : "Add"}
-        </button>
-        <button type="button" onClick={onCancel} className="admin-secondary px-3 py-1.5 text-xs">
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }
