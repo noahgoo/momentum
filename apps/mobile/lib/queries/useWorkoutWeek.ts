@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { addDaysStr, dateStr, mondayOfStr, parseDateStr, type WorkoutLog } from "@momentum/shared";
+import { addDaysStr, dateStr, parseDateStr, type WorkoutLog } from "@momentum/shared";
 import { supabase } from "../supabase";
 import { qk } from "./keys";
 import { deriveDayState, type DayState } from "../../components/workout/dayState";
@@ -45,10 +45,9 @@ export interface WorkoutWeekResult {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Resolves one program week's 7-day grid, always Monday-to-Sunday
- * regardless of the program's start date. Weeks are numbered from the
- * Monday on/before start_date, so a program starting midweek can show a
- * partial (mostly outOfRange) first and last week.
+ * Resolves one program week's 7-day grid, Monday-to-Sunday. A program always
+ * starts on a Monday (0043), so week n is exactly start_date + 7(n-1) .. +6.
+ * Programs backfilled from a midweek start show their first days as rest.
  */
 export function useWorkoutWeek(uid: string | undefined, weekNumber: number, todayStr: string) {
   return useQuery<WorkoutWeekResult | null>({
@@ -95,20 +94,12 @@ export function useWorkoutWeek(uid: string | undefined, weekNumber: number, toda
           ? Math.min(100, Math.max(0, Math.round(((daysDiffToday + 1) / totalProgramDays) * 100)))
           : 0;
 
-      // Weeks are numbered from the Monday on/before start_date, so the grid
-      // is always Monday-first regardless of which weekday the program
-      // actually starts on.
-      const anchorMonday = mondayOfStr(startDateStr);
-      const anchor = parseDateStr(anchorMonday) as Date;
-      const end = parseDateStr(endDateStr) as Date;
-      const anchorToEndDays = Math.floor((end.getTime() - anchor.getTime()) / DAY_MS);
-      const totalWeeks = Math.max(1, Math.ceil((anchorToEndDays + 1) / 7));
-      const daysDiffAnchorToday = Math.floor(
-        (new Date(todayStr + "T00:00:00").getTime() - anchor.getTime()) / DAY_MS
-      );
-      const currentWeekNumber = Math.max(1, Math.floor(daysDiffAnchorToday / 7) + 1);
+      // start_date is always a Monday (0043), so program weeks are calendar
+      // weeks and week n starts at start_date + 7(n-1).
+      const totalWeeks = Math.max(1, programTotalWeeks);
+      const currentWeekNumber = Math.max(1, Math.floor(daysDiffToday / 7) + 1);
 
-      const weekStart = addDaysStr(anchorMonday, (weekNumber - 1) * 7);
+      const weekStart = addDaysStr(startDateStr, (weekNumber - 1) * 7);
       const dayDateStrs = Array.from({ length: 7 }, (_, i) => addDaysStr(weekStart, i));
 
       // One call resolves all seven days through the same SQL the day view

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import type { DayOfWeek } from "@momentum/shared";
+import { addDaysStr, type DayOfWeek } from "@momentum/shared";
 import { useAuth } from "../../lib/auth";
 import { draftKey, useDraft } from "../../lib/useDraft";
 import { useUnsavedChangesGuard } from "../../lib/useUnsavedChangesGuard";
@@ -89,16 +89,12 @@ function parseDate(iso: string): Date {
 const DATE_FORMAT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 /**
- * The date a slot lands on. Weeks count from the assignment's start date (not
- * from Monday), the same way resolve_scheduled_workout does, so week n covers
- * start + 7(n-1) .. +6 and the weekday picks the one date in that span.
+ * The date a slot lands on. An assignment starts on a Monday, so week n is the
+ * calendar week start + 7(n-1) .. +6 and the weekday is its offset into it,
+ * the same way resolve_scheduled_workout does.
  */
 function slotDate(start: string, globalWeek: number, day: DayOfWeek): string {
-  const base = parseDate(start);
-  const startIdx = (base.getDay() + 6) % 7; // Mon = 0
-  const dayOffset = (DAYS.indexOf(day) - startIdx + 7) % 7;
-  base.setDate(base.getDate() + (globalWeek - 1) * 7 + dayOffset);
-  return DATE_FORMAT.format(base);
+  return DATE_FORMAT.format(parseDate(addDaysStr(start, (globalWeek - 1) * 7 + DAYS.indexOf(day))));
 }
 
 /** Which inline form, if any, is open under a row. */

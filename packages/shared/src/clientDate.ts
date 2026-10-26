@@ -91,6 +91,11 @@ export function addDaysStr(dateStr: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** True when `dateStr` (YYYY-MM-DD) falls on a Monday. */
+export function isMondayStr(dateStr: string): boolean {
+  return mondayOfStr(dateStr) === dateStr;
+}
+
 /**
  * The Monday of the week containing `dateStr`, as YYYY-MM-DD.
  * Pure calendar arithmetic — no instant, so no timezone can shift it.

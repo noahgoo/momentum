@@ -191,8 +191,13 @@ test.describe("per-client program editing", () => {
   test("each day shows its calendar date, counted from the assignment start", async ({ page }) => {
     await visit(page, `/library/programs/${INSTANCE_PROGRAM_ID}`);
 
+    // Mon Oct 19 start: every week is a calendar week, so dates ascend
+    // Mon..Sun inside it (a midweek start used to list Mon Oct 26 above
+    // Tue Oct 20).
+    await expect(page.getByTestId("day-0-1-monday")).toContainText("Oct 19");
     await expect(page.getByTestId("day-0-1-wednesday")).toContainText("Oct 21");
-    await expect(page.getByTestId("day-0-1-monday")).toContainText("Oct 26");
+    await expect(page.getByTestId("day-0-1-sunday")).toContainText("Oct 25");
+    await expect(page.getByTestId("day-0-2-monday")).toContainText("Oct 26");
     await expect(page.getByTestId("day-0-2-wednesday")).toContainText("Oct 28");
   });
 
@@ -364,5 +369,24 @@ test.describe("session editor", () => {
       "aria-pressed",
       "true"
     );
+  });
+});
+
+test.describe("assign form start date", () => {
+  test("defaults to a Monday, and a non-Monday snaps to that week's Monday", async ({ page }) => {
+    // Programs start on a Monday (0043): the picker can't be limited to one
+    // weekday, so the form defaults to the client's current Monday and snaps
+    // anything else.
+    await visit(page, "/assign");
+    const date = page.locator('input[type="date"]');
+
+    const isMonday = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay() === 1;
+    expect(isMonday(await date.inputValue())).toBe(true);
+
+    await date.fill("2026-10-21"); // a Wednesday
+    await expect(date).toHaveValue("2026-10-19");
+    await date.fill("2026-10-18"); // a Sunday belongs to the week before
+    await expect(date).toHaveValue("2026-10-12");
+    await expect(page.getByText("Programs start on a Monday.")).toBeVisible();
   });
 });

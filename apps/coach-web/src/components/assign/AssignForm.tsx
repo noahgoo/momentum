@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import type { ClientSummary, Workout } from "@momentum/shared";
+import { isMondayStr, mondayOfStr, type ClientSummary, type Workout } from "@momentum/shared";
 import type { ProgramListRow } from "../../queries/usePrograms";
 import { useProgramDetail } from "../../queries/usePrograms";
 import { useClientDate } from "../../lib/useClientDate";
@@ -33,9 +33,11 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
   // The CLIENT's today, not the coach's — a coach in NY assigning to an LA
   // client must not default the start date to the client's tomorrow.
   const { today: clientToday } = useClientDate(clientId || undefined);
-  // Null until the coach picks a date: fall back to the selected client's
-  // today, so switching clients re-defaults rather than keeping a stale date.
-  const effectiveStartDate = startDate ?? clientToday;
+  // Null until the coach picks a date: fall back to the Monday of the
+  // selected client's current week, so switching clients re-defaults rather
+  // than keeping a stale date. A program always starts on a Monday; a past one
+  // is fine (the program began earlier this week).
+  const effectiveStartDate = startDate ?? mondayOfStr(clientToday);
   const { data: activeAssignment } = useClientActiveAssignment(clientId || undefined, clientToday);
   const assignProgram = useAssignProgram();
 
@@ -59,6 +61,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
   if (!clientId) validationErrors.push("Choose a client.");
   if (!programId) validationErrors.push("Choose a program.");
   if (!effectiveStartDate) validationErrors.push("Choose a start date.");
+  else if (!isMondayStr(effectiveStartDate)) validationErrors.push("Programs start on a Monday. Pick a Monday.");
 
   const canSubmit = validationErrors.length === 0 && !assignProgram.isPending;
 
@@ -149,10 +152,14 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
           <input
             type="date"
             value={effectiveStartDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            // A date input can't be limited to one weekday, so a typed or
+            // picked non-Monday snaps to its week's Monday.
+            onChange={(e) => setStartDate(e.target.value ? mondayOfStr(e.target.value) : "")}
             className={`${selectClass} ${submitted && !effectiveStartDate ? "border-[var(--bad)]" : ""}`}
           />
-          <p className="mt-1 text-xs text-[var(--ink-30)]">Any day of the week is allowed as a start date.</p>
+          <p className="mt-1 text-xs text-[var(--ink-30)]">
+            Programs start on a Monday. A past Monday is fine; picking any other day snaps to that week&apos;s Monday.
+          </p>
         </div>
 
         <div className="border-t border-[var(--ink-08)] pt-4">

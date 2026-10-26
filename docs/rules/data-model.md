@@ -174,6 +174,15 @@ Resolution for a **past** date resolves against the assignment that was active
 on that date, not the currently active one. Reassigning a client must not
 change what their history says they were asked to do.
 
+`assignments.start_date` is always a **Monday** (CHECK constraint, and
+`assign_program` raises `start_date_must_be_monday`). A past Monday is allowed.
+A program week is therefore a calendar week: week `n` spans
+`start + 7(n-1) .. +6` and a weekday's offset into it is its Mon-based index.
+Nothing may compute week boundaries from the start date's own weekday. Moving a
+start date is never an UPDATE of the column alone: sessions are keyed by
+week/day, so a start change must renumber them to keep every date's session
+(see the backfill in `0043_programs_start_on_monday.sql`).
+
 ### R6. A write reaches every viewer of that data
 
 Coach and client see the same rows and must see the same values. Every

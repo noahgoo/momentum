@@ -243,8 +243,8 @@ const instanceClientProgram: ClientProgram = {
   name: "12-Week Strength Base",
   description: "Marguerite's copy",
   clientId: CLIENT_IDS[0],
-  // A Wednesday: week 1 runs Wed Oct 21 .. Tue Oct 27, so Monday falls on Oct 26.
-  startDate: "2026-10-21",
+  // Assignments always start on a Monday, so week 1 is Mon Oct 19 .. Sun Oct 25.
+  startDate: "2026-10-19",
   weeks: 2,
   phased: false,
   phases: [],
@@ -260,7 +260,7 @@ const phasedInstanceClientProgram: ClientProgram = {
   name: "Base to Peak",
   description: "Marguerite's copy",
   clientId: CLIENT_IDS[0],
-  startDate: "2026-10-21",
+  startDate: "2026-10-19",
   weeks: 2,
   phased: true,
   phases: [{ id: "ph-1", name: "Base", weeks: 2 }],

@@ -77,6 +77,7 @@ export interface AssignProgramInput {
 /** Domain wording for the codes assign_program raises. */
 const ASSIGN_ERRORS = {
   not_your_client: "That client isn't one of yours.",
+  start_date_must_be_monday: "Programs start on a Monday. Pick a Monday.",
   program_not_found: "That program no longer exists.",
   not_a_template: "That program is already a client's copy — assign from your library instead.",
 };

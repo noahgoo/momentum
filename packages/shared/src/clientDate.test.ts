@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_TIMEZONE,
   addDaysStr,
+  isMondayStr,
   mondayOfStr,
   clientDateStr,
   clientToday,
@@ -133,5 +134,13 @@ describe("mondayOfStr", () => {
 
   it("crosses a month boundary", () => {
     expect(mondayOfStr("2026-07-01")).toBe("2026-06-29"); // Wednesday
+  });
+});
+
+describe("isMondayStr", () => {
+  it("is true only for a Monday", () => {
+    expect(isMondayStr("2026-06-15")).toBe(true);
+    expect(isMondayStr("2026-06-16")).toBe(false);
+    expect(isMondayStr("2026-06-21")).toBe(false); // Sunday
   });
 });
