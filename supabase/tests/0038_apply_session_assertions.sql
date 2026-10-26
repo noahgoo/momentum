@@ -3,8 +3,9 @@
 -- Two of these are the only guard against a whole class of silent error:
 --
 --   #1 round-trips resolve_scheduled_workout against session_scheduled_date
---      with a WEDNESDAY start and phases of uneven length. A Monday-start
---      fixture passes a broken date inverse.
+--      with phases of uneven length. start_date is always a Monday (0043), so
+--      the weekday-offset case this once guarded is gone; the phase flattening
+--      is what the uneven lengths exercise.
 --   #5 puts the coach and the client in timezones that disagree about what
 --      day it is. Writing `current_date` instead of client_today() passes
 --      every other assertion here.
@@ -30,7 +31,7 @@ declare
   w_other  uuid := 'c4000000-0000-0000-0000-000000000002';
   ex_bench uuid := 'c5000000-0000-0000-0000-000000000001';
 
-  -- A WEDNESDAY, deliberately: see the header.
+  -- A Monday: assignments.start_date must be one (0043).
   v_start date;
   v_assignment uuid;
   v_sess record;
@@ -40,8 +41,8 @@ declare
   v_sid uuid;
   v_target uuid;
 begin
-  -- Nearest past Wednesday, then back 2 weeks so weeks 1-2 are behind us.
-  v_start := (date_trunc('week', current_date) + interval '2 days' - interval '2 weeks')::date;
+  -- This week's Monday, back 2 weeks so weeks 1-2 are behind us.
+  v_start := (date_trunc('week', current_date) - interval '2 weeks')::date;
 
   insert into auth.users (id, email, raw_user_meta_data)
   values

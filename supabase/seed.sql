@@ -37,7 +37,7 @@
 --  client3: broken streak. The missed day (v_missed3 in the script) is
 --           computed, not hardcoded: it's the most recent ACTUAL scheduled
 --           mon/wed/fri that is >= 2 days before current_date and after her
---           start (current_date - 10) -- guaranteeing it's a real scheduled
+--           start (two Mondays ago) -- guaranteeing it's a real scheduled
 --           day, not a rest day, so the streak genuinely breaks there. Every
 --           other scheduled day (before and after the miss) is completed;
 --           the day at current_date - 1 additionally carries
@@ -147,9 +147,9 @@ declare
   wl_c3_before uuid; wl_c3_missed uuid; wl_c3_after uuid;
 
   -- working vars
-  v_start1 date := current_date - 21; -- client1: mid-program (3 weeks in)
+  v_start1 date := date_trunc('week', current_date)::date - 21; -- client1: mid-program (3 weeks in; start_date is always a Monday)
   v_start2 date := date_trunc('week', current_date)::date; -- client2: this week (Monday)
-  v_start3 date := current_date - 10; -- client3: 10 days ago
+  v_start3 date := date_trunc('week', current_date)::date - 14; -- client3: two Mondays ago
   v_missed3 date; -- client3: most recent actual scheduled day, >=2 days ago, that she misses
   v_day day_of_week;
   v_wk int;
@@ -509,14 +509,14 @@ begin
 
   if not exists (select 1 from public.assignments where id = a_client8) then
     insert into public.assignments (id, client_id, program_id, start_date, active)
-    values (a_client8, client8, public.copy_program_tree(prog2_basic, client8, null), current_date - 5, true);
+    values (a_client8, client8, public.copy_program_tree(prog2_basic, client8, null), date_trunc('week', current_date)::date - 7, true);
   end if;
 
   -- client7 (disabled): old inactive assignment only. Also an instance, so a
   -- past assignment resolves history against its own copy (data-model R5).
   if not exists (select 1 from public.assignments where id = a_client7_old) then
     insert into public.assignments (id, client_id, program_id, start_date, active)
-    values (a_client7_old, client7, public.copy_program_tree(prog1_simple, client7, null), current_date - 60, false);
+    values (a_client7_old, client7, public.copy_program_tree(prog1_simple, client7, null), date_trunc('week', current_date - 60)::date, false);
   end if;
 
   -- clients 4-6, 9-10 intentionally have no assignment.
