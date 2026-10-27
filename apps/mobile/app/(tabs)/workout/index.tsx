@@ -1,5 +1,13 @@
-import { useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, RefreshControl, ScrollView, StyleSheet } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  PanResponder,
+} from "react-native";
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../../lib/auth";
@@ -57,6 +65,47 @@ export default function WorkoutWeekScreen() {
   const weekDates = new Set((data?.days ?? []).map((d) => d.dateStr));
   const missedCount = (movable?.missed ?? []).filter((m) => weekDates.has(m.date)).length;
 
+  // Keep the selected pill centered in the strip, clamped so the first and last
+  // weeks sit flush against their edge instead of leaving a gap.
+  const pillScroll = useRef<ScrollView>(null);
+  const pillLayouts = useRef<Record<number, { x: number; width: number }>>({});
+  const pillViewport = useRef(0);
+  const pillContent = useRef(0);
+  const centeredOnce = useRef(false);
+  const centerSelected = useRef<() => void>(() => undefined);
+  centerSelected.current = () => {
+    const pill = pillLayouts.current[effectiveWeek];
+    if (!pill || pillViewport.current === 0 || pillContent.current === 0) return;
+    const max = Math.max(0, pillContent.current - pillViewport.current);
+    const x = Math.min(max, Math.max(0, pill.x + pill.width / 2 - pillViewport.current / 2));
+    pillScroll.current?.scrollTo({ x, animated: centeredOnce.current });
+    centeredOnce.current = true;
+  };
+  // Also re-run from the layout callbacks below: a pill, the strip or its
+  // content can measure after the week changes (first load, rotation).
+  useEffect(() => centerSelected.current(), [effectiveWeek, data?.totalWeeks]);
+
+  // Horizontal swipe over the week steps to the previous/next week. Vertical
+  // scrolling and taps on a day are left alone: the pan only claims a gesture
+  // that is clearly sideways.
+  const totalWeeks = data?.totalWeeks ?? 0;
+  const swipeWeek = useRef<(delta: number) => void>(() => undefined);
+  swipeWeek.current = (delta) =>
+    setSelectedWeek(Math.min(totalWeeks, Math.max(1, effectiveWeek + delta)));
+  const weekPan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > Math.abs(g.dy) * 2.5,
+        // Once claimed, keep it: the vertical ScrollView must not take it back mid-swipe.
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderRelease: (_e, g) => {
+          if (g.dx <= -50) swipeWeek.current(1);
+          else if (g.dx >= 50) swipeWeek.current(-1);
+        },
+      }),
+    []
+  );
+
   const weekPills = useMemo(
     () => Array.from({ length: data?.totalWeeks ?? 0 }, (_, i) => i + 1),
     [data?.totalWeeks]
@@ -96,22 +145,6 @@ export default function WorkoutWeekScreen() {
           </View>
         </View>
 
-        {missedCount > 0 && (
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/workout/reschedule")}
-            style={styles.missedBanner}
-            accessibilityRole="button"
-          >
-            <View style={styles.missedBannerText}>
-              <Text style={styles.missedBannerTitle}>
-                {missedCount} missed workout{missedCount === 1 ? "" : "s"}
-              </Text>
-              <Text style={styles.missedBannerBody}>Fit them back into your week</Text>
-            </View>
-            <Text style={styles.missedBannerAction}>RESCHEDULE →</Text>
-          </TouchableOpacity>
-        )}
-
         <View style={styles.linkRow}>
           <TouchableOpacity onPress={() => router.push("/(tabs)/workout/reschedule")}>
             <Text style={styles.historyLinkText}>RESCHEDULE →</Text>
@@ -124,8 +157,17 @@ export default function WorkoutWeekScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          ref={pillScroll}
           style={styles.pillRow}
           contentContainerStyle={styles.pillRowContent}
+          onLayout={(e) => {
+            pillViewport.current = e.nativeEvent.layout.width;
+            centerSelected.current();
+          }}
+          onContentSizeChange={(w) => {
+            pillContent.current = w;
+            centerSelected.current();
+          }}
         >
           {weekPills.map((w) => {
             const selected = w === effectiveWeek;
@@ -133,6 +175,10 @@ export default function WorkoutWeekScreen() {
               <TouchableOpacity
                 key={w}
                 onPress={() => setSelectedWeek(w)}
+                onLayout={(e) => {
+                  pillLayouts.current[w] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
+                  if (w === effectiveWeek) centerSelected.current();
+                }}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
@@ -151,6 +197,7 @@ export default function WorkoutWeekScreen() {
           })}
         </ScrollView>
 
+        <View {...weekPan.panHandlers}>
         <View style={styles.weekNavRow}>
           <TouchableOpacity
             onPress={() => setSelectedWeek(Math.max(1, effectiveWeek - 1))}
@@ -184,6 +231,25 @@ export default function WorkoutWeekScreen() {
         </View>
 
         <WeekGrid days={data.days} moveNotes={moveNotes} />
+        </View>
+
+        {/* Below the grid on purpose: it loads after the week does, and above it
+          it would push every day down when it appeared. */}
+        {missedCount > 0 && (
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/workout/reschedule")}
+            style={styles.missedBanner}
+            accessibilityRole="button"
+          >
+            <View style={styles.missedBannerText}>
+              <Text style={styles.missedBannerTitle}>
+                {missedCount} missed workout{missedCount === 1 ? "" : "s"}
+              </Text>
+              <Text style={styles.missedBannerBody}>Fit them back into your week</Text>
+            </View>
+            <Text style={styles.missedBannerAction}>RESCHEDULE →</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
