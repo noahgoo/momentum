@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -22,12 +25,43 @@ export function AddGoalModal({ visible, onClose, onSubmit }: AddGoalModalProps) 
   const [text, setText] = useState("");
   const inputRef = useRef<TextInput>(null);
 
+  // The sheet follows a downward drag on its grabber and closes past a
+  // threshold (or a quick flick); otherwise it springs back.
+  const dragY = useRef(new Animated.Value(0)).current;
+  const keyboardDismissed = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const grabber = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          keyboardDismissed.current = false;
+        },
+        onPanResponderMove: (_e, g) => {
+          // Only a real drag lowers the keyboard, not a tap on the bar.
+          if (g.dy > 8 && !keyboardDismissed.current) {
+            keyboardDismissed.current = true;
+            Keyboard.dismiss();
+          }
+          dragY.setValue(Math.max(0, g.dy));
+        },
+        onPanResponderRelease: (_e, g) => {
+          if (g.dy > 80 || g.vy > 0.8) onCloseRef.current();
+          else Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
+        },
+        onPanResponderTerminate: () => Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start(),
+      }),
+    [dragY]
+  );
+
   useEffect(() => {
     if (!visible) return;
+    dragY.setValue(0);
     setText("");
     const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
-  }, [visible]);
+  }, [visible, dragY]);
 
   const submit = () => {
     const trimmed = text.trim();
@@ -42,8 +76,14 @@ export function AddGoalModal({ visible, onClose, onSubmit }: AddGoalModalProps) 
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.avoider}
         >
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.handle} />
+          <Animated.View
+            style={[styles.sheet, { transform: [{ translateY: dragY }] }]}
+            // Claims touches so a tap on the sheet does not reach the backdrop and close it.
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.grabberArea} {...grabber.panHandlers}>
+              <View style={styles.handle} />
+            </View>
             <Text style={styles.title}>New goal</Text>
             <TextInput
               ref={inputRef}
@@ -62,7 +102,7 @@ export function AddGoalModal({ visible, onClose, onSubmit }: AddGoalModalProps) 
             >
               <Text style={styles.submitLabel}>Add goal</Text>
             </Pressable>
-          </Pressable>
+          </Animated.View>
         </KeyboardAvoidingView>
       </Pressable>
     </Modal>
@@ -87,13 +127,19 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxl + spacing.lg,
   },
+  // A tall touch target: the 4px bar alone is too thin to grab.
+  grabberArea: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    marginTop: -spacing.lg,
+  },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.creamDeep,
-    alignSelf: "center",
-    marginBottom: spacing.lg,
   },
   title: {
     fontFamily: fonts.displayRegular,

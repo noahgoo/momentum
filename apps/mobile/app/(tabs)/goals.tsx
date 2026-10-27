@@ -174,14 +174,14 @@ export default function GoalsScreen() {
           {goals.map((goal, i) => {
             const done = todayLogs.some((l) => l.goal_id === goal.id);
             const isOwn = goal.set_by === uid;
-            const isSwipeable = isOwn && !goal.locked;
+            const canArchive = isOwn && !goal.locked;
             return (
               <GoalRow
                 key={goal.id}
                 goal={goal}
                 done={done}
                 isOwn={isOwn}
-                isSwipeable={isSwipeable}
+                canArchive={canArchive}
                 isLast={i === goals.length - 1 && addingDraft === null}
                 onToggle={() => handleToggle(goal)}
                 onArchive={() => handleArchive(goal.id)}
@@ -213,6 +213,9 @@ export default function GoalsScreen() {
             )}
           </View>
         </View>
+        {goals.some((g) => g.set_by === uid && !g.locked) && (
+          <Text style={styles.archiveHint}>Press and hold one of your goals to archive it.</Text>
+        )}
 
         {/* This week card */}
         <View style={[styles.card, styles.weekCard]}>
@@ -310,6 +313,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radii.card,
     ...shadows.cardSubtle,
+  },
+  archiveHint: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.ink50,
+    textAlign: "center",
+    marginTop: spacing.sm,
   },
   checklistCard: {
     padding: 6,

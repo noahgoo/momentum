@@ -1,147 +1,68 @@
-import { useMemo, useRef } from "react";
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Goal } from "@momentum/shared";
 import { colors, fonts, spacing } from "../../theme/tokens";
-
-const ARCHIVE_ZONE_WIDTH = 72;
-const SWIPE_OPEN_THRESHOLD = -36;
 
 interface GoalRowProps {
   goal: Goal;
   done: boolean;
   /** Set by the client themselves (vs. by their coach). Drives the "from you"/"from coach" label. */
   isOwn: boolean;
-  /** Own, unlocked goal: swipeable + archivable. Locked/coach goals are not. */
-  isSwipeable: boolean;
+  /** Own, unlocked goal: press-and-hold archives it. Locked/coach goals cannot be. */
+  canArchive: boolean;
   isLast: boolean;
   onToggle: () => void;
   onArchive: () => void;
 }
 
 /**
- * One checklist row. Own unlocked goals reveal a red "Archive" zone via a
- * horizontal pan gesture (no gesture-handler/reanimated dependency in this
- * app yet — `PanResponder` + `Animated` from core React Native cover this
- * one-row swipe without adding one). Locked/coach goals render a 🔒 badge
- * and are not swipeable or tap-editable.
+ * One checklist row. Tap toggles today's check-off. Own unlocked goals can be
+ * archived with a press-and-hold, confirmed in an alert (a swipe fought with
+ * the tab swipe and the tap). Locked/coach goals render a 🔒 badge and ignore
+ * the hold.
  */
-export function GoalRow({ goal, done, isOwn, isSwipeable, isLast, onToggle, onArchive }: GoalRowProps) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const latestOffset = useRef(0);
-  const movedPastTapThreshold = useRef(false);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_evt, gesture) =>
-          isSwipeable && Math.abs(gesture.dx) > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
-        onPanResponderGrant: () => {
-          movedPastTapThreshold.current = false;
-        },
-        onPanResponderMove: (_evt, gesture) => {
-          movedPastTapThreshold.current = true;
-          // Clamp to [-ARCHIVE_ZONE_WIDTH, 0], relative to wherever the row
-          // currently sits (so a second swipe from an already-open row works).
-          const base = latestOffset.current;
-          const clamped = Math.min(0, Math.max(-ARCHIVE_ZONE_WIDTH, base + gesture.dx));
-          translateX.setValue(clamped);
-        },
-        onPanResponderRelease: (_evt, gesture) => {
-          const base = latestOffset.current;
-          const clamped = Math.min(0, Math.max(-ARCHIVE_ZONE_WIDTH, base + gesture.dx));
-          const openIt = clamped < SWIPE_OPEN_THRESHOLD;
-          const target = openIt ? -ARCHIVE_ZONE_WIDTH : 0;
-          latestOffset.current = target;
-          Animated.timing(translateX, {
-            toValue: target,
-            duration: 180,
-            useNativeDriver: true,
-          }).start();
-        },
-      }),
-    [isSwipeable, translateX]
-  );
-
-  const handlePress = () => {
-    if (movedPastTapThreshold.current) {
-      movedPastTapThreshold.current = false;
-      return;
-    }
-    onToggle();
-  };
-
-  // A swipe steals the responder, so the Pressable's press is CANCELLED and
-  // handlePress never runs to clear the guard — leaving it set to eat the next
-  // genuine tap. onPressIn fires at touch-down, before a pan can claim the
-  // gesture on move, so clearing here is correct for both paths.
-  const handlePressIn = () => {
-    movedPastTapThreshold.current = false;
-  };
-
-  const handleArchive = () => {
-    latestOffset.current = 0;
-    Animated.timing(translateX, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-    onArchive();
+export function GoalRow({ goal, done, isOwn, canArchive, isLast, onToggle, onArchive }: GoalRowProps) {
+  const confirmArchive = () => {
+    Alert.alert("Archive this goal?", goal.text, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Archive", style: "destructive", onPress: onArchive },
+    ]);
   };
 
   return (
     <View style={[styles.wrapper, isLast && styles.wrapperLast]}>
-      {isSwipeable && (
-        <View style={styles.archiveZone}>
-          <Pressable onPress={handleArchive} hitSlop={8}>
-            <Text style={styles.archiveLabel}>Archive</Text>
-          </Pressable>
-        </View>
-      )}
-      <Animated.View
-        {...(isSwipeable ? panResponder.panHandlers : {})}
-        style={[styles.row, { transform: [{ translateX }] }]}
+      <Pressable
+        style={styles.rowPressable}
+        onPress={onToggle}
+        onLongPress={canArchive ? confirmArchive : undefined}
+        delayLongPress={400}
+        accessibilityActions={canArchive ? [{ name: "archive", label: "Archive goal" }] : undefined}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === "archive") confirmArchive();
+        }}
       >
-        <Pressable style={styles.rowPressable} onPress={handlePress} onPressIn={handlePressIn}>
-          <View style={[styles.checkbox, done && styles.checkboxDone]}>
-            {done && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <View style={styles.textCol}>
-            <Text style={[styles.goalText, done && styles.goalTextDone]}>{goal.text}</Text>
-            <Text style={styles.meta}>
-              {goal.locked ? "🔒 " : ""}
-              {isOwn ? "from you" : "from coach"}
-            </Text>
-          </View>
-        </Pressable>
-      </Animated.View>
+        <View style={[styles.checkbox, done && styles.checkboxDone]}>
+          {done && <Text style={styles.checkmark}>✓</Text>}
+        </View>
+        <View style={styles.textCol}>
+          <Text style={[styles.goalText, done && styles.goalTextDone]}>{goal.text}</Text>
+          <Text style={styles.meta}>
+            {goal.locked ? "🔒 " : ""}
+            {isOwn ? "from you" : "from coach"}
+          </Text>
+        </View>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    position: "relative",
-    overflow: "hidden",
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.ink08,
   },
   wrapperLast: {
     borderBottomWidth: 0,
-  },
-  archiveZone: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: ARCHIVE_ZONE_WIDTH,
-    backgroundColor: colors.bad,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  archiveLabel: {
-    color: "#fff",
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 11,
-    letterSpacing: 0.4,
-  },
-  row: {
-    backgroundColor: colors.surface,
   },
   rowPressable: {
     flexDirection: "row",
