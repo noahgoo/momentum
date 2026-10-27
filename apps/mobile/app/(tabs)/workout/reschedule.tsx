@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Check, ChevronLeft, Clock3 } from "lucide-react-native";
+import { Check, ChevronDown, ChevronLeft, Clock3 } from "lucide-react-native";
 import {
   describeScheduleMoveError,
   type MovableDay,
@@ -12,7 +12,7 @@ import {
 import { useAuth } from "../../../lib/auth";
 import { useTabBarSpace } from "../../../components/PillTabBar";
 import { useDraft } from "../../../lib/useDraft";
-import { suggestTargets } from "../../../lib/moveSuggestions";
+import { splitMissedByWeek, suggestTargets } from "../../../lib/moveSuggestions";
 import { randomUuid } from "../../../lib/uuid";
 import {
   useCancelScheduleMoves,
@@ -69,6 +69,10 @@ export default function RescheduleScreen() {
   const upcoming = data?.upcoming ?? [];
   const restDays = data?.rest_days ?? [];
   const today = data?.today ?? "";
+  const { thisWeek: missedThisWeek, older: missedOlder } = splitMissedByWeek(missed, today);
+  const [showOlder, setShowOlder] = useState(false);
+  // A selection must never sit hidden: open the older group when it holds one.
+  const olderHasSelection = missedOlder.some((d) => targets[d.date] !== undefined);
 
   // Seed once, when both the draft and the server's data are in: a restored
   // selection (minus anything the server no longer offers), or the date the
@@ -174,7 +178,7 @@ export default function RescheduleScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace + 96 }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace + 140 }]}>
         <TouchableOpacity onPress={goBack} style={styles.backRow} accessibilityRole="button">
           <ChevronLeft color={colors.ink50} size={16} />
           <Text style={styles.backText}>Back</Text>
@@ -204,9 +208,9 @@ export default function RescheduleScreen() {
           />
         )}
 
-        {data && missed.length > 0 && (
-          <Section label="MISSED">
-            {missed.map((day) => (
+        {data && missedThisWeek.length > 0 && (
+          <Section label="MISSED THIS WEEK">
+            {missedThisWeek.map((day) => (
               <MoveRow
                 key={day.date}
                 day={day}
@@ -218,6 +222,39 @@ export default function RescheduleScreen() {
               />
             ))}
           </Section>
+        )}
+
+        {data && missedOlder.length > 0 && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              onPress={() => setShowOlder((v) => !v)}
+              style={styles.olderToggle}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showOlder || olderHasSelection }}
+            >
+              <Text style={styles.sectionLabel}>OLDER MISSED ({missedOlder.length})</Text>
+              <ChevronDown
+                color={colors.ink50}
+                size={16}
+                style={{ transform: [{ rotate: showOlder || olderHasSelection ? "180deg" : "0deg" }] }}
+              />
+            </TouchableOpacity>
+            {(showOlder || olderHasSelection) && (
+              <View style={styles.sectionBody}>
+                {missedOlder.map((day) => (
+                  <MoveRow
+                    key={day.date}
+                    day={day}
+                    missed
+                    target={targets[day.date]}
+                    choices={restDays.filter((d) => !Object.values(targets).includes(d) || targets[day.date] === d)}
+                    onToggle={() => toggle(day)}
+                    onPick={(to) => pickTarget(day.date, to)}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
         )}
 
         {data && upcoming.length > 0 && (
@@ -245,7 +282,7 @@ export default function RescheduleScreen() {
       </ScrollView>
 
       {selected.length > 0 && (
-        <View style={[styles.footer, { paddingBottom: spacing.lg }]}>
+        <View style={[styles.footer, { bottom: tabBarSpace, paddingBottom: spacing.lg }]}>
           {request.error && <Text style={styles.errorText}>{describeScheduleMoveError(request.error)}</Text>}
           {request.isPaused && <Text style={styles.errorText}>You are offline. This sends when you reconnect.</Text>}
           <TouchableOpacity
@@ -375,6 +412,12 @@ function MoveRow({
 }
 
 const styles = StyleSheet.create({
+  olderToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+  },
   screen: { flex: 1, backgroundColor: colors.cream },
   content: { padding: spacing.xl },
   backRow: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start" },
@@ -443,7 +486,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
+    // `bottom` is set at render to sit above the floating tab bar (useTabBarSpace).
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     backgroundColor: colors.cream,

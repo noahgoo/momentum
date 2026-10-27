@@ -1,3 +1,5 @@
+import { mondayOfStr } from "@momentum/shared";
+
 /**
  * Picks a starting rest day for each workout the client wants to move, so the
  * common case ("I missed three, just fit them in") is one tap rather than
@@ -58,4 +60,21 @@ export function suggestTargets(
   }
 
   return result;
+}
+
+/**
+ * Splits missed workouts into this week's and older ones, so the reschedule
+ * screen can lead with what is recent. The week is Monday-to-Sunday around the
+ * server's `today` (C1), the same weeks the program grid uses.
+ */
+export function splitMissedByWeek<T extends { date: string }>(
+  missed: T[],
+  today: string
+): { thisWeek: T[]; older: T[] } {
+  if (!today) return { thisWeek: missed, older: [] };
+  const weekStart = mondayOfStr(today);
+  return {
+    thisWeek: missed.filter((d) => d.date >= weekStart),
+    older: missed.filter((d) => d.date < weekStart),
+  };
 }

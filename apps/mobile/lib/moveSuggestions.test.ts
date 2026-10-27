@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestTargets } from "./moveSuggestions";
+import { splitMissedByWeek, suggestTargets } from "./moveSuggestions";
 
 const TODAY = "2026-10-21";
 const REST = ["2026-10-21", "2026-10-23", "2026-10-25", "2026-10-26"];
@@ -38,5 +38,29 @@ describe("suggestTargets", () => {
 
   it("returns nothing when there are no rest days at all", () => {
     expect(suggestTargets(["2026-10-14"], [], TODAY)).toEqual({});
+  });
+});
+
+describe("splitMissedByWeek", () => {
+  const day = (date: string) => ({ date });
+
+  it("keeps Monday onward in this week and the rest as older", () => {
+    // 2026-10-21 is a Wednesday; its week starts Monday 2026-10-19.
+    const { thisWeek, older } = splitMissedByWeek(
+      [day("2026-10-14"), day("2026-10-18"), day("2026-10-19"), day("2026-10-20")],
+      TODAY
+    );
+    expect(thisWeek.map((d) => d.date)).toEqual(["2026-10-19", "2026-10-20"]);
+    expect(older.map((d) => d.date)).toEqual(["2026-10-14", "2026-10-18"]);
+  });
+
+  it("treats a Sunday today as part of the week that began the Monday before", () => {
+    const { thisWeek, older } = splitMissedByWeek([day("2026-10-19"), day("2026-10-18")], "2026-10-25");
+    expect(thisWeek.map((d) => d.date)).toEqual(["2026-10-19"]);
+    expect(older.map((d) => d.date)).toEqual(["2026-10-18"]);
+  });
+
+  it("handles nothing missed", () => {
+    expect(splitMissedByWeek([], TODAY)).toEqual({ thisWeek: [], older: [] });
   });
 });
