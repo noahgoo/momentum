@@ -21,8 +21,7 @@ function entryDateLabel(dateISO: string): string {
 
 /**
  * Ports the old dashboard's photos + measurements link cards. Both are
- * link-only (NON-GOAL: no photo grid or measurement entry UI here — that's
- * 8.4's job) — tapping either navigates to the progress tab.
+ * link-only: each opens its own Progress sub-screen directly.
  */
 export function ProgressEntryCards({ photos, measurement }: ProgressEntryCardsProps) {
   const router = useRouter();
@@ -31,7 +30,7 @@ export function ProgressEntryCards({ photos, measurement }: ProgressEntryCardsPr
     <>
       <TouchableOpacity
         style={styles.card}
-        onPress={() => router.push("/(tabs)/progress")}
+        onPress={() => router.navigate({ pathname: "/(tabs)/progress/photos", params: { from: "dashboard" } })}
         accessibilityRole="button"
       >
         <View style={styles.iconWrap}>
@@ -48,7 +47,7 @@ export function ProgressEntryCards({ photos, measurement }: ProgressEntryCardsPr
 
       <TouchableOpacity
         style={styles.card}
-        onPress={() => router.push("/(tabs)/progress")}
+        onPress={() => router.navigate({ pathname: "/(tabs)/progress/measurements", params: { from: "dashboard" } })}
         accessibilityRole="button"
       >
         <View style={styles.iconWrap}>
