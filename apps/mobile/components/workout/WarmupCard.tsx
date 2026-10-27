@@ -3,13 +3,15 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { ChevronDown, Check } from "lucide-react-native";
 import { parseSetConfig, type Workout, describeTarget } from "@momentum/shared";
 import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
+import { VideoButton } from "./VideoButton";
+import { VideoModal } from "./VideoModal";
 import type { WorkoutExerciseWithName } from "../../lib/queries/useWorkoutDay";
 
 interface WarmupCardProps {
   warmup: Workout;
   exercises: WorkoutExerciseWithName[];
   completed: boolean;
-  /** Disabled on future dates — nothing is loggable yet. */
+  /** Future dates: nothing is loggable yet, so the check-off is hidden and only the movements show. */
   readOnly?: boolean;
   onToggle: (completed: boolean) => void;
 }
@@ -23,27 +25,28 @@ interface WarmupCardProps {
  */
 export function WarmupCard({ warmup, exercises, completed, readOnly = false, onToggle }: WarmupCardProps) {
   const [open, setOpen] = useState(false);
+  const [video, setVideo] = useState<{ url: string; title: string } | null>(null);
 
   const totalMinutes = warmup.estimated_duration_minutes ?? 0;
 
   return (
     <View style={[styles.card, shadows.cardSubtle]}>
       <View style={styles.headerRow}>
-        <TouchableOpacity
-          onPress={() => !readOnly && onToggle(!completed)}
-          disabled={readOnly}
-          accessibilityLabel={`${completed ? "Clear" : "Complete"} warm-up`}
-          style={[
-            styles.checkbox,
-            {
-              backgroundColor: completed ? colors.ok : colors.paper,
-              borderColor: completed ? colors.ok : colors.line2,
-              opacity: readOnly ? 0.5 : 1,
-            },
-          ]}
-        >
-          {completed && <Check color="#fff" size={14} strokeWidth={3} />}
-        </TouchableOpacity>
+        {!readOnly && (
+          <TouchableOpacity
+            onPress={() => onToggle(!completed)}
+            accessibilityLabel={`${completed ? "Clear" : "Complete"} warm-up`}
+            style={[
+              styles.checkbox,
+              {
+                backgroundColor: completed ? colors.ok : colors.paper,
+                borderColor: completed ? colors.ok : colors.line2,
+              },
+            ]}
+          >
+            {completed && <Check color="#fff" size={14} strokeWidth={3} />}
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.titleColumn} onPress={() => setOpen((v) => !v)}>
           <Text style={styles.eyebrow}>WARM-UP</Text>
@@ -77,6 +80,7 @@ export function WarmupCard({ warmup, exercises, completed, readOnly = false, onT
             const setCount = configs.length || 1;
             const firstConfig = configs.length > 0 ? parseSetConfig(configs[0]) : undefined;
             const prescription = describeTarget(ex.mode, firstConfig);
+            const videoUrl = ex.exercises?.video_url ?? null;
 
             return (
               <View
@@ -89,11 +93,18 @@ export function WarmupCard({ warmup, exercises, completed, readOnly = false, onT
                 <Text style={styles.movementPrescription}>
                   {setCount > 1 ? `${setCount} × ${prescription}` : prescription}
                 </Text>
+                {videoUrl && (
+                  <VideoButton
+                    onPress={() => setVideo({ url: videoUrl, title: ex.exercises?.name ?? "Warm-up" })}
+                  />
+                )}
               </View>
             );
           })}
         </View>
       )}
+
+      <VideoModal video={video} onClose={() => setVideo(null)} />
     </View>
   );
 }

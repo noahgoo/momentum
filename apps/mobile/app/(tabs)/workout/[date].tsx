@@ -21,6 +21,7 @@ import { useWorkoutDay } from "../../../lib/queries/useWorkoutDay";
 import { useWarmupToggle } from "../../../lib/queries/useWarmupToggle";
 import { useSetWorkoutDifficulty } from "../../../lib/queries/useSetWorkoutDifficulty";
 import { WarmupCard } from "../../../components/workout/WarmupCard";
+import { WorkoutPreview } from "../../../components/workout/WorkoutPreview";
 import { WorkoutLogger } from "../../../components/workout/WorkoutLogger";
 import { DifficultyPicker } from "../../../components/workout/DifficultyPicker";
 import { colors, fonts, radii, spacing, shadows } from "../../../theme/tokens";
@@ -204,6 +205,12 @@ export default function WorkoutDayScreen() {
               readOnly={isFuture}
               onToggle={handleWarmupToggle}
             />
+          )}
+
+          {isFuture && data.exercises.length > 0 && (
+            <View style={styles.loggerSpacing}>
+              <WorkoutPreview exercises={data.exercises} />
+            </View>
           )}
 
           {!isFuture && uid && (

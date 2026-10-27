@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from "react-native";
-import { Check, Play, X } from "lucide-react-native";
+import { Check, X } from "lucide-react-native";
 import {
   computePace,
   describeTarget,
@@ -26,6 +26,7 @@ import { colors, fonts, radii, spacing, shadows } from "../../theme/tokens";
 import type { WorkoutExerciseWithName, ExerciseLogWithSets } from "../../lib/queries/useWorkoutDay";
 import { useSaveWorkoutLog, type ExerciseLogInput, type SetLogInput } from "../../lib/queries/useSaveWorkoutLog";
 import { useWorkoutDraft } from "../../lib/useWorkoutDraft";
+import { VideoButton } from "./VideoButton";
 import { VideoModal } from "./VideoModal";
 import {
   lastWeightsForExercise,
@@ -418,13 +419,7 @@ export function WorkoutLogger({
                   <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
                 </View>
                 {videoUrl && (
-                  <TouchableOpacity
-                    onPress={() => setVideoModal({ url: videoUrl, title: ex.exerciseName })}
-                    style={styles.videoButton}
-                  >
-                    <Play color={colors.blueDeep} size={12} fill={colors.blueDeep} />
-                    <Text style={styles.videoButtonText}>VIDEO</Text>
-                  </TouchableOpacity>
+                  <VideoButton onPress={() => setVideoModal({ url: videoUrl, title: ex.exerciseName })} />
                 )}
               </View>
 
@@ -812,17 +807,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.ink,
     flexShrink: 1,
-  },
-  videoButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  videoButtonText: {
-    fontFamily: fonts.bodySemiBold,
-    fontSize: 11,
-    color: colors.blueDeep,
-    letterSpacing: 0.6,
   },
   setRow: {
     flexDirection: "row",
