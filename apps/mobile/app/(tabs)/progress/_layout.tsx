@@ -33,14 +33,11 @@ export default function ProgressStackLayout() {
   useEffect(
     () =>
       navigation.addListener("blur", () => {
-        const stackKey = navigation
-          .getState()
-          ?.routes.find((r) => r.name === "progress")?.state?.key;
-        // Without the stack's key (not rendered yet) fall back to the untargeted
-        // action, which the focused stack handles.
-        navigation.dispatch(
-          stackKey ? { ...StackActions.popToTop(), target: stackKey } : StackActions.popToTop()
-        );
+        const stack = navigation.getState()?.routes.find((r) => r.name === "progress")?.state;
+        // Nothing above Progress home means nothing to pop; dispatching anyway
+        // is reported as an unhandled POP_TO_TOP.
+        if (!stack?.key || (stack.routes?.length ?? 0) < 2) return;
+        navigation.dispatch({ ...StackActions.popToTop(), target: stack.key });
       }),
     [navigation]
   );
