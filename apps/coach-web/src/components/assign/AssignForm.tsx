@@ -4,7 +4,7 @@ import { isMondayStr, mondayOfStr, type ClientSummary, type Workout } from "@mom
 import type { ProgramListRow } from "../../queries/usePrograms";
 import { useProgramDetail } from "../../queries/usePrograms";
 import { useClientDate } from "../../lib/useClientDate";
-import { useAssignProgram, useClientActiveAssignment } from "../../queries/useAssign";
+import { describeAssignError, useAssignProgram, useClientActiveAssignment } from "../../queries/useAssign";
 import { CurrentAssignmentCard } from "./CurrentAssignmentCard";
 import { SchedulePreview, toProgramPreview } from "./SchedulePreview";
 
@@ -75,14 +75,7 @@ export function AssignForm({ clients, programs, workouts, initialClientId, initi
       const assignmentId = await assignProgram.mutateAsync({ clientId, programId, startDate: effectiveStartDate });
       setSuccessAssignmentId(assignmentId);
     } catch (err) {
-      const code = (err as { code?: string } | null)?.code;
-      if (code === "23505") {
-        setConflictError(
-          "Another active assignment was created for this client at the same time. Please try again."
-        );
-      } else {
-        setConflictError(err instanceof Error ? err.message : "Failed to assign program.");
-      }
+      setConflictError(describeAssignError(err));
     }
   }
 

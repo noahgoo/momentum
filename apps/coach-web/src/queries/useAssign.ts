@@ -80,6 +80,10 @@ const ASSIGN_ERRORS = {
   start_date_must_be_monday: "Programs start on a Monday. Pick a Monday.",
   program_not_found: "That program no longer exists.",
   not_a_template: "That program is already a client's copy — assign from your library instead.",
+  // mutationFn rethrows error.message, so the 23505 code is gone by the time
+  // the form sees it; match the constraint text instead.
+  'duplicate key value violates unique constraint "assignments_one_active_per_client"':
+    "Another active assignment was created for this client at the same time. Please try again.",
 };
 
 export function describeAssignError(error: unknown): string {
