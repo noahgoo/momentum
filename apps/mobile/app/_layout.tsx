@@ -87,6 +87,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="reset-password" />
+          <Stack.Screen name="accept-invite" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="settings" />
         </Stack>

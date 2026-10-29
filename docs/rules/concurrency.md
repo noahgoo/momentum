@@ -193,6 +193,12 @@ new relationship (friendships, threads) must degrade gracefully when one side
 is disabled: show "Former client", not a blank name or a crash. A coach's view
 of a departed client's history must keep working.
 
+Disabling is two writes that must agree: `profiles.disabled` (display, the
+reminder cron) and the auth ban (what actually stops a login or refresh). Both
+are written by the `manage-client` Edge Function and nowhere else — the
+privilege trigger rejects any signed-in caller changing `disabled`. Never
+`auth.admin.deleteUser`: `profiles.id` cascades from `auth.users`.
+
 ## C8. Show whose value it is, and when it changed
 
 This is the UX half of every rule above. Data that is correct but unattributed

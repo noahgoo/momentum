@@ -4,24 +4,8 @@ import type { ClientSummary } from "@momentum/shared";
 import { avatarInitial } from "../components/dashboard/format";
 import { useClientSummaries } from "../queries/useClientSummaries";
 import { useToggleClientDisabled } from "../queries/useClientDetail";
-
-/** Disabled stub per the slice's NON-GOALS: email invite sending needs an Edge Function, post-MVP. */
-function InviteClientStub() {
-  return (
-    <div className="group relative">
-      <button
-        type="button"
-        disabled
-        className="cursor-not-allowed rounded-lg bg-[var(--ink-08)] px-4 py-2.5 text-sm font-medium text-[var(--ink-30)]"
-      >
-        Invite client
-      </button>
-      <div className="pointer-events-none absolute top-full right-0 z-10 mt-1.5 w-56 rounded-lg bg-[var(--ink)] px-3 py-2 text-xs text-white opacity-0 shadow-lg transition group-hover:opacity-100">
-        Invites need an Edge Function — post-MVP.
-      </div>
-    </div>
-  );
-}
+import { usePendingInvites } from "../queries/useManageClient";
+import { AddClientDialog } from "../components/clients/ClientAccountDialogs";
 
 function RosterRowToggle({ client }: { client: ClientSummary }) {
   const toggleDisabled = useToggleClientDisabled(client.client_id);
@@ -57,7 +41,7 @@ function RosterRowToggle({ client }: { client: ClientSummary }) {
   );
 }
 
-function RosterRow({ client }: { client: ClientSummary }) {
+function RosterRow({ client, invitePending }: { client: ClientSummary; invitePending: boolean }) {
   return (
     <Link
       to={`/clients/${client.client_id}`}
@@ -74,6 +58,11 @@ function RosterRow({ client }: { client: ClientSummary }) {
           {client.disabled && (
             <span className="flex-none rounded-full bg-[var(--ink-08)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-50)]">
               Disabled
+            </span>
+          )}
+          {invitePending && (
+            <span className="flex-none rounded-full bg-[var(--ink-08)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-50)]">
+              Invited
             </span>
           )}
         </div>
@@ -101,10 +90,12 @@ function RosterRow({ client }: { client: ClientSummary }) {
   );
 }
 
-/** Coach roster: name/email/streak/program-status list from `client_summaries`, plus enable/disable + invite stub. */
+/** Coach roster: name/email/streak/program-status list from `client_summaries`, plus add-client and enable/disable. */
 export function ClientsPage() {
   const { data: summaries, isLoading } = useClientSummaries();
+  const { data: pendingInvites } = usePendingInvites();
   const [query, setQuery] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const rows = summaries ?? [];
   const filtered = query.trim()
@@ -123,7 +114,9 @@ export function ClientsPage() {
             {isLoading ? "Loading…" : `${rows.length} client${rows.length === 1 ? "" : "s"}`}
           </p>
         </div>
-        <InviteClientStub />
+        <button type="button" onClick={() => setAdding(true)} className="admin-primary px-4 py-2.5 text-sm">
+          Add client
+        </button>
       </div>
 
       <input
@@ -152,10 +145,11 @@ export function ClientsPage() {
       {!isLoading && filtered.length > 0 && (
         <div className="space-y-3">
           {filtered.map((client) => (
-            <RosterRow key={client.client_id} client={client} />
+            <RosterRow key={client.client_id} client={client} invitePending={pendingInvites?.has(client.client_id) ?? false} />
           ))}
         </div>
       )}
+      {adding && <AddClientDialog onClose={() => setAdding(false)} />}
     </div>
   );
 }

@@ -33,6 +33,8 @@
  */
 export const qk = {
   clientSummaries: () => ["clientSummaries"] as const,
+  /** Clients whose emailed invite has not been accepted; nests under the list so it refreshes with it. */
+  pendingInvites: () => ["clientSummaries", "pendingInvites"] as const,
   // "detail" segment disambiguates from the sibling clientGoals /
   // clientProgressPhotos keys, which also nest under ['clientSummaries', id].
   // The date is part of the key so a client's day rollover is a new query;

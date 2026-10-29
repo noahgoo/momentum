@@ -4,6 +4,8 @@ import type { Profile } from "@momentum/shared";
 import { avatarInitial } from "../dashboard/format";
 import type { ProgramStatus } from "../../queries/useClientDetail";
 import { useSendPasswordReset } from "../../queries/useClientDetail";
+import { EMAIL_INVITES_ENABLED, useResendInvite } from "../../queries/useManageClient";
+import { SetPasswordDialog } from "./ClientAccountDialogs";
 
 interface Props {
   profile: Profile;
@@ -24,14 +26,15 @@ function formatHeight(heightIn: number | null): string | null {
  * Header card for the coach client-detail page: identity, streak badge,
  * height/sex, program status, and the primary actions row.
  *
- * The account menu offers password reset only. Resend invite needs an Edge
- * Function to mint the signup link (still post-MVP, same reason as
- * ClientsPage's InviteClientStub), and a menu item that silently does nothing
- * is worse than an absent one.
+ * The account menu offers a reset email, a coach-set password, and (once email
+ * invites are enabled) resending a pending invite.
  */
 export function ClientHeaderCard({ profile, streak, programStatus, onToggleDisabled, togglePending }: Props) {
   const height = formatHeight(profile.height_in);
   const sendReset = useSendPasswordReset();
+  const resendInvite = useResendInvite(profile.id);
+  const invitePending = profile.invited_at != null && profile.invite_accepted_at == null;
+  const [settingPassword, setSettingPassword] = useState(false);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -158,6 +161,30 @@ export function ClientHeaderCard({ profile, streak, programStatus, onToggleDisab
                 >
                   Send password reset
                 </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setSettingPassword(true);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-[var(--ink)] transition hover:bg-[var(--cream)]"
+                >
+                  Set password
+                </button>
+                {invitePending && EMAIL_INVITES_ENABLED && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      resendInvite.mutate();
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-sm text-[var(--ink)] transition hover:bg-[var(--cream)]"
+                  >
+                    Resend invite
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -215,8 +242,19 @@ export function ClientHeaderCard({ profile, streak, programStatus, onToggleDisab
       {sendReset.isSuccess && (
         <p className="mt-3 text-sm text-[var(--ok)]">Reset email sent to {profile.email}</p>
       )}
+      {resendInvite.isSuccess && (
+        <p className="mt-3 text-sm text-[var(--ok)]">Invite re-sent to {profile.email}</p>
+      )}
+      {resendInvite.isError && <p className="mt-3 text-sm text-[var(--bad)]">{resendInvite.error.message}</p>}
       {sendReset.isError && (
         <p className="mt-3 text-sm text-[var(--bad)]">Couldn’t send the reset email. Try again.</p>
+      )}
+      {settingPassword && (
+        <SetPasswordDialog
+          clientId={profile.id}
+          clientName={profile.display_name || "this client"}
+          onClose={() => setSettingPassword(false)}
+        />
       )}
     </div>
   );

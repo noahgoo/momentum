@@ -51,6 +51,9 @@ Re-check the condition at send time, not only at queue time. `run_hourly_reminde
 correctly checks "scheduled and not completed" before queueing; the consumer
 should not send a stale reminder for a workout finished in the interim.
 
+The recipient being disabled is one of those conditions, for every kind:
+`send-notifications` checks `profiles.disabled` before the per-kind checks.
+
 Notification payloads carry ids, not rendered text, wherever the underlying
 data can change before delivery. Deep links resolve live when opened.
 

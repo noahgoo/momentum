@@ -8,6 +8,7 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { Profile } from "@momentum/shared";
+import { AppState } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "./supabase";
 import { unregisterPushToken } from "./pushToken";
@@ -24,6 +25,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const COACH_REJECTION_MESSAGE = "This is the client app. Use the coach web portal to sign in.";
+const DISABLED_MESSAGE = "This account has been disabled. Contact your coach.";
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
@@ -68,6 +70,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      // The coach's disable also bans the auth user, so a fresh login or token
+      // refresh already fails; this ends a session that is still alive.
+      if (data.disabled) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+        setError(DISABLED_MESSAGE);
+        setLoading(false);
+        router.replace("/login");
+        return;
+      }
+
       setProfile(data);
       setError(null);
       setLoading(false);
@@ -92,9 +106,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
     });
 
+    // A phone that was backgrounded when the coach disabled the account would
+    // otherwise keep its screen until the next cold start.
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      void supabase.auth.getSession().then(({ data }) => {
+        if (!cancelled && data.session) void loadProfileForSession(data.session);
+      });
+    });
+
     return () => {
       cancelled = true;
       subscription.subscription.unsubscribe();
+      appState.remove();
     };
   }, []);
 

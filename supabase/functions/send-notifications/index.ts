@@ -48,6 +48,15 @@ function nextAttemptAt(attempts: number): string {
  * time rather than delivering something stale.
  */
 async function stillWorthSending(row: OutboxRow): Promise<boolean> {
+  // A recipient disabled after this was queued must not be pushed to. Applies
+  // to every kind, so it sits before the per-kind checks.
+  const { data: recipient } = await supabase
+    .from("profiles")
+    .select("disabled")
+    .eq("id", row.profile_id)
+    .maybeSingle();
+  if (!recipient || recipient.disabled) return false;
+
   if (row.kind === "schedule_move_requested") {
     // Nothing to tell the coach about if every move in the batch was already
     // decided or withdrawn before this was delivered. Auto-applied batches

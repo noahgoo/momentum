@@ -721,6 +721,8 @@ export type Database = {
           fcm_token: string | null
           height_in: number | null
           id: string
+          invite_accepted_at: string | null
+          invited_at: string | null
           invited_by: string | null
           last_reminder_date: string | null
           move_approval: string
@@ -744,6 +746,8 @@ export type Database = {
           fcm_token?: string | null
           height_in?: number | null
           id: string
+          invite_accepted_at?: string | null
+          invited_at?: string | null
           invited_by?: string | null
           last_reminder_date?: string | null
           move_approval?: string
@@ -767,6 +771,8 @@ export type Database = {
           fcm_token?: string | null
           height_in?: number | null
           id?: string
+          invite_accepted_at?: string | null
+          invited_at?: string | null
           invited_by?: string | null
           last_reminder_date?: string | null
           move_approval?: string

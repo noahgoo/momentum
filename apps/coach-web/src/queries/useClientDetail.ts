@@ -11,6 +11,7 @@ import type {
 } from "@momentum/shared";
 import { supabase } from "../lib/supabase";
 import { qk } from "./keys";
+import { invokeManageClient } from "./useManageClient";
 
 /** One completed (or in-progress) workout log, with its exercises/sets nested for the RecentWorkouts panel. */
 export interface WorkoutLogWithSets extends WorkoutLog {
@@ -143,21 +144,18 @@ export function useClientDetail(clientId: string | undefined, todayStr: string) 
 }
 
 /**
- * Toggles `profiles.disabled` for a client. Used by both ClientsPage's
- * roster toggle and ClientDetailPage's header action — invalidates both the
- * detail cache and the summaries list (disabled affects the dashboard grid's
- * dimmed state and its attention sort).
+ * Disables or re-enables a client. Goes through the manage-client Edge Function,
+ * which bans the auth user as well as setting `profiles.disabled` — the flag
+ * alone would leave a working session (migration 0045 stops the direct write).
+ * Used by both ClientsPage's roster toggle and ClientDetailPage's header
+ * action — invalidates both the detail cache and the summaries list (disabled
+ * affects the dashboard grid's dimmed state and its attention sort).
  */
 export function useToggleClientDisabled(clientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (nextDisabled: boolean) => {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ disabled: nextDisabled })
-        .eq("id", clientId);
-      if (error) throw error;
-    },
+    mutationFn: (nextDisabled: boolean) =>
+      invokeManageClient({ action: "set_disabled", client_id: clientId, disabled: nextDisabled }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.clientDetail(clientId) });
       void queryClient.invalidateQueries({ queryKey: qk.clientSummaries() });
@@ -229,9 +227,9 @@ export function useSaveMotivationOverride(clientId: string) {
  * menu. Uses the same `resetPasswordForEmail` path as ForgotPasswordPage, so
  * the link lands on /reset-password.
  *
- * No cache invalidation: sending mail changes nothing this app reads. Resend
- * invite is deliberately NOT here — it needs an Edge Function to mint the
- * signup link (see ClientsPage's InviteClientStub), which is still post-MVP.
+ * No cache invalidation: sending mail changes nothing this app reads. Resending
+ * an emailed invite is `useResendInvite`; a coach-set password is
+ * `useSetClientPassword`.
  */
 export function useSendPasswordReset() {
   return useMutation({
