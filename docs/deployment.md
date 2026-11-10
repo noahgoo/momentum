@@ -52,5 +52,60 @@ reminders that never arrive** — that was the state this work fixed
 (violation N-1). If the consumer cannot be deployed yet, turn the reminder
 controls off in the client rather than leaving them enabled.
 
+### Scheduling the consumer
+
+Nothing calls `send-notifications` until it is scheduled. With `pg_cron` and
+`pg_net` enabled (Dashboard → Database → Extensions), store the service-role
+key in Vault once, then schedule a call one minute after each producer run:
+
+```sql
+select vault.create_secret('<service-role-key>', 'service_role_key');
+
+select cron.schedule(
+  'momentum_send_notifications',
+  '1,16,31,46 * * * *',
+  $$select net.http_post(
+      url := 'https://ohozbjcdsgnhqtaqneke.supabase.co/functions/v1/send-notifications',
+      headers := jsonb_build_object(
+        'Authorization',
+        'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')
+      )
+    );$$
+);
+```
+
+### iOS: APNs credentials
+
+Expo Push forwards to Apple, so Apple needs a key that says "this app may
+receive pushes". EAS creates and stores it for you.
+
+1. Enroll in the Apple Developer Program. The bundle id is
+   `com.noahgoo.momentum` (`apps/mobile/app.json`).
+2. `cd apps/mobile && eas login`, then build a real binary. **Expo Go cannot
+   receive pushes for this app.**
+   `eas build -p ios --profile development` for a device dev build, or
+   `--profile preview` for an internal-distribution build. On the first iOS
+   build EAS asks you to sign in to Apple, registers the bundle id, adds the
+   Push Notifications capability and generates the APNs key.
+3. To inspect or rotate the key later: `eas credentials -p ios` → the profile →
+   Push Notifications.
+4. Install the build on a real iPhone (simulators have no push service).
+   Sign in; the app asks for notification permission and writes a row to
+   `push_tokens`.
+5. Check delivery without waiting for the scheduler: paste the stored
+   `ExponentPushToken[...]` into https://expo.dev/notifications and send. If
+   that arrives, the APNs half is done and any remaining problem is the
+   consumer or its schedule.
+
+Changing `app.json` plugins (the `expo-notifications` and `expo-image-picker`
+entries) needs a new native build; an OTA update is not enough.
+
+### Android: FCM
+
+Android needs its own credential: create a Firebase project, add an Android
+app with package `com.noahgoo.momentum`, download `google-services.json` into
+`apps/mobile`, set `expo.android.googleServicesFile` in `app.json`, and upload
+an FCM v1 service-account key with `eas credentials -p android`.
+
 Verify end to end: set a reminder a quarter-hour out on a real device,
 confirm the push arrives and that `notification_outbox.sent_at` is stamped.

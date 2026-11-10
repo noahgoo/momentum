@@ -35,6 +35,20 @@
       "expo-font",
       "expo-localization",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Momentum uses your photos so you can add progress pictures.",
+          "cameraPermission": "Momentum uses your camera so you can take progress pictures."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#F6F4F0"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

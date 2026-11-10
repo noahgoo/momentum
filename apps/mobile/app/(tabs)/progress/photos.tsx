@@ -26,21 +26,40 @@ export default function ProgressPhotosScreen() {
   const [error, setError] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
-  async function handleAddPhotos() {
+  /** Lets the client choose between the camera and their library. */
+  function handleAddPhotos() {
     if (!uid || uploadMutation.isPending) return;
     setError(null);
+    Alert.alert("Add photos", undefined, [
+      { text: "Take photo", onPress: () => void pickPhotos("camera") },
+      { text: "Choose from library", onPress: () => void pickPhotos("library") },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError("Photo library access is required to add photos.");
-      return;
+  async function pickPhotos(source: "camera" | "library") {
+    if (!uid || uploadMutation.isPending) return;
+
+    let result: ImagePicker.ImagePickerResult;
+    if (source === "camera") {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError("Camera access is required to take a photo. You can enable it in Settings.");
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 1 });
+    } else {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError("Photo library access is required to add photos.");
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: "images",
+        allowsMultipleSelection: true,
+        quality: 1,
+      });
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images",
-      allowsMultipleSelection: true,
-      quality: 1,
-    });
     if (result.canceled || result.assets.length === 0) return;
 
     const { failed, succeeded } = await uploadMutation.mutateAsync({

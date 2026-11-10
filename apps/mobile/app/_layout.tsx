@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import * as Linking from "expo-linking";
-import { Stack } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import {
@@ -21,6 +22,17 @@ import { TimezoneSyncGate } from "../components/TimezoneSyncGate";
 
 void SplashScreen.preventAutoHideAsync();
 
+// Without a handler iOS silently drops a push that arrives while the app is
+// open. Show it as a banner like any other.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
 // The Supabase client has detectSessionInUrl disabled (there's no browser
 // URL to parse in React Native), so a password-recovery deep link has to be
 // caught here and traded for a session by hand. Once exchanged, auth.tsx's
@@ -38,6 +50,19 @@ function handleAuthDeepLink(url: string | null) {
   if (typeof code === "string") {
     void supabase.auth.exchangeCodeForSession(code);
   }
+}
+
+/**
+ * A tapped push opens the Workout tab. The payload carries a kind, not a
+ * destination, and the tab resolves the live schedule when it opens, so a
+ * notification delivered hours ago still shows what is true now.
+ */
+function openFromNotification(response: Notifications.NotificationResponse | null) {
+  const kind = response?.notification.request.content.data?.kind;
+  if (typeof kind !== "string") return;
+  // Moves await the coach; everything else a client is told about is on the
+  // workout tab.
+  router.push("/(tabs)/workout");
 }
 
 export default function RootLayout() {
@@ -58,6 +83,13 @@ export default function RootLayout() {
       void SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    // Cold start from a tap, and taps while the app is running.
+    openFromNotification(Notifications.getLastNotificationResponse());
+    const subscription = Notifications.addNotificationResponseReceivedListener(openFromNotification);
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     void Linking.getInitialURL().then(handleAuthDeepLink);
