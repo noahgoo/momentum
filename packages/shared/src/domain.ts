@@ -115,7 +115,7 @@ const SCHEDULE_MOVE_MESSAGES: Record<ScheduleMoveReason, string> = {
   already_logged: "You already trained on that day, so it cannot be moved.",
   date_passed: "That day has already passed.",
   program_changed: "That day is outside your current program.",
-  target_not_rest: "That day already has a workout. Pick a rest day.",
+  target_not_rest: "That day already has a workout. Pick a rest day, or swap the two workouts.",
   duplicate_date: "Each day can only appear once.",
   already_pending: "That workout already has a move waiting for a decision.",
   invalid_moves: "Those moves could not be read. Try again.",
@@ -138,7 +138,7 @@ export function describeScheduleMoveError(error: unknown): string {
 
 /** One line of a decide_schedule_moves / request_schedule_moves result. */
 export interface ScheduleMoveSkip {
-  id: string;
+  id: string | null;
   reason: ScheduleMoveReason;
 }
 
@@ -169,6 +169,8 @@ export interface PendingMove {
   from_date: string;
   to_date: string;
   session_name: string | null;
+  /** Shared by both halves of a swap; null for an ordinary one-way move. */
+  swap_id: string | null;
 }
 
 /** get_movable_days: everything the reschedule screen needs in one round trip. */
@@ -186,6 +188,7 @@ export interface MovedDay {
   to_date: string;
   session_name: string | null;
   auto_applied: boolean;
+  swap_id: string | null;
 }
 
 export type ProgressPhoto = Tables["progress_photos"]["Row"];

@@ -139,3 +139,29 @@ export function useCancelScheduleMoves(uid: string | undefined) {
     },
   });
 }
+
+/**
+ * Files a swap of two scheduled days. Same contract as
+ * `useRequestScheduleMoves`: the caller mints the batch id and keeps it across
+ * retries (C4), and nothing is queued offline because the meaning depends on
+ * the schedule as it is right now (S3).
+ */
+export function useRequestScheduleSwap(uid: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    networkMode: "online",
+    mutationFn: async ({ batchId, dateA, dateB }: { batchId: string; dateA: string; dateB: string }) => {
+      const { data, error } = await supabase.rpc("request_schedule_swap", {
+        p_batch_id: batchId,
+        p_date_a: dateA,
+        p_date_b: dateB,
+      });
+      if (error) throw new Error(error.message);
+      return data as unknown as RequestScheduleMovesResult;
+    },
+    onSettled: () => {
+      if (uid) invalidateScheduleKeys(queryClient, uid);
+    },
+  });
+}

@@ -50,12 +50,19 @@ export default function WorkoutWeekScreen() {
     const short = (d: string) =>
       new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     for (const m of movedDays ?? []) {
+      if (m.swap_id) {
+        // Both halves of a swap land on both dates; each date reads the same way.
+        notes[m.from_date] = `Swapped with ${short(m.to_date)}`;
+        continue;
+      }
       notes[m.from_date] = `Moved to ${short(m.to_date)}`;
       notes[m.to_date] = `Moved from ${short(m.from_date)}`;
     }
     // Pending wins over a past accepted note on the same date: it is the newer fact.
     for (const m of movable?.pending ?? []) {
-      notes[m.from_date] = `Move pending · ${short(m.to_date)}`;
+      notes[m.from_date] = m.swap_id
+        ? `Swap pending · ${short(m.to_date)}`
+        : `Move pending · ${short(m.to_date)}`;
     }
     return notes;
   }, [movedDays, movable?.pending]);

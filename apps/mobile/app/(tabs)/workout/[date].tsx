@@ -242,7 +242,7 @@ export default function WorkoutDayScreen() {
               accessibilityRole="button"
             >
               <Text style={styles.moveLinkText}>
-                {isToday || isFuture ? "Move this workout" : "Reschedule this missed workout"}
+                {isToday || isFuture ? "Move or swap this workout" : "Reschedule this missed workout"}
               </Text>
             </TouchableOpacity>
           )}

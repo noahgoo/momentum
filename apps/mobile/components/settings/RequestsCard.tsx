@@ -41,7 +41,11 @@ function statusLabel(request: ChangeRequest): string {
  * action via decide_schedule_moves; the client files moves from the
  * reschedule screen and watches their status here.
  */
-export function RequestsCard({ requests, loading }: RequestsCardProps) {
+export function RequestsCard({ requests: allRequests, loading }: RequestsCardProps) {
+  // A swap is two rows with one outcome; list it once.
+  const requests = allRequests.filter(
+    (r, i, all) => !r.swap_id || all.findIndex((o) => o.swap_id === r.swap_id) === i
+  );
   return (
     <SettingsCard label="Move requests">
       {loading ? (
@@ -57,7 +61,9 @@ export function RequestsCard({ requests, loading }: RequestsCardProps) {
             >
               <View style={styles.itemText}>
                 <Text style={styles.itemDates}>
-                  {formatDate(request.from_date)} → {formatDate(request.to_date)}
+                  {request.swap_id
+                    ? `Swap ${formatDate(request.from_date)} ⇄ ${formatDate(request.to_date)}`
+                    : `${formatDate(request.from_date)} → ${formatDate(request.to_date)}`}
                 </Text>
                 <Text
                   style={[

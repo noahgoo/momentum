@@ -20,11 +20,19 @@ interface MoveBatchCardProps {
  * days (C1), which the card says rather than leaving the coach to assume.
  */
 export function MoveBatchCard({ batch, selected, onToggle, onToggleAll, onDecide, busy, notice }: MoveBatchCardProps) {
+  // A swap is two rows that are always decided together, so it is one line
+  // here: ticking it ticks both, and either id decides the pair.
+  const units = batch.moves
+    .filter((m, i, all) => !m.swap_id || all.findIndex((o) => o.swap_id === m.swap_id) === i)
+    .map((m) => ({
+      move: m,
+      partner: m.swap_id ? batch.moves.find((o) => o.swap_id === m.swap_id && o.id !== m.id) : undefined,
+    }));
   const ids = batch.moves.map((m) => m.id);
   const chosen = ids.filter((id) => selected.has(id));
   const allChosen = chosen.length === ids.length;
   const working = busy !== null;
-  const single = ids.length === 1;
+  const single = units.length === 1;
 
   return (
     <div className="admin-card p-4" data-testid="move-batch">
@@ -32,7 +40,7 @@ export function MoveBatchCard({ batch, selected, onToggle, onToggleAll, onDecide
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-[var(--ink)]">{batch.clientName ?? "Unknown client"}</p>
           <p className="text-xs text-[var(--ink-30)]">
-            {single ? "1 workout" : `${ids.length} workouts`} · requested {formatRelativeTime(batch.requestedAt)} ·
+            {single ? "1 request" : `${units.length} requests`} · requested {formatRelativeTime(batch.requestedAt)} ·
             client&apos;s days
           </p>
         </div>
@@ -45,27 +53,53 @@ export function MoveBatchCard({ batch, selected, onToggle, onToggleAll, onDecide
       </div>
 
       <ul className="mb-3 space-y-2">
-        {batch.moves.map((move) => (
+        {units.map(({ move, partner }) => (
           <li key={move.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {!single && (
               <input
                 type="checkbox"
                 checked={selected.has(move.id)}
-                onChange={() => onToggle(move.id)}
+                onChange={() => {
+                  onToggle(move.id);
+                  if (partner) onToggle(partner.id);
+                }}
                 disabled={working}
-                aria-label={`Select ${move.workoutName ?? "workout"} on ${formatDateWithWeekday(move.from_date)}`}
+                aria-label={
+                  partner
+                    ? `Select swap of ${formatDateWithWeekday(move.from_date)} and ${formatDateWithWeekday(move.to_date)}`
+                    : `Select ${move.workoutName ?? "workout"} on ${formatDateWithWeekday(move.from_date)}`
+                }
               />
             )}
-            <span className="text-xs font-medium text-[var(--ink-70)]">{move.workoutName ?? "Workout"}</span>
-            <span className="flex items-center gap-2 text-sm">
-              <span className="rounded-lg bg-[var(--ink-08)] px-2.5 py-1 font-medium text-[var(--ink-70)]">
-                {formatDateWithWeekday(move.from_date)}
-              </span>
-              <span className="text-[var(--ink-30)]">→</span>
-              <span className="rounded-lg bg-[var(--blue)]/20 px-2.5 py-1 font-medium text-[var(--ink)]">
-                {formatDateWithWeekday(move.to_date)}
-              </span>
-            </span>
+            {partner ? (
+              <>
+                <span className="rounded-full bg-[var(--ink-08)] px-2 py-0.5 text-[10px] font-semibold text-[var(--ink-50)] uppercase">
+                  Swap
+                </span>
+                <span className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded-lg bg-[var(--ink-08)] px-2.5 py-1 font-medium text-[var(--ink-70)]">
+                    {move.workoutName ?? "Workout"} · {formatDateWithWeekday(move.from_date)}
+                  </span>
+                  <span className="text-[var(--ink-30)]">⇄</span>
+                  <span className="rounded-lg bg-[var(--blue)]/20 px-2.5 py-1 font-medium text-[var(--ink)]">
+                    {partner.workoutName ?? "Workout"} · {formatDateWithWeekday(move.to_date)}
+                  </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-xs font-medium text-[var(--ink-70)]">{move.workoutName ?? "Workout"}</span>
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="rounded-lg bg-[var(--ink-08)] px-2.5 py-1 font-medium text-[var(--ink-70)]">
+                    {formatDateWithWeekday(move.from_date)}
+                  </span>
+                  <span className="text-[var(--ink-30)]">→</span>
+                  <span className="rounded-lg bg-[var(--blue)]/20 px-2.5 py-1 font-medium text-[var(--ink)]">
+                    {formatDateWithWeekday(move.to_date)}
+                  </span>
+                </span>
+              </>
+            )}
           </li>
         ))}
       </ul>
@@ -169,12 +203,13 @@ function historyLabel(request: ChangeRequestRow): { text: string; good: boolean 
 /** One decided move row for the collapsed history section. */
 export function HistoryRequestRow({ request }: { request: ChangeRequestRow }) {
   const { text, good } = historyLabel(request);
+  const verb = request.swap_id ? "⇄" : "→";
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[var(--ink-08)] py-2.5 text-xs last:border-0">
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-[var(--ink-70)]">{request.clientName ?? "Unknown client"}</p>
         <p className="truncate text-[var(--ink-30)]">
-          {request.workoutName ?? "Workout"} · {formatDateWithWeekday(request.from_date)} →{" "}
+          {request.workoutName ?? "Workout"} · {formatDateWithWeekday(request.from_date)} {verb}{" "}
           {formatDateWithWeekday(request.to_date)}
         </p>
       </div>

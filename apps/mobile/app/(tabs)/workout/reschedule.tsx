@@ -18,6 +18,7 @@ import {
   useCancelScheduleMoves,
   useMovableDays,
   useRequestScheduleMoves,
+  useRequestScheduleSwap,
 } from "../../../lib/queries/useScheduleMoves";
 import { colors, fonts, radii, spacing } from "../../../theme/tokens";
 
@@ -54,6 +55,7 @@ export default function RescheduleScreen() {
 
   const { data, isPending, isError, refetch } = useMovableDays(uid);
   const request = useRequestScheduleMoves(uid);
+  const requestSwap = useRequestScheduleSwap(uid);
   const cancel = useCancelScheduleMoves(uid);
 
   const draft = useDraft<MoveDraft>(uid ? `moveDraft:${uid}` : null);
@@ -63,6 +65,8 @@ export default function RescheduleScreen() {
   // One id per submission attempt, kept across retries so the server can
   // recognise a double tap or a retry (C4). Reset only once a request lands.
   const batchId = useRef<string>(randomUuid());
+  // Swaps are filed one by one; each keeps its own id across retries for the same reason.
+  const swapBatchIds = useRef<Record<string, string>>({});
   const seeded = useRef(false);
 
   const missed = data?.missed ?? [];
@@ -82,7 +86,8 @@ export default function RescheduleScreen() {
     seeded.current = true;
 
     const movable = new Set([...data.missed, ...data.upcoming].map((d) => d.date));
-    const free = new Set(data.rest_days);
+    // A target is either a free rest day or another upcoming workout (a swap).
+    const free = new Set([...data.rest_days, ...data.upcoming.map((d) => d.date)]);
     const kept: Record<string, string> = {};
     for (const [from, to] of Object.entries(draft.restored?.targets ?? {})) {
       if (movable.has(from) && free.has(to)) kept[from] = to;
@@ -104,6 +109,8 @@ export default function RescheduleScreen() {
   }
 
   function toggle(day: MovableDay) {
+    // This day is another workout's swap partner; picking it up too would ask for it twice.
+    if (Object.values(targets).includes(day.date)) return;
     if (targets[day.date]) {
       const next = { ...targets };
       delete next[day.date];
@@ -123,21 +130,71 @@ export default function RescheduleScreen() {
     [missed, upcoming, targets]
   );
   const auto = profile?.move_approval === "auto";
+  const sending = request.isPending || requestSwap.isPending;
+
+  /**
+   * Other upcoming workouts this one could trade places with. Missed days can
+   * only move forward, so they never offer a swap. A day already picked up to
+   * move, or already someone else's partner, is not offered.
+   */
+  function swapChoicesFor(day: MovableDay, missedDay: boolean): MovableDay[] {
+    if (missedDay) return [];
+    const partners = Object.values(targets);
+    return upcoming.filter(
+      (d) =>
+        d.date !== day.date &&
+        targets[d.date] === undefined &&
+        (!partners.includes(d.date) || targets[day.date] === d.date)
+    );
+  }
 
   async function send() {
     if (selected.length === 0) return;
+    const upcomingDates = new Set(upcoming.map((d) => d.date));
+    // A target that is itself a workout day is a swap; a rest day is a move.
+    const swaps = selected.filter((from) => upcomingDates.has(targets[from]!));
+    const moves = selected.filter((from) => !upcomingDates.has(targets[from]!));
     try {
-      const result = await request.mutateAsync({
-        batchId: batchId.current,
-        moves: selected.map((from) => ({ fromDate: from, toDate: targets[from]! })),
+      const results: RequestScheduleMovesResult[] = [];
+      let filed = 0;
+      let applied = 0;
+      if (moves.length > 0) {
+        const r = await request.mutateAsync({
+          batchId: batchId.current,
+          moves: moves.map((from) => ({ fromDate: from, toDate: targets[from]! })),
+        });
+        results.push(r);
+        filed += r.filed ?? 0;
+        applied += r.applied ?? 0;
+      }
+      for (const from of swaps) {
+        const key = `${from}|${targets[from]}`;
+        swapBatchIds.current[key] ??= randomUuid();
+        const r = await requestSwap.mutateAsync({
+          batchId: swapBatchIds.current[key]!,
+          dateA: from,
+          dateB: targets[from]!,
+        });
+        results.push(r);
+        // A swap is two rows but one request to the client.
+        filed += r.duplicate ? 0 : 1;
+        applied += r.applied ? 1 : 0;
+      }
+      setOutcome({
+        batch_id: batchId.current,
+        duplicate: false,
+        filed,
+        applied,
+        auto_applied: results.some((r) => r.auto_applied),
+        skipped: results.flatMap((r) => r.skipped ?? []),
       });
-      setOutcome(result);
       draft.clear();
       setTargets({});
       batchId.current = randomUuid();
+      swapBatchIds.current = {};
     } catch {
-      // The error is shown from request.error; the draft and batch id stay so
-      // the client can fix the selection and send again.
+      // The error is shown from request.error / requestSwap.error; the draft
+      // and batch ids stay so the client can fix the selection and send again.
     }
   }
 
@@ -163,7 +220,7 @@ export default function RescheduleScreen() {
                 : "They will show on your week as pending until your coach decides."}
             </Text>
             {(outcome.skipped ?? []).map((s) => (
-              <Text key={s.id} style={styles.resultSkipped}>
+              <Text key={s.id ?? s.reason} style={styles.resultSkipped}>
                 {describeScheduleMoveError(s.reason)}
               </Text>
             ))}
@@ -186,7 +243,7 @@ export default function RescheduleScreen() {
 
         <Text style={styles.title}>Reschedule workouts</Text>
         <Text style={styles.subtitle}>
-          Pick the workouts to move, then a rest day for each.
+          Pick the workouts to move, then a rest day for each. To trade two workouts, use "Or swap with".
           {auto ? " Your coach has you set to move automatically." : " Your coach approves each request."}
         </Text>
 
@@ -217,6 +274,7 @@ export default function RescheduleScreen() {
                 missed
                 target={targets[day.date]}
                 choices={restDays.filter((d) => !Object.values(targets).includes(d) || targets[day.date] === d)}
+                swapChoices={swapChoicesFor(day, true)}
                 onToggle={() => toggle(day)}
                 onPick={(to) => pickTarget(day.date, to)}
               />
@@ -248,6 +306,7 @@ export default function RescheduleScreen() {
                     missed
                     target={targets[day.date]}
                     choices={restDays.filter((d) => !Object.values(targets).includes(d) || targets[day.date] === d)}
+                    swapChoices={swapChoicesFor(day, true)}
                     onToggle={() => toggle(day)}
                     onPick={(to) => pickTarget(day.date, to)}
                   />
@@ -265,6 +324,7 @@ export default function RescheduleScreen() {
                 day={day}
                 target={targets[day.date]}
                 choices={restDays.filter((d) => !Object.values(targets).includes(d) || targets[day.date] === d)}
+                swapChoices={swapChoicesFor(day, false)}
                 onToggle={() => toggle(day)}
                 onPick={(to) => pickTarget(day.date, to)}
               />
@@ -283,16 +343,18 @@ export default function RescheduleScreen() {
 
       {selected.length > 0 && (
         <View style={[styles.footer, { bottom: tabBarSpace, paddingBottom: spacing.lg }]}>
-          {request.error && <Text style={styles.errorText}>{describeScheduleMoveError(request.error)}</Text>}
+          {(request.error || requestSwap.error) && (
+            <Text style={styles.errorText}>{describeScheduleMoveError(request.error ?? requestSwap.error)}</Text>
+          )}
           {request.isPaused && <Text style={styles.errorText}>You are offline. This sends when you reconnect.</Text>}
           <TouchableOpacity
             onPress={() => void send()}
-            disabled={request.isPending}
-            style={[styles.primary, request.isPending ? styles.disabled : undefined]}
+            disabled={sending}
+            style={[styles.primary, sending ? styles.disabled : undefined]}
             accessibilityRole="button"
           >
             <Text style={styles.primaryText}>
-              {request.isPending
+              {sending
                 ? "Sending…"
                 : auto
                   ? `Move ${selected.length} workout${selected.length === 1 ? "" : "s"}`
@@ -326,22 +388,34 @@ function PendingSection({
 }) {
   return (
     <Section label="WAITING ON YOUR COACH">
-      {pending.map((move) => (
+      {pending
+        // A swap is two rows; show it once. Withdrawing it withdraws both.
+        .filter((move, i, all) => !move.swap_id || all.findIndex((m) => m.swap_id === move.swap_id) === i)
+        .map((move) => {
+          const partner = move.swap_id
+            ? pending.find((m) => m.swap_id === move.swap_id && m.id !== move.id)
+            : undefined;
+          return (
         <View key={move.id} style={styles.pendingRow}>
           <Clock3 color={colors.ink50} size={16} />
           <View style={styles.rowText}>
             <Text style={styles.rowName} numberOfLines={1}>
-              {move.session_name ?? "Workout"}
+              {partner
+                ? `${move.session_name ?? "Workout"} ⇄ ${partner.session_name ?? "Workout"}`
+                : (move.session_name ?? "Workout")}
             </Text>
             <Text style={styles.rowDate}>
-              {shortDate(move.from_date)} → {shortDate(move.to_date)}
+              {partner
+                ? `Swap ${shortDate(move.from_date)} and ${shortDate(move.to_date)}`
+                : `${shortDate(move.from_date)} → ${shortDate(move.to_date)}`}
             </Text>
           </View>
           <TouchableOpacity onPress={() => onWithdraw(move.id)} disabled={busy} hitSlop={8}>
             <Text style={styles.withdraw}>Withdraw</Text>
           </TouchableOpacity>
         </View>
-      ))}
+          );
+        })}
     </Section>
   );
 }
@@ -351,6 +425,7 @@ function MoveRow({
   missed,
   target,
   choices,
+  swapChoices,
   onToggle,
   onPick,
 }: {
@@ -358,6 +433,7 @@ function MoveRow({
   missed?: boolean;
   target: string | undefined;
   choices: string[];
+  swapChoices: MovableDay[];
   onToggle: () => void;
   onPick: (to: string) => void;
 }) {
@@ -386,24 +462,48 @@ function MoveRow({
       </TouchableOpacity>
 
       {selected && (
-        <View>
-          <Text style={styles.moveTo}>Move to</Text>
-          {choices.length === 0 ? (
-            <Text style={styles.rowDate}>No free day left</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              {choices.map((to) => (
-                <TouchableOpacity
-                  key={to}
-                  onPress={() => onPick(to)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: to === target }}
-                  style={[styles.chip, to === target ? styles.chipOn : undefined]}
-                >
-                  <Text style={[styles.chipText, to === target ? styles.chipTextOn : undefined]}>{shortDate(to)}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+        <View style={styles.targetGroups}>
+          <View>
+            <Text style={styles.moveTo}>Move to</Text>
+            {choices.length === 0 ? (
+              <Text style={styles.rowDate}>No free day left</Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                {choices.map((to) => (
+                  <TouchableOpacity
+                    key={to}
+                    onPress={() => onPick(to)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: to === target }}
+                    style={[styles.chip, to === target ? styles.chipOn : undefined]}
+                  >
+                    <Text style={[styles.chipText, to === target ? styles.chipTextOn : undefined]}>{shortDate(to)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {swapChoices.length > 0 && (
+            <View>
+              <Text style={styles.moveTo}>Or swap with</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                {swapChoices.map((other) => (
+                  <TouchableOpacity
+                    key={other.date}
+                    onPress={() => onPick(other.date)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Swap with ${other.name ?? "workout"} on ${shortDate(other.date)}`}
+                    accessibilityState={{ selected: other.date === target }}
+                    style={[styles.chip, other.date === target ? styles.chipOn : undefined]}
+                  >
+                    <Text style={[styles.chipText, other.date === target ? styles.chipTextOn : undefined]}>
+                      {shortDate(other.date)} · {other.name ?? "Workout"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           )}
         </View>
       )}
@@ -461,6 +561,7 @@ const styles = StyleSheet.create({
   },
   boxOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   moveTo: { fontFamily: fonts.bodySemiBold, fontSize: 10, letterSpacing: 1, color: colors.ink50, marginBottom: 6 },
+  targetGroups: { gap: spacing.md },
   chips: { gap: spacing.sm },
   chip: {
     minHeight: 36,

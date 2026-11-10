@@ -411,6 +411,7 @@ function move(
     decided_by: null,
     auto_applied: false,
     skip_reason: null,
+    swap_id: null,
     ...overrides,
   };
 }

@@ -180,6 +180,7 @@ export type Database = {
           session_id: string | null
           session_name: string | null
           skip_reason: string | null
+          swap_id: string | null
           status: Database["public"]["Enums"]["change_request_status"]
           to_date: string
         }
@@ -197,6 +198,7 @@ export type Database = {
           session_id?: string | null
           session_name?: string | null
           skip_reason?: string | null
+          swap_id?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           to_date: string
         }
@@ -214,6 +216,7 @@ export type Database = {
           session_id?: string | null
           session_name?: string | null
           skip_reason?: string | null
+          swap_id?: string | null
           status?: Database["public"]["Enums"]["change_request_status"]
           to_date?: string
         }
@@ -1458,6 +1461,10 @@ export type Database = {
       }
       request_schedule_moves: {
         Args: { p_batch_id: string; p_moves: Json }
+        Returns: Json
+      }
+      request_schedule_swap: {
+        Args: { p_batch_id: string; p_date_a: string; p_date_b: string }
         Returns: Json
       }
       is_coach: { Args: never; Returns: boolean }
