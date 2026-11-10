@@ -21,6 +21,8 @@ pnpm -F coach-web test:ui     # UI checks, 1440px + 390px
 
 ## Mobile app build
 
+Make sure to be in the apps/mobile directory when you build!!
+
 ```bash
 cd apps/mobile
 eas build --platform ios --profile production
