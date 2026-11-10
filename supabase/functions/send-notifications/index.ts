@@ -52,10 +52,16 @@ async function stillWorthSending(row: OutboxRow): Promise<boolean> {
   // to every kind, so it sits before the per-kind checks.
   const { data: recipient } = await supabase
     .from("profiles")
-    .select("disabled")
+    .select("disabled, timezone, notifications_enabled")
     .eq("id", row.profile_id)
     .maybeSingle();
   if (!recipient || recipient.disabled) return false;
+
+  if (row.kind === "schedule_updated") {
+    // N4: the client's switch is the client's. Coach-update pushes honour it
+    // the same way reminders do.
+    return recipient.notifications_enabled !== false;
+  }
 
   if (row.kind === "schedule_move_requested") {
     // Nothing to tell the coach about if every move in the batch was already
@@ -79,6 +85,14 @@ async function stillWorthSending(row: OutboxRow): Promise<boolean> {
   const date = row.payload?.date as string | undefined;
   if (!date) return false;
 
+  // N3: a reminder is only true on the day it was for. Rows can sit in the
+  // queue for days (consumer not running, no device registered yet), and
+  // "you have a workout today" must never arrive about last Tuesday.
+  const localToday = new Intl.DateTimeFormat("en-CA", {
+    timeZone: recipient.timezone ?? "America/New_York",
+  }).format(new Date());
+  if (date !== localToday) return false;
+
   const { data: log } = await supabase
     .from("workout_logs")
     .select("completed")
@@ -97,6 +111,10 @@ function describe(row: OutboxRow): { title: string; body: string } {
       return row.payload?.auto_applied
         ? { title: "Workouts moved", body: "A client rescheduled workouts. No action needed." }
         : { title: "Move request", body: "A client asked to move workouts. Tap to review." };
+    case "schedule_updated":
+      return row.payload?.change === "assigned"
+        ? { title: "New program", body: "Your coach assigned you a new program. Tap to see your week." }
+        : { title: "Schedule updated", body: "Your coach updated your workouts. Tap to see what changed." };
     case "schedule_move_decided":
       return { title: "Schedule updated", body: "Your coach replied to your move request." };
     default:

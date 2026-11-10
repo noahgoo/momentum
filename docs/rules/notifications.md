@@ -64,6 +64,13 @@ never sends what they turned off. OS-level permission is separate from the
 in-app preference: a client who granted neither, or revoked at the OS level,
 sees why they are not receiving reminders rather than silence.
 
+Coach-made schedule changes (a program assigned, a session added or edited)
+queue one `schedule_updated` row per client, from triggers on `assignments`,
+`sessions` and `session_exercises` (0047). Edits fold into the client's
+existing unsent row, so a sitting of edits is one push. Template edits, the
+client's own edits and cron queue nothing, and the consumer skips the push
+when the client has notifications off.
+
 Per C1a, reminders fire at the client's chosen local time, at most once per
 client per local day.
 
