@@ -162,6 +162,22 @@ export function formatPrescription(mode: "reps" | "time" | "distance", cfg: SetC
 }
 
 /**
+ * Resistance suffix for a timed set: " @ 25 lb", " @ 25 lb each hand",
+ * " @ BW + 25 lb", " @ assisted 25 lb", " @ BW". Empty when the set carries
+ * no resistance, so a plain hold reads exactly as before. `0` is a real
+ * weight, not an absent one (P5).
+ */
+function describeResistance(cfg: SetConfig): string {
+  if (cfg.loadType === "bodyweight") return " @ BW";
+  if (cfg.weight == null) return "";
+  const w = formatWeight(cfg.weight, cfg.weightUnit);
+  if (cfg.loadType === "each_hand") return ` @ ${w} each hand`;
+  if (cfg.loadType === "bodyweight_plus") return ` @ BW + ${w}`;
+  if (cfg.loadType === "assisted") return ` @ assisted ${w}`;
+  return ` @ ${w}`;
+}
+
+/**
  * One-line plain-English target for a set, e.g. "10 reps × 25 lb each hand",
  * "0:45 each side", "3 mi @ 8:30/mi", "Max reps". Reads only the config it is
  * given, so history passes the snapshot and the live logger passes the
@@ -177,11 +193,14 @@ export function describeTarget(mode: "reps" | "time" | "distance", cfg: SetConfi
   }
   const side = cfg.perSide ? " each side" : "";
   if (mode === "time") {
-    return cfg.seconds == null
-      ? cfg.maxEffort
-        ? `Hold max${side}`
-        : "—"
-      : `${formatDuration(cfg.seconds)}${side}`;
+    const hold =
+      cfg.seconds == null
+        ? cfg.maxEffort
+          ? `Hold max${side}`
+          : null
+        : `${formatDuration(cfg.seconds)}${side}`;
+    if (hold == null) return "—";
+    return `${hold}${describeResistance(cfg)}`;
   }
   const reps = cfg.reps == null ? (cfg.maxEffort ? "Max reps" : null) : `${cfg.reps} ${cfg.reps === 1 ? "rep" : "reps"}`;
   if (reps == null) return "—";
@@ -267,7 +286,12 @@ export interface SetResultFields {
  * unfinished set shows an em dash, never a 0 it didn't record (P5).
  */
 export function describeResult(mode: ExerciseMode, set: SetResultFields): string {
-  if (mode === "time") return formatDuration(set.actual_seconds);
+  if (mode === "time") {
+    const held = formatDuration(set.actual_seconds);
+    // Only a weight the client actually entered is on the log row (P8), so a
+    // plain hold with no resistance reads as before.
+    return set.weight != null && held !== "—" ? `${held} @ ${formatWeight(set.weight, set.weight_unit)}` : held;
+  }
   if (mode === "distance") {
     if (set.actual_distance == null) return "—";
     const pace = computePace(set.actual_distance, set.actual_seconds);

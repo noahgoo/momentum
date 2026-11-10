@@ -66,9 +66,17 @@ function prescriptionSummary(mode: ExerciseMode, configs: SetConfig[]): string {
   const load = LOAD_TYPE_OPTIONS.find((o) => o.value === configs.find((cfg) => cfg.loadType)?.loadType);
   const delta = configs[0]?.weightDelta;
   const unit = configs[0]?.weightUnit ?? "lbs";
+  const weights = configs.map((cfg) => cfg.weight);
+  const resistance =
+    mode === "time" && weights.some((w) => w != null)
+      ? weights.every((w) => w === weights[0])
+        ? `@ ${weights[0]} ${unit}`
+        : `@ mixed ${unit}`
+      : null;
 
   return [
     perSide ? `${base} /side` : base,
+    resistance,
     load ? load.label.replace(" (dumbbells)", "").toLowerCase() : null,
     delta !== undefined ? `last ${formatDelta(delta, unit)}` : null,
   ]
@@ -103,6 +111,14 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
   const perSide = configs.some((cfg) => cfg.perSide);
   const weightDelta = configs[0]?.weightDelta;
   const usesIncrement = weightDelta !== undefined;
+  // Resistance on a timed exercise is derived: it exists iff a set carries a
+  // weight, load type or increment. `resistanceOn` only covers the moment the
+  // coach has flipped it on but not typed a number yet.
+  const [resistanceOn, setResistanceOn] = useState(false);
+  const hasResistance = configs.some(
+    (cfg) => cfg.weight != null || cfg.loadType !== undefined || cfg.weightDelta !== undefined,
+  );
+  const showWeight = item.mode === "reps" || (item.mode === "time" && (hasResistance || resistanceOn));
 
   function updateSet(setIdx: number, patch: Partial<SetConfig>) {
     onChange({
@@ -143,6 +159,20 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
     onChange({
       ...item,
       setConfigs: configs.map((cfg) => ({ ...cfg, distanceUnit: nextUnit })),
+    });
+  }
+
+  // Turning resistance on only seeds the unit (P6: a weight must carry one);
+  // turning it off drops every weight field so no hidden number rides along
+  // into the client's target.
+  function changeResistance(on: boolean) {
+    setResistanceOn(on);
+    onChange({
+      ...item,
+      setConfigs: configs.map((cfg) => {
+        if (on) return { ...cfg, weightUnit: cfg.weightUnit ?? unit };
+        return omit(omit(omit(omit(cfg, "weight"), "weightDelta"), "loadType"), "weightUnit");
+      }),
     });
   }
 
@@ -192,6 +222,7 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
     });
   }
 
+  const gridCols = showWeight || item.mode === "distance" ? "grid-cols-[32px_1fr_1fr_24px]" : "grid-cols-[32px_1fr_24px]";
   const notesLabel = item.notes?.trim() ? "notes" : null;
 
   return (
@@ -287,7 +318,14 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
             </div>
           </div>
 
-          {item.mode !== "distance" && (
+          {item.mode === "time" && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--ink-50)]">Resistance</span>
+              <Switch checked={showWeight} label="Resistance" onChange={changeResistance} />
+            </div>
+          )}
+
+          {showWeight && (
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-[var(--ink-50)]">Weight unit</span>
               <div className="flex overflow-hidden rounded-lg border border-[var(--ink-08)] bg-white">
@@ -329,7 +367,7 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
             </div>
           )}
 
-          {item.mode === "reps" && (
+          {showWeight && (
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-[var(--ink-50)]">Weight means</span>
               <select
@@ -368,7 +406,7 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
             </div>
           )}
 
-          {item.mode !== "distance" && (
+          {showWeight && (
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium text-[var(--ink-50)]">
                 Target from last weight
@@ -405,11 +443,12 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
           )}
 
           <div>
-            <div className="mb-1.5 grid grid-cols-[32px_1fr_1fr_24px] gap-2">
+            <div className={`mb-1.5 grid ${gridCols} gap-2`}>
               <div className="text-center text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">SET</div>
               <div className="text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">
                 {item.mode === "time" ? "TIME" : item.mode === "distance" ? distanceUnit.toUpperCase() : "REPS"}
               </div>
+              {(showWeight || item.mode === "distance") && (
               <div className="text-[10px] font-semibold tracking-wider text-[var(--ink-30)]">
                 {item.mode === "distance"
                   ? `PACE / ${distanceUnit.toUpperCase()}`
@@ -419,11 +458,12 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                       ? `ADDED (${unit.toUpperCase()})`
                       : unit.toUpperCase()}
               </div>
+              )}
               <div />
             </div>
 
             {configs.map((cfg, setIdx) => (
-              <div key={setIdx} className="mb-1.5 grid grid-cols-[32px_1fr_1fr_24px] items-center gap-2">
+              <div key={setIdx} className={`mb-1.5 grid ${gridCols} items-center gap-2`}>
                 <div className="text-center text-xs font-medium text-[var(--ink-30)]">{setIdx + 1}</div>
 
                 {maxEffort && item.mode !== "distance" ? (
@@ -453,7 +493,7 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                   />
                 )}
 
-                {item.mode === "distance" ? (
+                {!showWeight && item.mode !== "distance" ? null : item.mode === "distance" ? (
                   <DurationInput
                     value={cfg.paceSeconds}
                     onChange={(n) => updateSet(setIdx, { paceSeconds: n, distanceUnit })}
@@ -474,7 +514,7 @@ export function ExerciseRow({ item, index, dragHandleProps, onChange, onDuplicat
                 ) : (
                   <NumericInput
                     value={cfg.weight}
-                    onChange={(n) => updateSet(setIdx, { weight: n })}
+                    onChange={(n) => updateSet(setIdx, { weight: n, weightUnit: cfg.weightUnit ?? unit })}
                     placeholder="-"
                     className="w-full rounded-lg border border-[var(--ink-08)] bg-white px-2 py-1.5 text-sm outline-none focus:border-[var(--blue-deep)]"
                   />

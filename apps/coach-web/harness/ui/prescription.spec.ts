@@ -104,7 +104,9 @@ test.describe("exercise prescription controls", () => {
     const timeSide = page.getByRole("switch", { name: "Time is per side" });
     await expect(timeSide).toHaveAttribute("aria-checked", "true");
 
-    // But a weight-relative target still makes sense for a weighted hold.
+    // A weight-relative target only makes sense once the hold has resistance.
+    await expect(page.getByRole("switch", { name: "Target from last weight" })).toHaveCount(0);
+    await page.getByRole("switch", { name: "Resistance" }).click();
     await expect(page.getByRole("switch", { name: "Target from last weight" })).toBeVisible();
   });
 
@@ -186,5 +188,31 @@ test.describe("exercise prescription controls", () => {
       })
       .toBe(true);
     expect(knob.x + knob.width).toBeLessThanOrEqual(track.x + track.width);
+  });
+
+  test("resistance toggle on a timed exercise reaches every set and strips cleanly", async ({ page, isMobile }) => {
+    await addAndExpandExercise(page, Boolean(isMobile));
+    await page.getByRole("button", { name: "Time", exact: true }).click();
+    await page.getByRole("button", { name: "+ Add set" }).click();
+
+    // Off by default: no weight column.
+    await expect(page.getByPlaceholder("-", { exact: true })).toHaveCount(0);
+
+    const resistance = page.getByRole("switch", { name: "Resistance" });
+    await resistance.click();
+    await expect(page.getByPlaceholder("-", { exact: true })).toHaveCount(2);
+
+    // Typing into set 2 must not touch set 1.
+    await page.getByPlaceholder("-", { exact: true }).nth(1).fill("25");
+    await expect(page.getByPlaceholder("-", { exact: true }).first()).toHaveValue("");
+
+    await page.getByRole("button", { name: "Close" }).first().click();
+    await expect(page.getByText("@ 25 lbs").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit" }).first().click();
+    await page.getByRole("switch", { name: "Resistance" }).click();
+    await expect(page.getByPlaceholder("-", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Close" }).first().click();
+    await expect(page.getByText("@ 25 lbs")).toHaveCount(0);
   });
 });

@@ -93,6 +93,24 @@ describe("describeTarget", () => {
     );
   });
 
+  it("adds resistance to a timed target and keeps a plain hold unchanged", () => {
+    expect(describeTarget("time", { seconds: 45 })).toBe("45s");
+    expect(describeTarget("time", { seconds: 45, weight: 25, weightUnit: "lbs" })).toBe("45s @ 25 lb");
+    expect(describeTarget("time", { seconds: 60, weight: 20, weightUnit: "kg", perSide: true })).toBe(
+      "1:00 each side @ 20 kg"
+    );
+    expect(describeTarget("time", { seconds: 30, weight: 25, weightUnit: "lbs", loadType: "each_hand" })).toBe(
+      "30s @ 25 lb each hand"
+    );
+    expect(describeTarget("time", { seconds: 30, weight: 10, weightUnit: "lbs", loadType: "bodyweight_plus" })).toBe(
+      "30s @ BW + 10 lb"
+    );
+    expect(describeTarget("time", { seconds: 30, loadType: "bodyweight" })).toBe("30s @ BW");
+    // P5: a real 0 is a weight, not an absent one.
+    expect(describeTarget("time", { seconds: 30, weight: 0, weightUnit: "lbs" })).toBe("30s @ 0 lb");
+    expect(describeTarget("time", { maxEffort: true, weight: 25, weightUnit: "lbs" })).toBe("Hold max @ 25 lb");
+  });
+
   it("shows an em dash for a target with nothing in it", () => {
     expect(describeTarget("reps", {})).toBe("—");
     expect(describeTarget("time", {})).toBe("—");
@@ -174,6 +192,14 @@ describe("describeResult", () => {
   it("reads reps and weight with the unit they were logged in", () => {
     expect(describeResult("reps", { ...blank, reps: 8, weight: 22.5, weight_unit: "kg" })).toBe("8 × 22.5 kg");
     expect(describeResult("reps", { ...blank, reps: 12 })).toBe("12 reps");
+  });
+
+  it("reads a timed result with the resistance it was done at", () => {
+    expect(describeResult("time", { ...blank, actual_seconds: 45 })).toBe("45s");
+    expect(describeResult("time", { ...blank, actual_seconds: 45, weight: 25, weight_unit: "lbs" })).toBe(
+      "45s @ 25 lb"
+    );
+    expect(describeResult("time", { ...blank, weight: 25, weight_unit: "lbs" })).toBe("—");
   });
 
   it("shows an em dash for an unrecorded set and keeps a real zero (P5)", () => {

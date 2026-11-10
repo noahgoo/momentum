@@ -182,7 +182,11 @@ function describeLast(
   prev: ExerciseLogWithSets["set_logs"][number] | undefined
 ): string | undefined {
   if (!prev) return undefined;
-  if (mode === "time") return prev.actual_seconds != null ? formatDuration(prev.actual_seconds) : undefined;
+  if (mode === "time") {
+    if (prev.actual_seconds == null) return undefined;
+    const held = formatDuration(prev.actual_seconds);
+    return prev.weight != null ? `${held} @ ${formatWeight(prev.weight, prev.weight_unit)}` : held;
+  }
   if (mode === "distance") {
     if (prev.actual_distance == null) return undefined;
     const dist = `${prev.actual_distance} ${distanceUnitLabel(prev.distance_unit)}`;
@@ -388,8 +392,13 @@ export function WorkoutLogger({
           const note = workoutEx?.notes?.trim();
           const rest = workoutEx?.rest_seconds;
           // Bodyweight work has no load to enter; everything else does.
+          // A timed exercise only has a load when the coach prescribed one.
           const showWeight =
-            mode === "reps" && !ex.sets.every((s) => s.prescribed?.loadType === "bodyweight");
+            mode === "reps"
+              ? !ex.sets.every((s) => s.prescribed?.loadType === "bodyweight")
+              : mode === "time" &&
+                ex.sets.some((s) => s.prescribed?.weight != null || s.prescribed?.weightDelta != null) &&
+                !ex.sets.every((s) => s.prescribed?.loadType === "bodyweight");
           const weightCaption = ex.sets.some((s) => s.prescribed?.loadType === "assisted")
             ? "ASSIST"
             : ex.sets.some((s) => s.prescribed?.loadType === "bodyweight_plus")
@@ -444,6 +453,9 @@ export function WorkoutLogger({
                   {mode === "reps" && <Text style={[styles.caption, styles.repsInputWidth]}>REPS</Text>}
                   {showWeight && <Text style={[styles.caption, styles.weightInputWidth]}>{weightCaption}</Text>}
                   {mode === "time" && <Text style={[styles.caption, styles.timeInputWidth]}>TIME</Text>}
+                  {mode === "time" && showWeight && (
+                    <Text style={[styles.caption, styles.weightInputWidth]}>{weightCaption}</Text>
+                  )}
                 </View>
               )}
 
@@ -527,13 +539,27 @@ export function WorkoutLogger({
                     {checkbox}
                     {targetBlock}
                     {mode === "time" ? (
-                      <TimeField
-                        value={set.actualSeconds}
-                        onChange={(actualSeconds) => updateSet(exIdx, setIdx, { actualSeconds })}
-                        placeholder={targetCfg.seconds != null ? maskDigits(digitsFromSeconds(targetCfg.seconds)) : undefined}
-                        style={styles.timeInputWidth}
-                        accessibilityLabel={`Time for set ${setIdx + 1}`}
-                      />
+                      <>
+                        <TimeField
+                          value={set.actualSeconds}
+                          onChange={(actualSeconds) => updateSet(exIdx, setIdx, { actualSeconds })}
+                          placeholder={targetCfg.seconds != null ? maskDigits(digitsFromSeconds(targetCfg.seconds)) : undefined}
+                          style={styles.timeInputWidth}
+                          accessibilityLabel={`Time for set ${setIdx + 1}`}
+                        />
+                        {showWeight && (
+                          <NumberField
+                            value={set.weight}
+                            onChange={(weight) =>
+                              updateSet(exIdx, setIdx, { weight, weightEntered: weight !== undefined })
+                            }
+                            unit={weightUnitLabel(weightUnit)}
+                            placeholder={targetCfg.weight != null ? String(targetCfg.weight) : "—"}
+                            style={styles.weightInputWidth}
+                            accessibilityLabel={`Weight for set ${setIdx + 1}`}
+                          />
+                        )}
+                      </>
                     ) : (
                       <>
                         <NumberField
